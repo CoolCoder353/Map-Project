@@ -1,0 +1,12 @@
+# Unrelated personal files kept in this folder — never commit
+security-report.md
+settings.txt
+Notes.txt
+
+node_modules/
+dist/
+.env
+.env.*
+*.osm.pbf
+*.pmtiles
+graphhopper-data/
