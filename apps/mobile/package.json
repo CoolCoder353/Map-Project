@@ -9,7 +9,7 @@
     "prebuild": "expo prebuild --platform android",
     "bundle:check": "expo export --platform android --output-dir dist-check",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "jest"
   },
   "dependencies": {
     "expo": "~57.0.23",
@@ -43,6 +43,13 @@
     "@types/react": "~19.2.0",
     "typescript": "~6.0.3",
     "vitest": "^5.0.1",
-    "@types/geojson": "^7946.0.16"
+    "@types/geojson": "^7946.0.16",
+    "jest": "^30.5.1",
+    "jest-expo": "~57.0.5",
+    "@testing-library/react-native": "^14.0.1",
+    "react-test-renderer": "19.2.3",
+    "@react-native/jest-preset": "^0.86.0",
+    "react-server-dom-webpack": "~19.2.4",
+    "@types/jest": "^30.0.0"
   }
 }

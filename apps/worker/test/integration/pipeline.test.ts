@@ -62,7 +62,9 @@ describe('OSM refresh orchestration', () => {
         await writeFile(join(loc, 'nodes'), 'graph');
       }
       if (cmd === 'java' && argv.includes('--output=')) {
-        await writeFile(args.find((a) => a.startsWith('--output='))!.slice(9), 'pmtiles');
+        const out = args.find((a) => a.startsWith('--output='))!.slice(9);
+        expect(out.endsWith('.pmtiles')).toBe(true); // Planetiler needs the real extension
+        await writeFile(out, 'pmtiles');
       }
       if (cmd === 'osmium' && args[0] === 'export') {
         await writeFile(args[args.indexOf('-o') + 1]!, seq([feature('n9', { place: 'town', name: 'Queanbeyan' }, [149.23, -35.35])]));
@@ -80,7 +82,18 @@ describe('OSM refresh orchestration', () => {
     expect(await readFile(join(dataDir, 'graphhopper', 'graph-current', 'nodes'), 'utf8')).toBe('graph');
     expect(await readFile(join(dataDir, 'tiles', 'australia.pmtiles'), 'utf8')).toBe('pmtiles');
     expect((await readFile(join(dataDir, 'graphhopper', 'graph-version'), 'utf8')).trim()).toMatch(/^\d+$/);
-    const [run] = await opsService.listPipelineRuns(t.db);
+    // A second run reuses the graph and tiles already built for this extract.
+    const runId2 = await opsService.createPipelineRun(t.db, 'osm_refresh', null);
+    commands.length = 0;
+    await runOsmRefresh(
+      t.db,
+      runId2,
+      { dataDir, pbfUrl: 'https://example.test/au.osm.pbf', graphhopperJar: 'gh.jar', graphhopperConfig: 'c.yml', graphhopperHeap: '1g', planetilerJar: 'p.jar', planetilerHeap: '1g', skip: ['download'] },
+      fake,
+    );
+    expect(commands.filter((c) => c.startsWith('java'))).toEqual([]);
+
+    const [, run] = await opsService.listPipelineRuns(t.db);
     expect(run).toMatchObject({ status: 'succeeded', osmDataDate: '2026-09-10T20:21:02Z' });
     expect(run!.logTail).toContain('== graph done');
     expect((await adminService.getAppState<string>(t.db, opsService.OSM_DATA_DATE_KEY))?.value).toBe('2026-09-10T20:21:02Z');

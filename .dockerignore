@@ -1,0 +1,18 @@
+# Keep the build context small and free of host-only artefacts.
+**/node_modules
+.git
+data
+dist
+dist-check
+.gradle-docker
+apps/mobile/android
+apps/mobile/.expo
+apps/web/dist
+apps/web/test-results
+apps/web/playwright-report
+apps/web/.impeccable/review
+**/*.tsbuildinfo
+infra/.env
+security-report.md
+settings.txt
+Notes.txt

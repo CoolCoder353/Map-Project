@@ -71,13 +71,27 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
   const ghDir = join(cfg.dataDir, 'graphhopper');
   const tilesDir = join(cfg.dataDir, 'tiles');
   const pbf = join(osmDir, 'australia-latest.osm.pbf');
+  // Planetiler infers the output format from the extension, so the temp file keeps ".pmtiles".
+  const tilesNext = join(tilesDir, 'australia.next.pmtiles');
   let dataDate: string | null = null;
+
+  const mtime = async (p: string) => (await stat(p).catch(() => null))?.mtimeMs ?? null;
+  /** Reuse an output that is already newer than the extract (makes retries cheap). */
+  const upToDate = async (output: string) => {
+    const [out, src] = await Promise.all([mtime(output), mtime(pbf)]);
+    return out !== null && src !== null && out >= src;
+  };
 
   await opsService.updatePipelineRun(db, runId, { status: 'running' });
   try {
     await Promise.all([osmDir, ghDir, tilesDir, join(cfg.dataDir, 'sources')].map((d) => mkdir(d, { recursive: true })));
 
     await step('download', async () => {
+      const age = await mtime(pbf);
+      if (age !== null && Date.now() - age < 24 * 3600_000) {
+        log(`reusing the extract downloaded ${new Date(age).toISOString()}`);
+        return;
+      }
       await run('curl', ['-fL', '--retry', '3', '-o', `${pbf}.part`, cfg.pbfUrl], log);
       await run('curl', ['-fL', '--retry', '3', '-o', `${pbf}.md5`, `${cfg.pbfUrl}.md5`], log);
       // md5 file references the original filename; check against the downloaded part.
@@ -93,6 +107,10 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
     });
 
     await step('graph', async () => {
+      if (await upToDate(join(ghDir, 'graph-next', 'nodes'))) {
+        log('reusing the graph already built for this extract');
+        return;
+      }
       await rm(join(ghDir, 'graph-next'), { recursive: true, force: true });
       await run(
         'java',
@@ -111,6 +129,10 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
     });
 
     await step('tiles', async () => {
+      if (await upToDate(tilesNext)) {
+        log('reusing the tiles already built for this extract');
+        return;
+      }
       await run(
         'java',
         [
@@ -118,7 +140,7 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
           '-jar',
           cfg.planetilerJar,
           `--osm-path=${pbf}`,
-          `--output=${join(tilesDir, 'australia.pmtiles.next')}`,
+          `--output=${tilesNext}`,
           `--tmpdir=${join(cfg.dataDir, 'tmp')}`,
           `--download_dir=${join(cfg.dataDir, 'sources')}`,
           '--download',
@@ -152,9 +174,8 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
         await writeFile(join(ghDir, 'graph-version'), `${Date.now()}\n`);
       }
       if (!cfg.skip.includes('tiles')) {
-        const next = join(tilesDir, 'australia.pmtiles.next');
-        await stat(next);
-        await rename(next, join(tilesDir, 'australia.pmtiles'));
+        await stat(tilesNext);
+        await rename(tilesNext, join(tilesDir, 'australia.pmtiles'));
       }
       if (dataDate) await adminService.setAppState(db, opsService.OSM_DATA_DATE_KEY, dataDate);
     });
