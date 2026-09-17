@@ -99,7 +99,8 @@ function panelPadding() {
     return { top, bottom: 56, left: (panel?.right ?? 416) + 40, right: 80 };
   }
   const sheetTop = panel?.top ?? window.innerHeight * 0.42;
-  return { top, bottom: Math.max(56, window.innerHeight - sheetTop + 24), left: 32, right: 72 };
+  // Room below the lowest marker for its label, the scale bar and the attribution pill.
+  return { top, bottom: Math.max(96, window.innerHeight - sheetTop + 96), left: 40, right: 72 };
 }
 
 export function MapProvider({
@@ -125,6 +126,7 @@ export function MapProvider({
     track: EMPTY,
     travelled: EMPTY,
     search: EMPTY,
+    routeLabels: EMPTY,
   });
   const clickHandlers = useRef(new Set<(p: LngLat) => void>());
   const routeClickHandlers = useRef(new Set<(id: string) => void>());
@@ -250,25 +252,46 @@ export function MapProvider({
       paint: { 'line-color': explore, 'line-width': 7, 'line-dasharray': [2, 0.6] },
     });
     if (hasGlyphs) {
-      map.addLayer({
-        id: 'route-callouts',
-        type: 'symbol',
-        source: 'routes',
-        filter: ['has', 'label'],
-        layout: {
-          'symbol-placement': 'line-center',
-          'text-field': ['get', 'label'],
-          'text-font': ['Noto Sans Bold'],
-          'text-size': ['case', ['get', 'selected'], 13, 11],
-          'text-allow-overlap': false,
-          'symbol-sort-key': ['case', ['get', 'selected'], 0, 1],
-        },
-        paint: {
-          'text-color': ['case', isFastest, accent, explore],
-          'text-halo-color': surface,
-          'text-halo-width': 2,
-        },
+      // Route callouts: text chips placed beside each line (not along it), selected first.
+      if (!map.hasImage('chip')) {
+        const ratio = 2;
+        const size = 24 * ratio;
+        const r = 8 * ratio;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d')!;
+        ctx.fillStyle = surface;
+        ctx.strokeStyle = dark ? '#4a5057' : '#c7cbd1';
+        ctx.lineWidth = 1.5 * ratio;
+        ctx.beginPath();
+        ctx.roundRect(ctx.lineWidth, ctx.lineWidth, size - 2 * ctx.lineWidth, size - 2 * ctx.lineWidth, r);
+        ctx.fill();
+        ctx.stroke();
+        map.addImage('chip', ctx.getImageData(0, 0, size, size), {
+          pixelRatio: ratio,
+          stretchX: [[r, size - r]],
+          stretchY: [[r, size - r]],
+          content: [r / 2, r / 2, size - r / 2, size - r / 2],
+        });
+      }
+      const calloutLayout = (selected: boolean) => ({
+        'icon-image': 'chip',
+        'icon-text-fit': 'both' as const,
+        'icon-text-fit-padding': [3, 7, 3, 7] as [number, number, number, number],
+        'text-field': ['get', 'label'] as ExpressionSpecification,
+        'text-font': ['Noto Sans Bold'],
+        'text-size': selected ? 13 : 12,
+        // Chip centred on the label point (a bubble over the line, as in other map apps).
+        // The selected route's chip always shows; others give way when they would collide.
+        'text-allow-overlap': selected,
+        'icon-allow-overlap': selected,
       });
+      const calloutPaint = {
+        'text-color': ['case', ['==', ['get', 'kind'], 'fastest'], accent, cssVar('--explore') || explore] as ExpressionSpecification,
+      };
+      map.addLayer({ id: 'route-callouts', type: 'symbol', source: 'routeLabels', filter: ['!', ['get', 'selected']], layout: calloutLayout(false), paint: calloutPaint });
+      map.addLayer({ id: 'route-callouts-selected', type: 'symbol', source: 'routeLabels', filter: ['get', 'selected'], layout: calloutLayout(true), paint: calloutPaint });
     }
 
     // Place picked from the panel search
@@ -356,7 +379,7 @@ export function MapProvider({
       });
       const features = res.cells.map<GeoJSON.Feature>((c) => ({
         type: 'Feature',
-        properties: { fraction: c.fraction },
+        properties: { fraction: c.fraction, recent: c.recent },
         geometry: { type: 'Polygon', coordinates: [cellToBoundary(c.h3, true)] },
       }));
       setSource('coverage', { type: 'FeatureCollection', features });
@@ -513,20 +536,59 @@ export function MapProvider({
       setRoutes(routes, selectedId, hoveredId = null) {
         // Draw selected last so it sits on top within its layer.
         const ordered = [...routes].sort((a, b) => Number(a.id === selectedId) - Number(b.id === selectedId));
-        const minutes = (sec: number) => (sec >= 3600 ? `${Math.floor(sec / 3600)} h ${Math.round((sec % 3600) / 60)} min` : `${Math.round(sec / 60)} min`);
+        const minutes = (sec: number) =>
+          sec >= 3600 ? `${Math.floor(sec / 3600)} h ${Math.round((sec % 3600) / 60)} min` : `${Math.round(sec / 60)} min`;
+        const labelFor = (r: Route) =>
+          r.novelty.newKm >= 0.1
+            ? `${minutes(r.durationS)} · ${r.novelty.newKm.toFixed(r.novelty.newKm < 10 ? 1 : 0)} km new`
+            : minutes(r.durationS);
         setSource('routes', {
           type: 'FeatureCollection',
           features: ordered.map((r) => ({
             type: 'Feature',
-            properties: {
-              id: r.id,
-              kind: r.kind,
-              selected: r.id === selectedId,
-              hovered: r.id === hoveredId,
-              label: r.novelty.newKm >= 0.1 ? `${minutes(r.durationS)} · ${r.novelty.newKm.toFixed(r.novelty.newKm < 10 ? 1 : 0)} km new` : minutes(r.durationS),
-            },
+            properties: { id: r.id, kind: r.kind, selected: r.id === selectedId, hovered: r.id === hoveredId },
             geometry: { type: 'LineString', coordinates: r.geometry },
           })),
+        });
+        // One chip per route at a point where the routes are furthest apart, offset to the
+        // outside of the bundle. On narrow screens only the selected route is labelled.
+        const narrow = window.innerWidth < 900;
+        const labelled = narrow ? ordered.filter((r) => r.id === selectedId) : ordered;
+        const centroid = routes.length
+          ? routes
+              .map((r) => r.geometry[Math.floor(r.geometry.length / 2)]!)
+              .reduce<[number, number]>((acc, p) => [acc[0] + p[0] / routes.length, acc[1] + p[1] / routes.length], [0, 0])
+          : [0, 0];
+        setSource('routeLabels', {
+          type: 'FeatureCollection',
+          features: labelled.map((r) => {
+            let best = r.geometry[Math.floor(r.geometry.length / 2)]!;
+            let bestD = -1;
+            for (let i = Math.floor(r.geometry.length * 0.25); i < r.geometry.length * 0.75; i += Math.max(1, Math.floor(r.geometry.length / 40))) {
+              const p = r.geometry[i]!;
+              const d = Math.min(
+                ...routes.filter((o) => o.id !== r.id).map((o) => Math.min(...o.geometry.filter((_, k) => k % 5 === 0).map((q) => Math.hypot(q[0] - p[0], q[1] - p[1])))),
+                Infinity,
+              );
+              if (d > bestD) {
+                bestD = d;
+                best = p;
+              }
+            }
+            const east = best[0] >= (centroid[0] ?? 0);
+            return {
+              type: 'Feature',
+              properties: {
+                kind: r.kind,
+                selected: r.id === selectedId,
+                label: labelFor(r),
+                anchor: east ? 'left' : 'right',
+                offset: east ? [1.1, 0] : [-1.1, 0],
+                iconOffset: east ? [12, 0] : [-12, 0],
+              },
+              geometry: { type: 'Point', coordinates: best },
+            };
+          }),
         });
       },
       setMarkers(markers) {
