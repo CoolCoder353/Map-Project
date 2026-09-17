@@ -19,3 +19,4 @@ export * as placeService from './services/places.js';
 export * as adminService from './services/admin.js';
 export * as opsService from './services/ops.js';
 export * as accountService from './services/account.js';
+export * from "./lib/queue.js";
