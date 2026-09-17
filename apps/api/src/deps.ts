@@ -12,6 +12,6 @@ export interface AppDeps {
     Config,
     'CORS_ORIGINS' | 'COOKIE_SECURE' | 'TRUST_PROXY' | 'MAP_ASSETS_DIR' | 'RATE_LIMIT_PER_MIN' | 'AUTH_RATE_LIMIT_PER_MIN' | 'NODE_ENV'
   >;
-  tiles: TileArchive | null;
+  tiles: (TileArchive & { available(): Promise<boolean> }) | null;
   jobs: JobControl;
 }

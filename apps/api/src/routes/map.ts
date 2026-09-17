@@ -14,13 +14,15 @@ export const mapRoutes =
     const tileLimit = { config: { rateLimit: { max: 3000, timeWindow: '1 minute' } } };
 
     app.get('/tiles/tiles.json', tileLimit, async (req, reply) => {
-      if (!deps.tiles) return reply.status(503).send({ error: { code: 'unavailable', message: 'Map tiles not built yet' } });
+      if (!deps.tiles || !(await deps.tiles.available())) {
+        return reply.status(503).send({ error: { code: 'unavailable', message: 'Map tiles not built yet' } });
+      }
       reply.header('cache-control', 'public, max-age=300');
       return deps.tiles.tileJson(`${originOf(req)}/tiles/{z}/{x}/{y}.mvt`);
     });
 
     app.get<{ Params: { z: string; x: string; y: string } }>('/tiles/:z/:x/:y.mvt', tileLimit, async (req, reply) => {
-      if (!deps.tiles) return reply.status(503).send();
+      if (!deps.tiles || !(await deps.tiles.available())) return reply.status(503).send();
       const [z, x, y] = [Number(req.params.z), Number(req.params.x), Number(req.params.y)];
       if (![z, x, y].every(Number.isInteger) || z < 0 || z > 22 || x < 0 || y < 0 || x >= 2 ** z || y >= 2 ** z) {
         return reply.status(400).send({ error: { code: 'bad_request', message: 'Invalid tile coordinates' } });

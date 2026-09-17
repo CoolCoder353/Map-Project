@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs';
 import {
   GraphHopperClient,
   MetricsAggregator,
@@ -12,7 +11,7 @@ import {
 } from '@wayfinder/core';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
-import { openTileArchive } from './plugins/tiles.js';
+import { reloadingTileArchive } from './plugins/tiles.js';
 
 const config = loadConfig();
 const log = createLogger('api', config.LOG_LEVEL);
@@ -22,8 +21,8 @@ const boss = await startBoss(config.DATABASE_URL);
 const metrics = new MetricsAggregator(metricsWriter(db));
 metrics.start();
 
-const tiles = existsSync(config.PMTILES_PATH) ? openTileArchive(config.PMTILES_PATH) : null;
-if (!tiles) log.warn({ path: config.PMTILES_PATH }, 'PMTiles archive not found; map tiles disabled until built');
+const tiles = reloadingTileArchive(config.PMTILES_PATH);
+if (!(await tiles.available())) log.warn({ path: config.PMTILES_PATH }, 'PMTiles archive not found; tiles return 503 until the data pipeline builds it');
 
 const app = await buildApp({
   ctx: {

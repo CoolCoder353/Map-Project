@@ -1,4 +1,4 @@
-import { open, type FileHandle } from 'node:fs/promises';
+import { open, stat, type FileHandle } from 'node:fs/promises';
 import { Compression, PMTiles, type RangeResponse, type Source } from 'pmtiles';
 
 class NodeFileSource implements Source {
@@ -50,6 +50,40 @@ export function openTileArchive(path: string): TileArchive {
         vector_layers: metadata.vector_layers ?? [],
         attribution: metadata.attribution ?? '© OpenStreetMap contributors',
       };
+    },
+  };
+}
+
+/**
+ * A tile archive that tolerates the file not existing yet and reopens it when the data
+ * pipeline swaps in a new version (checked at most every `checkMs`).
+ */
+export function reloadingTileArchive(path: string, checkMs = 30_000): TileArchive & { available(): Promise<boolean> } {
+  let current: { archive: TileArchive; mtimeMs: number } | null = null;
+  let lastCheck = 0;
+  const refresh = async () => {
+    if (Date.now() - lastCheck < checkMs && current) return current;
+    lastCheck = Date.now();
+    try {
+      const s = await stat(path);
+      if (!current || current.mtimeMs !== s.mtimeMs) current = { archive: openTileArchive(path), mtimeMs: s.mtimeMs };
+    } catch {
+      current = null;
+    }
+    return current;
+  };
+  return {
+    async available() {
+      return (await refresh()) !== null;
+    },
+    async getTile(z, x, y) {
+      const c = await refresh();
+      return c ? c.archive.getTile(z, x, y) : null;
+    },
+    async tileJson(url) {
+      const c = await refresh();
+      if (!c) throw new Error('Tiles unavailable');
+      return c.archive.tileJson(url);
     },
   };
 }

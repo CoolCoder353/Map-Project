@@ -1,0 +1,22 @@
+{
+  "name": "@wayfinder/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --conditions=development src/main.ts",
+    "start": "node dist/main.js",
+    "import-places": "tsx --conditions=development src/pipeline/import-places-cli.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@wayfinder/core": "workspace:*",
+    "@wayfinder/shared": "workspace:*",
+    "pg-boss": "^12.33.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.13"
+  }
+}
