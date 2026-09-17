@@ -44,10 +44,7 @@
 }
 .btn-danger {
   background: var(--danger);
-  color: #fff;
-}
-:root[data-theme='dark'] .btn-danger {
-  color: #2a0c0a;
+  color: var(--on-danger);
 }
 .btn-danger-outline {
   background: transparent;
@@ -358,15 +355,11 @@
   max-width: min(520px, calc(100vw - 32px));
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-control);
-  background: #2b2f34;
-  color: #f1f3f4;
+  background: var(--toast-bg);
+  color: var(--toast-fg);
   box-shadow: var(--shadow-2);
   font-size: var(--text-sm);
   animation: toast-in 220ms var(--ease-out);
-}
-:root[data-theme='dark'] .toast {
-  background: #e8eaed;
-  color: #202124;
 }
 @keyframes toast-in {
   from {

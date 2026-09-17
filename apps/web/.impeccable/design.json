@@ -1,0 +1,942 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-17T16:44:35.324Z",
+  "title": "Design System: Wayfinder",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Route Blue",
+        "canonical": "#1765cc",
+        "oklch": "oklch(52.3% 0.176 257.8)",
+        "dark": "#7eb0f9",
+        "purpose": "Primary actions, selection, active tab and nav, focus, fastest route line.",
+        "tonalRamp": [
+          "#000828",
+          "#00205b",
+          "#003a95",
+          "#085cc2",
+          "#3a80e4",
+          "#74a6f0",
+          "#abcbfb",
+          "#e2f0ff"
+        ]
+      },
+      "accent-hover": {
+        "role": "primary",
+        "displayName": "Pressed Blue",
+        "canonical": "#1257b3",
+        "oklch": "oklch(47.2% 0.160 258.0)",
+        "dark": "#a2c6fb",
+        "purpose": "Primary button hover.",
+        "tonalRamp": [
+          "#000828",
+          "#00205b",
+          "#003b94",
+          "#1a5dba",
+          "#3f81e0",
+          "#74a6f0",
+          "#abcbfb",
+          "#e2f0ff"
+        ]
+      },
+      "accent-soft": {
+        "role": "primary",
+        "displayName": "Blue Wash",
+        "canonical": "#e6effc",
+        "oklch": "oklch(94.9% 0.020 257.5)",
+        "dark": "#1e3452",
+        "purpose": "Selected chips, active nav pill, fastest swatch, focus halo.",
+        "tonalRamp": [
+          "#060b14",
+          "#1f252f",
+          "#3b434d",
+          "#5a626d",
+          "#7b838f",
+          "#9da6b2",
+          "#c1cad6",
+          "#e6effc"
+        ]
+      },
+      "on-accent": {
+        "role": "primary",
+        "displayName": "On Blue",
+        "canonical": "#ffffff",
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "dark": "#0c1a2e",
+        "purpose": "Text and icons on Route Blue.",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#a5a5a5",
+          "#c9c9c9",
+          "#eeeeee"
+        ]
+      },
+      "explore": {
+        "role": "secondary",
+        "displayName": "Explore Green",
+        "canonical": "#0b7d56",
+        "oklch": "oklch(52.3% 0.111 162.4)",
+        "dark": "#62d19f",
+        "purpose": "New-ground badge text, explore swatches, explore selection ring and callout text.",
+        "tonalRamp": [
+          "#001303",
+          "#003413",
+          "#00532f",
+          "#00744e",
+          "#34976e",
+          "#5cbb90",
+          "#9cd9bb",
+          "#def5e8"
+        ]
+      },
+      "explore-line": {
+        "role": "secondary",
+        "displayName": "Trail Green",
+        "canonical": "#13985f",
+        "oklch": "oklch(60.0% 0.137 157.6)",
+        "dark": "#49c28c",
+        "purpose": "Explore route strokes and recent coverage outlines.",
+        "tonalRamp": [
+          "#001301",
+          "#00340a",
+          "#005622",
+          "#007741",
+          "#189a61",
+          "#5abc87",
+          "#a0d9b6",
+          "#dff5e7"
+        ]
+      },
+      "explore-soft": {
+        "role": "secondary",
+        "displayName": "Meadow Wash",
+        "canonical": "#e3f3ec",
+        "oklch": "oklch(95.0% 0.019 167.9)",
+        "dark": "#173a2b",
+        "purpose": "Backgrounds behind Explore Green.",
+        "tonalRamp": [
+          "#040e0a",
+          "#1c2823",
+          "#384540",
+          "#57655f",
+          "#788680",
+          "#9aa9a3",
+          "#becdc7",
+          "#e3f3ec"
+        ]
+      },
+      "bg": {
+        "role": "neutral",
+        "displayName": "Desk Grey",
+        "canonical": "#eef0f3",
+        "oklch": "oklch(95.4% 0.005 258.3)",
+        "dark": "#15171a",
+        "purpose": "App background.",
+        "tonalRamp": [
+          "#15171a",
+          "#202327",
+          "#30353b",
+          "#4a5057",
+          "#6f7680",
+          "#c7cbd1",
+          "#eceef1",
+          "#f5f6f8"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Paper White",
+        "canonical": "#ffffff",
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "dark": "#202327",
+        "purpose": "Panels, cards, menus, dialogs, map controls, callout chips.",
+        "tonalRamp": [
+          "#15171a",
+          "#202327",
+          "#30353b",
+          "#4a5057",
+          "#6f7680",
+          "#c7cbd1",
+          "#eceef1",
+          "#f5f6f8"
+        ]
+      },
+      "surface-2": {
+        "role": "neutral",
+        "displayName": "Mist",
+        "canonical": "#f5f6f8",
+        "oklch": "oklch(97.3% 0.003 264.5)",
+        "dark": "#272b30",
+        "purpose": "Resting search fill, hover rows, notices.",
+        "tonalRamp": [
+          "#15171a",
+          "#202327",
+          "#30353b",
+          "#4a5057",
+          "#6f7680",
+          "#c7cbd1",
+          "#eceef1",
+          "#f5f6f8"
+        ]
+      },
+      "surface-3": {
+        "role": "neutral",
+        "displayName": "Fog Grey",
+        "canonical": "#eceef1",
+        "oklch": "oklch(94.8% 0.005 258.3)",
+        "dark": "#30353b",
+        "purpose": "Segmented track, ghost hover, neutral badges.",
+        "tonalRamp": [
+          "#15171a",
+          "#202327",
+          "#30353b",
+          "#4a5057",
+          "#6f7680",
+          "#c7cbd1",
+          "#eceef1",
+          "#f5f6f8"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#1d2126",
+        "oklch": "oklch(24.6% 0.011 254.0)",
+        "dark": "#e8eaed",
+        "purpose": "Primary text.",
+        "tonalRamp": [
+          "#15171a",
+          "#202327",
+          "#30353b",
+          "#4a5057",
+          "#6f7680",
+          "#c7cbd1",
+          "#eceef1",
+          "#f5f6f8"
+        ]
+      },
+      "text-2": {
+        "role": "neutral",
+        "displayName": "Slate",
+        "canonical": "#565d66",
+        "oklch": "oklch(47.5% 0.017 254.7)",
+        "dark": "#aeb4bb",
+        "purpose": "Secondary text, metadata, idle icons.",
+        "tonalRamp": [
+          "#15171a",
+          "#202327",
+          "#30353b",
+          "#4a5057",
+          "#6f7680",
+          "#c7cbd1",
+          "#eceef1",
+          "#f5f6f8"
+        ]
+      },
+      "text-3": {
+        "role": "neutral",
+        "displayName": "Pewter",
+        "canonical": "#6f7680",
+        "oklch": "oklch(56.3% 0.018 257.2)",
+        "dark": "#969ca4",
+        "purpose": "Placeholders, leading icons, chevrons.",
+        "tonalRamp": [
+          "#15171a",
+          "#202327",
+          "#30353b",
+          "#4a5057",
+          "#6f7680",
+          "#c7cbd1",
+          "#eceef1",
+          "#f5f6f8"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#dfe2e6",
+        "oklch": "oklch(91.2% 0.006 255.5)",
+        "dark": "#363b41",
+        "purpose": "Dividers and idle card borders.",
+        "tonalRamp": [
+          "#15171a",
+          "#202327",
+          "#30353b",
+          "#4a5057",
+          "#6f7680",
+          "#c7cbd1",
+          "#eceef1",
+          "#f5f6f8"
+        ]
+      },
+      "border-strong": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "#c7cbd1",
+        "oklch": "oklch(84.1% 0.009 258.3)",
+        "dark": "#4a5057",
+        "purpose": "Input strokes, chip and secondary outlines.",
+        "tonalRamp": [
+          "#15171a",
+          "#202327",
+          "#30353b",
+          "#4a5057",
+          "#6f7680",
+          "#c7cbd1",
+          "#eceef1",
+          "#f5f6f8"
+        ]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Danger",
+        "canonical": "#c5221f",
+        "oklch": "oklch(53.2% 0.198 27.9)",
+        "dark": "#f28b82",
+        "purpose": "Destructive actions, errors, destination pin.",
+        "tonalRamp": [
+          "#210000",
+          "#4f0000",
+          "#830000",
+          "#b70910",
+          "#d45146",
+          "#e7867a",
+          "#f7b7ae",
+          "#ffe7e3"
+        ]
+      },
+      "danger-soft": {
+        "role": "tertiary",
+        "displayName": "Danger Wash",
+        "canonical": "#fce8e6",
+        "oklch": "oklch(94.6% 0.022 24.4)",
+        "dark": "#3c1f1d",
+        "purpose": "Error notices and badges.",
+        "tonalRamp": [
+          "#130807",
+          "#2f2120",
+          "#4d3e3c",
+          "#6d5d5b",
+          "#8f7e7c",
+          "#b3a09e",
+          "#d7c4c2",
+          "#fde9e7"
+        ]
+      },
+      "warning": {
+        "role": "tertiary",
+        "displayName": "Warning",
+        "canonical": "#9a5b00",
+        "oklch": "oklch(53.1% 0.119 65.1)",
+        "dark": "#f6c26b",
+        "purpose": "Warning text.",
+        "tonalRamp": [
+          "#1d0200",
+          "#480f00",
+          "#6b2f00",
+          "#8e5000",
+          "#b27227",
+          "#d8954e",
+          "#ecc095",
+          "#fdebda"
+        ]
+      },
+      "warning-soft": {
+        "role": "tertiary",
+        "displayName": "Warning Wash",
+        "canonical": "#fdf1dc",
+        "oklch": "oklch(96.2% 0.031 81.8)",
+        "dark": "#3a2c12",
+        "purpose": "Warning notices, map banner.",
+        "tonalRamp": [
+          "#120a00",
+          "#2d2413",
+          "#4a412f",
+          "#6a604e",
+          "#8c816e",
+          "#afa490",
+          "#d3c8b3",
+          "#f9edd8"
+        ]
+      },
+      "success": {
+        "role": "tertiary",
+        "displayName": "Success",
+        "canonical": "#137333",
+        "oklch": "oklch(48.8% 0.130 149.0)",
+        "dark": "#81c995",
+        "purpose": "Success text.",
+        "tonalRamp": [
+          "#001200",
+          "#003200",
+          "#005313",
+          "#157434",
+          "#409755",
+          "#6bba7a",
+          "#a7d7af",
+          "#e1f5e4"
+        ]
+      },
+      "success-soft": {
+        "role": "tertiary",
+        "displayName": "Success Wash",
+        "canonical": "#e6f4ea",
+        "oklch": "oklch(95.4% 0.020 154.9)",
+        "dark": "#1c3424",
+        "purpose": "Success badges, created invite codes.",
+        "tonalRamp": [
+          "#050e08",
+          "#1e2821",
+          "#3a453d",
+          "#59655c",
+          "#79867d",
+          "#9ca9a0",
+          "#c0cdc4",
+          "#e5f3e9"
+        ]
+      },
+      "inverse-surface": {
+        "role": "neutral",
+        "displayName": "Inverse",
+        "canonical": "#2b2f34",
+        "oklch": "oklch(30.3% 0.011 254.0)",
+        "dark": "#e8eaed",
+        "purpose": "Toast background (flips by theme).",
+        "tonalRamp": [
+          "#080b10",
+          "#22252a",
+          "#3e4248",
+          "#5d6267",
+          "#7e8389",
+          "#a1a5ac",
+          "#c4cad0",
+          "#eaeff6"
+        ]
+      },
+      "inverse-text": {
+        "role": "neutral",
+        "displayName": "Inverse Text",
+        "canonical": "#f1f3f4",
+        "oklch": "oklch(96.3% 0.003 228.8)",
+        "dark": "#202124",
+        "purpose": "Toast text (flips by theme).",
+        "tonalRamp": [
+          "#0a0b0c",
+          "#242526",
+          "#414243",
+          "#606162",
+          "#818383",
+          "#a3a5a6",
+          "#c7c9ca",
+          "#edeff0"
+        ]
+      },
+      "series-1": {
+        "role": "tertiary",
+        "displayName": "Chart Blue",
+        "canonical": "#2a78d6",
+        "oklch": "oklch(57.5% 0.163 255.5)",
+        "dark": "#3987e5",
+        "purpose": "Admin chart series slot 1.",
+        "tonalRamp": [
+          "#000927",
+          "#00215b",
+          "#003c94",
+          "#055fba",
+          "#3582e1",
+          "#70a7f0",
+          "#a9ccfa",
+          "#e2f0ff"
+        ]
+      },
+      "series-2": {
+        "role": "tertiary",
+        "displayName": "Chart Orange",
+        "canonical": "#eb6834",
+        "oklch": "oklch(67.1% 0.175 40.6)",
+        "dark": "#d95926",
+        "purpose": "Admin chart series slot 2.",
+        "tonalRamp": [
+          "#210000",
+          "#4e0000",
+          "#810300",
+          "#ad2d00",
+          "#d15724",
+          "#e58a68",
+          "#f5b9a4",
+          "#ffe8df"
+        ]
+      },
+      "map-land": {
+        "role": "tertiary",
+        "displayName": "Warm Paper",
+        "canonical": "#f3efe6",
+        "oklch": "oklch(95.3% 0.013 86.8)",
+        "dark": "#1d2126",
+        "purpose": "Basemap background (API style).",
+        "tonalRamp": [
+          "#0d0b06",
+          "#28251e",
+          "#45423a",
+          "#646159",
+          "#86827a",
+          "#a8a59c",
+          "#cdc9c0",
+          "#f2eee5"
+        ]
+      },
+      "map-water": {
+        "role": "tertiary",
+        "displayName": "Lake",
+        "canonical": "#a9d3e6",
+        "oklch": "oklch(84.3% 0.051 227.2)",
+        "dark": "#1f3a4d",
+        "purpose": "Basemap water.",
+        "tonalRamp": [
+          "#000e1c",
+          "#002a38",
+          "#214757",
+          "#406778",
+          "#61899b",
+          "#83acbe",
+          "#a7d1e4",
+          "#dbf3fe"
+        ]
+      },
+      "map-park": {
+        "role": "tertiary",
+        "displayName": "Park",
+        "canonical": "#cfe3b8",
+        "oklch": "oklch(89.0% 0.061 127.9)",
+        "dark": "#233526",
+        "purpose": "Basemap parks.",
+        "tonalRamp": [
+          "#050f00",
+          "#1c2a05",
+          "#384823",
+          "#576842",
+          "#788a62",
+          "#9aad84",
+          "#bed1a7",
+          "#e9f3de"
+        ]
+      },
+      "map-motorway": {
+        "role": "tertiary",
+        "displayName": "Motorway Amber",
+        "canonical": "#f0a35e",
+        "oklch": "oklch(77.7% 0.125 61.2)",
+        "dark": "#a8703f",
+        "purpose": "Basemap motorways.",
+        "tonalRamp": [
+          "#1e0200",
+          "#490c00",
+          "#6e2c00",
+          "#924d00",
+          "#b76e24",
+          "#dc924f",
+          "#eebe97",
+          "#feeadb"
+        ]
+      },
+      "map-label": {
+        "role": "tertiary",
+        "displayName": "Map Ink",
+        "canonical": "#3d3a33",
+        "oklch": "oklch(34.9% 0.013 87.6)",
+        "dark": "#e3ded3",
+        "purpose": "Basemap place labels.",
+        "tonalRamp": [
+          "#0d0b06",
+          "#28251e",
+          "#45423b",
+          "#646159",
+          "#85827a",
+          "#a8a59c",
+          "#ccc9c0",
+          "#f2eee5"
+        ]
+      },
+      "map-fog": {
+        "role": "tertiary",
+        "displayName": "Fog Veil",
+        "canonical": "#26303a",
+        "oklch": "oklch(30.4% 0.023 248.6)",
+        "dark": "#000000",
+        "purpose": "Unexplored-land fog: 34% opacity light, 62% dark.",
+        "tonalRamp": [
+          "#040c14",
+          "#1c2630",
+          "#39434e",
+          "#57636e",
+          "#788490",
+          "#9aa7b3",
+          "#becbd8",
+          "#e3f0fe"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "stat-lead": {
+        "displayName": "Stat lead",
+        "purpose": "The single headline figure on the coverage tab."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Admin page titles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Panel detail titles and the sign-in card title."
+      },
+      "title-sm": {
+        "displayName": "Title small",
+        "purpose": "Brand name, route durations, stat values."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Base text, inputs, route card titles at 600."
+      },
+      "body-sm": {
+        "displayName": "Body small",
+        "purpose": "Panel intros, menus, tables, notices, route metadata."
+      },
+      "label-md": {
+        "displayName": "Label medium",
+        "purpose": "Buttons, field labels, segmented options, in-panel headings at 650."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Tab captions, badges, hints, table headers, small buttons."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Invite codes, IDs, stack traces, log details."
+      },
+      "map-label": {
+        "displayName": "Map label",
+        "purpose": "Basemap labels (Noto Sans 11-13px, haloed); route callouts in Noto Sans Bold 12/13px."
+      }
+    },
+    "themes": {
+      "mechanism": "prefers-color-scheme with :root[data-theme='light'|'dark'] override; dark values in colorMeta.<token>.dark",
+      "consumers": [
+        "apps/web/src/styles/tokens.css",
+        "apps/api/src/style.ts (basemap LIGHT/DARK palettes)",
+        "apps/mobile/src/lib/theme.ts (mirror; not documented here)"
+      ]
+    },
+    "shadows": [
+      {
+        "name": "shadow-1",
+        "value": "0 1px 2px rgba(32, 38, 45, 0.18), 0 1px 3px 1px rgba(32, 38, 45, 0.08)",
+        "dark": "0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 3px 1px rgba(0, 0, 0, 0.3)",
+        "purpose": "Resting float: map controls, avatar, attribution, banners, admin cards, selected segmented option, primary hover."
+      },
+      {
+        "name": "shadow-2",
+        "value": "0 1px 3px rgba(32, 38, 45, 0.2), 0 4px 12px 2px rgba(32, 38, 45, 0.12)",
+        "dark": "0 2px 4px rgba(0, 0, 0, 0.5), 0 6px 16px 2px rgba(0, 0, 0, 0.35)",
+        "purpose": "Raised float: planner panel, menus, search suggestions, dialogs, toasts, chart tooltips, auth card."
+      },
+      {
+        "name": "focus-halo",
+        "value": "0 0 0 3px var(--accent-soft)",
+        "purpose": "Focused inputs and search box, with an accent border."
+      },
+      {
+        "name": "selection-ring",
+        "value": "0 0 0 1px var(--accent) | var(--explore)",
+        "purpose": "Selected route cards and voice options."
+      },
+      {
+        "name": "focus-outline",
+        "value": "outline: 2px solid var(--accent); outline-offset: 2px",
+        "purpose": "Default :focus-visible treatment."
+      },
+      {
+        "name": "dialog-backdrop",
+        "value": "rgba(20, 23, 26, 0.45)",
+        "purpose": "Modal backdrop."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Standard easing for all state and position transitions."
+      },
+      {
+        "name": "duration-state",
+        "value": "120ms",
+        "purpose": "Hover, focus and colour changes on buttons, fields, tabs."
+      },
+      {
+        "name": "duration-toggle",
+        "value": "150ms",
+        "purpose": "Switch knob, tab underline, route card selection."
+      },
+      {
+        "name": "duration-toast",
+        "value": "220ms",
+        "purpose": "Toast rises 8px and fades in."
+      },
+      {
+        "name": "duration-sheet",
+        "value": "260ms",
+        "purpose": "Mobile bottom sheet collapse (transform)."
+      },
+      {
+        "name": "shimmer",
+        "value": "1.4s linear infinite",
+        "purpose": "Skeleton loading."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation and transition durations 0.001ms",
+        "purpose": "prefers-reduced-motion: reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sheet",
+        "value": "899px",
+        "purpose": "max-width: planner panel becomes a 58% bottom sheet."
+      },
+      {
+        "name": "admin-grid",
+        "value": "1100px",
+        "purpose": "max-width: admin card grids collapse to one column."
+      },
+      {
+        "name": "admin-nav",
+        "value": "800px",
+        "purpose": "max-width: admin sidebar becomes a horizontal nav strip."
+      },
+      {
+        "name": "admin-sm",
+        "value": "600px",
+        "purpose": "max-width: hide secondary table columns."
+      }
+    ],
+    "mapOverlays": {
+      "routeFastestSelected": {
+        "color": "var(--accent)",
+        "width": 7,
+        "casing": {
+          "light": "#ffffff",
+          "dark": "#0b0d10",
+          "width": 11
+        },
+        "cap": "round"
+      },
+      "routeExploreSelected": {
+        "color": "var(--explore-line)",
+        "width": 7,
+        "dasharray": [
+          2,
+          0.6
+        ],
+        "casing": {
+          "light": "#ffffff",
+          "dark": "#0b0d10",
+          "width": 11
+        }
+      },
+      "routeUnselected": {
+        "width": 5,
+        "hoverWidth": 7,
+        "opacity": {
+          "fastest": 0.6,
+          "explore": 0.65
+        },
+        "exploreDasharray": [
+          2,
+          1
+        ],
+        "casing": {
+          "color": "var(--surface)",
+          "width": 8,
+          "opacity": 0.9
+        }
+      },
+      "callout": {
+        "background": "var(--surface)",
+        "stroke": {
+          "light": "#c7cbd1",
+          "dark": "#4a5057",
+          "width": 1.5
+        },
+        "radius": 8,
+        "font": "Noto Sans Bold",
+        "size": {
+          "default": 12,
+          "selected": 13
+        },
+        "textColor": "accent (fastest) | explore"
+      },
+      "coverage": {
+        "fog": {
+          "light": "#26303a @ 0.34",
+          "dark": "#000000 @ 0.62"
+        },
+        "exploredFill": "accent, 0.06-0.22 light / 0.10-0.32 dark by fraction",
+        "exploredOutline": "accent @ 0.85, 0.5-1.4px by zoom",
+        "recentOutline": "explore-line, 1.5-3px by zoom"
+      },
+      "pins": {
+        "destination": "var(--danger), r8, surface stroke 3",
+        "startVia": "stroke var(--text)"
+      }
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one primary action per view, such as Send to phone.",
+      "html": "<button class=\"ds-btn-primary\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m22 2-7 20-4-9-9-4Z\"/><path d=\"M22 2 11 13\"/></svg>Send to phone</button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:0 16px;border-radius:999px;border:1px solid transparent;font:600 0.8125rem/1 var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);transition:background-color 120ms cubic-bezier(0.16,1,0.3,1),box-shadow 120ms cubic-bezier(0.16,1,0.3,1);cursor:pointer;background:var(--accent, #1765cc);color:var(--on-accent, #ffffff);}.ds-btn-primary:hover{background:var(--accent-hover, #1257b3);box-shadow:var(--shadow-1, 0 1px 2px rgba(32,38,45,0.18), 0 1px 3px 1px rgba(32,38,45,0.08));}.ds-btn-primary:focus-visible{outline:2px solid var(--accent, #1765cc);outline-offset:2px;}.ds-btn-primary:disabled{opacity:.55;cursor:not-allowed;}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Supporting actions beside a primary; outlined pill with blue text.",
+      "html": "<button class=\"ds-btn-secondary\">4 steps</button>",
+      "css": ".ds-btn-secondary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:0 16px;border-radius:999px;border:1px solid transparent;font:600 0.8125rem/1 var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);transition:background-color 120ms cubic-bezier(0.16,1,0.3,1),box-shadow 120ms cubic-bezier(0.16,1,0.3,1);cursor:pointer;background:var(--surface, #ffffff);border-color:var(--border-strong, #c7cbd1);color:var(--accent, #1765cc);}.ds-btn-secondary:hover{background:var(--accent-soft, #e6effc);}.ds-btn-secondary:focus-visible{outline:2px solid var(--accent, #1765cc);outline-offset:2px;}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Low-emphasis actions such as Cancel or Back to the map.",
+      "html": "<button class=\"ds-btn-ghost\">Cancel</button>",
+      "css": ".ds-btn-ghost{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:36px;padding:0 16px;border-radius:999px;border:1px solid transparent;font:600 0.8125rem/1 var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);transition:background-color 120ms cubic-bezier(0.16,1,0.3,1),box-shadow 120ms cubic-bezier(0.16,1,0.3,1);cursor:pointer;background:transparent;color:var(--text-2, #565d66);}.ds-btn-ghost:hover{background:var(--surface-3, #eceef1);color:var(--text, #1d2126);}.ds-btn-ghost:focus-visible{outline:2px solid var(--accent, #1765cc);outline-offset:2px;}"
+    },
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "search-box",
+      "description": "Panel search and route endpoints: borderless Mist fill that lifts to white with a blue halo on focus.",
+      "html": "<label class=\"ds-search\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"m20 20-3.5-3.5\"/></svg><input placeholder=\"Search places\" aria-label=\"Search places\"></label>",
+      "css": ".ds-search{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;border-radius:8px;background:var(--surface-2, #f5f6f8);border:1px solid transparent;color:var(--text-3, #6f7680);transition:border-color 120ms,background-color 120ms,box-shadow 120ms;width:320px;}.ds-search input{flex:1;min-width:0;height:42px;border:none;background:transparent;outline:none;font:400 0.9375rem var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);color:var(--text, #1d2126);}.ds-search input::placeholder{color:var(--text-3, #6f7680);}.ds-search:focus-within{background:var(--surface, #ffffff);border-color:var(--accent, #1765cc);box-shadow:0 0 0 3px var(--accent-soft, #e6effc);}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Form fields in settings, auth and admin.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Email</span><input class=\"ds-input\" placeholder=\"you@example.com\"></label>",
+      "css": ".ds-field{display:grid;gap:6px;width:280px;font-family:var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);}.ds-field-label{font-size:0.8125rem;font-weight:600;color:var(--text-2, #565d66);}.ds-input{min-height:40px;padding:0 12px;border-radius:8px;border:1px solid var(--border-strong, #c7cbd1);background:var(--surface, #ffffff);color:var(--text, #1d2126);font:400 0.9375rem var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);transition:border-color 120ms,box-shadow 120ms;}.ds-input::placeholder{color:var(--text-3, #6f7680);}.ds-input:focus{outline:none;border-color:var(--accent, #1765cc);box-shadow:0 0 0 3px var(--accent-soft, #e6effc);}"
+    },
+    {
+      "name": "Planner Tabs",
+      "kind": "nav",
+      "refersTo": "panel-tab",
+      "description": "Icon-over-caption tab strip in the floating panel; active tab takes a 3px blue underline.",
+      "html": "<nav class=\"ds-tabs\"><a class=\"ds-tab is-active\" href=\"#\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m3 11 19-9-9 19-2-8-8-2Z\"/></svg>Directions</a><a class=\"ds-tab\" href=\"#\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21 16V8l-9-5-9 5v8l9 5 9-5Z\"/></svg>Coverage</a></nav>",
+      "css": ".ds-tabs{display:flex;gap:2px;padding:0 8px;border-bottom:1px solid var(--border, #dfe2e6);width:240px;font-family:var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);}.ds-tab{display:grid;justify-items:center;gap:2px;flex:1;padding:8px 4px 10px;color:var(--text-2, #565d66);text-decoration:none;font-size:0.75rem;font-weight:600;border-bottom:3px solid transparent;transition:color 120ms,border-color 150ms cubic-bezier(0.16,1,0.3,1);}.ds-tab:hover{color:var(--text, #1d2126);}.ds-tab.is-active{color:var(--accent, #1765cc);border-bottom-color:var(--accent, #1765cc);}.ds-tab:focus-visible{outline:2px solid var(--accent, #1765cc);outline-offset:2px;}"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Toggle filters such as place categories; pressed chips turn Blue Wash.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip\" aria-pressed=\"true\">Lookouts</button><button class=\"ds-chip\" aria-pressed=\"false\">Waterfalls</button></div>",
+      "css": ".ds-chips{display:flex;gap:8px;}.ds-chip{display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border-radius:999px;border:1px solid var(--border-strong, #c7cbd1);background:var(--surface, #ffffff);color:var(--text-2, #565d66);font:500 0.8125rem var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);cursor:pointer;}.ds-chip:hover{background:var(--surface-2, #f5f6f8);}.ds-chip[aria-pressed=\"true\"]{background:var(--accent-soft, #e6effc);border-color:transparent;color:var(--accent, #1765cc);}.ds-chip:focus-visible{outline:2px solid var(--accent, #1765cc);outline-offset:2px;}"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segmented",
+      "description": "Two-to-three-way choices such as Drive / Walk.",
+      "html": "<div class=\"ds-seg\" role=\"group\"><button aria-pressed=\"true\">Drive</button><button aria-pressed=\"false\">Walk</button></div>",
+      "css": ".ds-seg{display:inline-flex;padding:3px;gap:2px;border-radius:999px;background:var(--surface-3, #eceef1);}.ds-seg button{min-height:30px;padding:0 12px;border:none;border-radius:999px;background:transparent;color:var(--text-2, #565d66);font:600 0.8125rem var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);cursor:pointer;}.ds-seg button[aria-pressed=\"true\"]{background:var(--surface, #ffffff);color:var(--text, #1d2126);box-shadow:var(--shadow-1, 0 1px 2px rgba(32,38,45,0.18), 0 1px 3px 1px rgba(32,38,45,0.08));}.ds-seg button:focus-visible{outline:2px solid var(--accent, #1765cc);outline-offset:2px;}"
+    },
+    {
+      "name": "Route Option (explore, selected)",
+      "kind": "card",
+      "refersTo": "route-option",
+      "description": "Signature card: swatch, title, km and hatched new-ground badge, duration with extra minutes; selected explore takes a green ring.",
+      "html": "<div class=\"ds-route is-selected\"><span class=\"ds-route-swatch\"><svg width=\"17\" height=\"17\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6\"/></svg></span><span class=\"ds-route-body\"><span class=\"ds-route-title\">Explore 1</span><span class=\"ds-route-meta\">41 km <span class=\"ds-badge-new\">32 km you've never been</span></span></span><span class=\"ds-route-time\"><strong>49 min</strong>+12 min</span></div>",
+      "css": ".ds-route{display:flex;align-items:center;gap:12px;width:360px;padding:12px;border:1px solid var(--border, #dfe2e6);border-radius:8px;background:var(--surface, #ffffff);font-family:var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);font-variant-numeric:tabular-nums;transition:border-color 150ms,box-shadow 150ms cubic-bezier(0.16,1,0.3,1);}.ds-route:hover{border-color:var(--border-strong, #c7cbd1);background:var(--surface-2, #f5f6f8);}.ds-route.is-selected{border-color:var(--explore, #0b7d56);box-shadow:0 0 0 1px var(--explore, #0b7d56);}.ds-route-swatch{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;flex:none;background:var(--explore-soft, #e3f3ec);color:var(--explore, #0b7d56);}.ds-route-body{flex:1;min-width:0;display:grid;gap:3px;}.ds-route-title{font-weight:600;font-size:0.9375rem;color:var(--text, #1d2126);}.ds-route-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:0.8125rem;color:var(--text-2, #565d66);}.ds-route-time{display:grid;justify-items:end;gap:2px;font-size:0.75rem;color:var(--text-2, #565d66);}.ds-route-time strong{font-size:1.125rem;font-weight:650;color:var(--text, #1d2126);}.ds-badge-new{display:inline-flex;padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:600;white-space:nowrap;color:var(--explore, #0b7d56);background-color:var(--explore-soft, #e3f3ec);background-image:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--explore, #0b7d56) 9%,transparent) 0 2px,transparent 2px 6px);}"
+    },
+    {
+      "name": "Map Zoom Control",
+      "kind": "custom",
+      "refersTo": "map-control",
+      "description": "Floating map control group: 40px white squares with the resting shadow, split by a hairline.",
+      "html": "<div class=\"ds-mapctl\"><button aria-label=\"Zoom in\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M12 5v14M5 12h14\"/></svg></button><button aria-label=\"Zoom out\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/></svg></button></div>",
+      "css": ".ds-mapctl{display:inline-grid;border-radius:8px;background:var(--surface, #ffffff);box-shadow:var(--shadow-1, 0 1px 2px rgba(32,38,45,0.18), 0 1px 3px 1px rgba(32,38,45,0.08));overflow:hidden;}.ds-mapctl button{display:grid;place-items:center;width:40px;height:40px;border:none;background:var(--surface, #ffffff);color:var(--text-2, #565d66);cursor:pointer;}.ds-mapctl button+button{border-top:1px solid var(--border, #dfe2e6);}.ds-mapctl button:hover{color:var(--text, #1d2126);background:var(--surface-2, #f5f6f8);}.ds-mapctl button:focus-visible{outline:2px solid var(--accent, #1765cc);outline-offset:2px;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Atlas",
+    "overview": "Wayfinder plays the map-app category straight, at the craft level of Google Maps and Apple Maps on the web. The map fills the viewport and the interface floats over it: near-white panels with 12px corners and a soft two-layer shadow, system UI type, neutral greys, and a single blue that means \"act here\" or \"fastest\". Nothing decorates the chrome. The map carries the colour and the panel carries the numbers.\n\nThe product-specific idea is that novelty is data. Kilometres you have never travelled sit beside minutes and kilometres as a first-class figure, in a second hue (explore green) that always arrives with a second channel: a dashed line on the map, a hatched badge in the panel, words in the label. Blue solid is the fastest route; green dashed is the invitation.\n\nDensity suits desk planning: 13 to 15px working text, tabular numerals, compact 30 to 40px controls, 8px list gaps. The admin area (/admin) uses the same tokens in a conventional sidebar-plus-cards layout with dense tables and line or bar charts. Light and dark themes are full peers: both follow the system setting and can be overridden with `data-theme`. The Android app mirrors these tokens in `apps/mobile/src/lib/theme.ts`; it consumes this system but is not documented here.",
+    "keyCharacteristics": [
+      "Full-bleed map with floating surface chrome (400px panel, 16px inset).",
+      "One blue accent for primary actions, selection and the fastest route; one green for explore routes and new ground.",
+      "Novelty is never signalled by colour alone: dashed lines, hatched badges, explicit \"km you've never been\" text.",
+      "System UI type throughout, weights 400/550/600/650, tabular numerals for every figure.",
+      "Pill-shaped actions, 8px controls and cards, 12px floating panels.",
+      "Soft ambient shadows only on things that float; in-panel content is flat and separated by 1px borders."
+    ],
+    "rules": [
+      {
+        "name": "The One Blue Rule",
+        "body": "Route Blue marks exactly three things: the primary action, the current selection, and the fastest route. It never decorates, and it never marks an explore route.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Channels Rule",
+        "body": "Explore Green is always paired with a non-colour signal: a dash pattern on the map, a hatched fill on the badge, or the words \"new\" / \"you've never been\". Remove the green and the meaning must survive.",
+        "section": "colors"
+      },
+      {
+        "name": "The Chart Slot Rule",
+        "body": "Charts take colour from the series slots, never from accent or explore, so data never borrows the meaning of an action or a route.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Figures Rule",
+        "body": "Every number that can change or be compared (durations, distances, new km, table cells, chart axes, the budget readout) uses tabular numerals.",
+        "section": "typography"
+      },
+      {
+        "name": "The Sentence Case Rule",
+        "body": "UI labels, headings, tabs and admin nav group titles are sentence case at their normal tracking. Emphasis comes from weight, not capitals or letterspacing. (Uppercase appears only in basemap state labels, a cartographic convention.)",
+        "section": "typography"
+      },
+      {
+        "name": "The Float Only Rule",
+        "body": "Shadows belong to things that hover over the map or page. Cards inside a panel (route options, place cards, run lists) are bordered, never shadowed.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do float every piece of map chrome on Paper White with the resting (controls) or raised (panels, menus, dialogs) shadow, inset 16px from the viewport edge.",
+      "Do show every route comparison as minutes, km and new km together, with durations in tabular title-small.",
+      "Do draw fastest routes solid in Route Blue and explore routes dashed in Trail Green, each on a light casing so they read over any basemap.",
+      "Do pair every use of Explore Green with a dash, a hatch or explicit \"new\" wording.",
+      "Do use pills for actions and chips, 8px for fields and in-panel cards, 12px for floating surfaces.",
+      "Do read the product name from runtime config in the brand slot; the brand mark is an inline SVG.",
+      "Do define each new colour in both themes, flipping on-colour text to dark over the lighter dark-theme accents.",
+      "Do honour reduced motion; all transitions sit between 120 and 260ms on the ease-out curve (cubic-bezier(0.16, 1, 0.3, 1))."
+    ],
+    "donts": [
+      "Don't use Route Blue for explore routes, decorative icons or chart series.",
+      "Don't encode route type, novelty or coverage by hue alone.",
+      "Don't shadow cards that sit inside a panel; use the 1px Hairline border and selection ring.",
+      "Don't add a display or brand typeface, uppercase UI labels or letterspaced labels; hierarchy comes from weight and size in the system UI stack.",
+      "Don't hard-code hex values in components; take them from the tokens so both themes follow.",
+      "Don't stretch phone patterns onto the desk layout; the bottom sheet is for widths below 900px only."
+    ]
+  }
+}
