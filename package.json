@@ -20,7 +20,8 @@
     "dev:web": "pnpm --filter @wayfinder/web dev",
     "seed:demo": "tsx --conditions=development scripts/seed-demo.ts",
     "dev:fake-gh": "tsx --conditions=development scripts/fake-graphhopper.ts",
-    "bench:explore": "tsx --conditions=development scripts/bench-explore.ts"
+    "bench:explore": "tsx --conditions=development scripts/bench-explore.ts",
+    "verify:stack": "tsx --conditions=development scripts/verify-stack.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
