@@ -112,7 +112,7 @@ Sizing for Australia: 8 vCPU, 32 GB RAM, 250 GB SSD.
 4. Sign in, open **Admin → Jobs & data → Refresh map data**. The first build downloads the Australia extract (~1 GB) and builds the routing graph, tiles and search index (1–2 hours). It then refreshes monthly.
 5. Create invite codes in **Admin → Invite codes** and send the sign-up links to friends.
 
-Caddy obtains TLS certificates automatically. Nightly backups:
+Caddy obtains TLS certificates automatically. Day-to-day running, refreshes, backups and troubleshooting are in [docs/operations.md](docs/operations.md). Nightly backups:
 
 ```bash
 RESTIC_REPOSITORY=/mnt/backup/wayfinder RESTIC_PASSWORD_FILE=/root/restic-pass infra/scripts/backup.sh
