@@ -1,0 +1,47 @@
+{
+  "title": "Choose the visual world for Wayfinder (web) — safer hand",
+  "question": "Familiar directions, as requested. Pick one, or take the category standard.",
+  "options": [
+    {
+      "id": "topo-sheet",
+      "label": "Topographic Sheet",
+      "lineage": "Geoscience Australia 1:100k / 1:250k topographic map series",
+      "thesis": "The app as a well-made national topo map: calm terrain tints, a collar with legend and scale, and a sheet index that fills in as you explore.",
+      "palette": ["#f6f4ec", "#dfe8cf", "#b86b3a", "#2d6fb3", "#22262a"],
+      "materials": ["terrain tints and contour brown", "map collar with legend", "sheet index diagram"],
+      "viewport": "Map fills the screen inside a thin collar; a side panel reads like the legend panel, listing fastest and explore routes with minutes and new km.",
+      "risk": "Earthy map palette is familiar and calm, and could feel plain if the collar details are skipped."
+    },
+    {
+      "id": "street-directory",
+      "label": "Street Directory",
+      "lineage": "UBD / Gregory's spiral-bound street directories",
+      "thesis": "A dense, trusty directory: grid references, bold index tabs and a route plan that reads like a page of directions.",
+      "palette": ["#fbf7ea", "#f2c230", "#d8412f", "#1d4f91", "#1a1a1a"],
+      "materials": ["index tabs", "grid references", "bold road colours"],
+      "viewport": "Map page with grid-reference margins; a tabbed index panel on the left for Plan, Discover, Coverage, Trips.",
+      "risk": "Strong nostalgia for Australians; road-directory yellow can feel dated if overused."
+    },
+    {
+      "id": "park-signage",
+      "label": "National Park Signage",
+      "lineage": "NPWS track signs and the Australian Walking Track Grading System",
+      "thesis": "Routed-timber trail signs: clear distances, times and grades, with explore routes graded by how much new ground they cover.",
+      "palette": ["#f3efe4", "#5b3a22", "#e9dcc0", "#2f6b3f", "#1b1b1b"],
+      "materials": ["routed timber signs", "grade markers", "distance and time rows"],
+      "viewport": "Full map; route choices stacked like a trailhead signpost: destination, km, minutes, grade of newness.",
+      "risk": "Very outdoorsy; driving-first users may find the trail framing a stretch."
+    }
+  ],
+  "buildPath": { "value": "code" },
+  "canon": true,
+  "canonCard": {
+    "label": "The category standard",
+    "thesis": "Google Maps / Apple Maps / Organic Maps grammar: floating search, side panel of route cards, blue route line — executed at their craft level.",
+    "palette": ["#ffffff", "#1a73e8", "#5f6368", "#e8f0fe"],
+    "materials": ["floating search", "route cards", "rounded chips"],
+    "viewport": "Left panel with search and route cards over a full-screen map; explore routes as alternates with a 'new km' badge.",
+    "risk": "Indistinguishable from the apps it sits alongside, by design."
+  },
+  "steer": true
+}

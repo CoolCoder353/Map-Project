@@ -4,3 +4,4 @@ export * from './routing.js';
 export * from './tracks.js';
 export * from './coverage.js';
 export * from './admin.js';
+export * from './app.js';

@@ -46,3 +46,16 @@ describe('schemas', () => {
     expect(CreateInvitesSchema.parse({})).toEqual({ count: 1, expiresInDays: 14, note: null, roleOnSignup: 'user' });
   });
 });
+
+describe('app settings and copy', () => {
+  it('validates app settings and provides every copy key for each voice', async () => {
+    const { AppSettingsSchema, UpdateAppSettingsSchema, COPY } = await import('../src/index.js');
+    expect(AppSettingsSchema.safeParse({ appName: '  ', voice: 'plain' }).success).toBe(false);
+    expect(AppSettingsSchema.safeParse({ appName: 'Fogline', voice: 'loud' }).success).toBe(false);
+    expect(UpdateAppSettingsSchema.safeParse({}).success).toBe(false);
+    const keys = Object.keys(COPY.plain).sort();
+    for (const voice of ['playful', 'minimal'] as const) expect(Object.keys(COPY[voice]).sort()).toEqual(keys);
+    expect(COPY.plain.newKm(4.24)).toBe('4.2 km you’ve never been');
+    expect(COPY.minimal.newKm(12.6)).toBe('13 km new');
+  });
+});

@@ -11,10 +11,12 @@ import {
   JobListQuerySchema,
   MetricsQuerySchema,
   PageQuerySchema,
+  UpdateAppSettingsSchema,
 } from '@wayfinder/shared';
 import {
   AppError,
   adminService,
+  appSettingsService,
   audit,
   authService,
   badRequest,
@@ -169,6 +171,15 @@ export const adminRoutes =
       if (!(await inviteService.revokeInvite(db, req.params.code))) throw badRequest('Invite is already used or revoked');
       await audit(db, { actorId: currentUser(req).id, action: 'invite.revoke', targetType: 'invite', targetId: req.params.code, ip: req.ip });
       return { ok: true };
+    });
+
+    // ---- App settings (name, voice) ----
+    app.get('/app-settings', async () => appSettingsService.getAppSettings(db));
+    app.patch('/app-settings', adminOnly, async (req) => {
+      const patch = parse(UpdateAppSettingsSchema, req.body);
+      const { before, after } = await appSettingsService.updateAppSettings(db, patch);
+      await audit(db, { actorId: currentUser(req).id, action: 'app.settings_change', targetType: 'app', targetId: null, details: { before, after }, ip: req.ip });
+      return after;
     });
 
     // ---- Audit ----

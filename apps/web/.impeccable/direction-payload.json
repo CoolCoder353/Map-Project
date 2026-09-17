@@ -1,0 +1,125 @@
+{
+  "title": "Choose the visual world for Wayfinder (web)",
+  "question": "The roll assigned the Flight-plan Chart direction. Keep it, take an alternate, or re-roll.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Flight-plan Chart",
+      "kicker": "THE ROLL",
+      "lineage": "Airservices VFR terminal charts + a pilot's nav log",
+      "thesis": "Plan a Saturday like a flight: a chart with overprints and a nav log of legs, minutes and new ground.",
+      "palette": ["#eef0e6", "#d9e3c8", "#c2127a", "#1f4fb4", "#1b1d1f"],
+      "materials": ["chart paper with terrain tints", "magenta overprint", "ruled nav-log table"],
+      "viewport": "Full-bleed chart; a docked nav-log sheet lists fastest and explore routes as legs with minutes, km and new km; the chosen route is overprinted in magenta with leg ticks.",
+      "risk": "Aviation grammar can read as niche; column labels must stay plain English, not pilot jargon.",
+      "raised": [
+        { "from": "challenger-exposure-record", "raise": "Novelty and coverage are carried by hatch density, never by colour alone." },
+        { "from": "challenger-split-flap", "raise": "Route comparison is a fixed-column board: rows re-rank, columns never move." },
+        { "from": "challenger-pc98", "raise": "Frame regions never move; navigation swaps the sheet's contents while the chart stays put." },
+        { "from": "challenger-deep-dive", "raise": "One shared minutes axis rules every route comparison and the explore budget." },
+        { "from": "challenger-crouwel", "raise": "The hexagon grid is a real, toggleable chart layer, not decoration." }
+      ]
+    },
+    {
+      "id": "model-pick",
+      "label": "Orienteering Course Map",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "IOF orienteering map specification (ISOM)",
+      "thesis": "Every route is a course printed in magenta over a strict symbol map, through controls you have never punched.",
+      "palette": ["#ffffff", "#ffdd8a", "#c9e7c1", "#8f4a1c", "#c11e7d"],
+      "materials": ["overprint course lines", "control circles", "strict symbol legend"],
+      "viewport": "Map fills the screen; routes as numbered control courses; a course card lists legs and new ground.",
+      "risk": "The closest to what a map app would naturally become; familiar to orienteers, merely 'a map' to others."
+    },
+    {
+      "id": "challenger-exposure-record",
+      "label": "Exposure Record Sheets",
+      "verdict": "declined",
+      "lineage": "darkroom printer's exposure record",
+      "thesis": "Coverage as translucent zone sheets with hatch density.",
+      "palette": ["#f2f2ee", "#8a8a86", "#c42b8e"],
+      "materials": ["tracing paper", "zone ramp", "hatching"],
+      "viewport": "Stacked translucent sheets over the map.",
+      "risk": "Darkroom metaphor has nothing to do with travel.",
+      "case": "Fuses poorly for friends planning trips; its colour-independent hatching is exactly right for coverage.",
+      "kept": "Hatch density encodes novelty without colour."
+    },
+    {
+      "id": "challenger-split-flap",
+      "label": "Split-flap Concourse",
+      "verdict": "declined",
+      "lineage": "rail departure boards",
+      "thesis": "Routes as departures ranked by time.",
+      "palette": ["#111111", "#f5f5f0", "#f0a73a"],
+      "materials": ["flap cells", "steel frame"],
+      "viewport": "A board of route rows.",
+      "risk": "Transit board implies schedules the product does not have.",
+      "case": "Transit framing misleads (no timetables); its fixed columns suit route comparison.",
+      "kept": "Fixed columns, re-ranking rows."
+    },
+    {
+      "id": "challenger-pc98",
+      "label": "Sixteen-colour Field",
+      "verdict": "declined",
+      "lineage": "PC-98 screens",
+      "thesis": "Fixed dithered regions and bordered menus.",
+      "palette": ["#000000", "#5555ff", "#ff55ff", "#ffffff"],
+      "materials": ["dither", "bitmap type"],
+      "viewport": "Fixed text window under pixel art.",
+      "risk": "Pixel scaling fights a vector map.",
+      "case": "Loses on clarity at map scale; its fixed regions discipline is useful.",
+      "kept": "Regions never move; contents swap."
+    },
+    {
+      "id": "challenger-deep-dive",
+      "label": "Mesophotic Dive Log",
+      "verdict": "declined",
+      "lineage": "technical dive computers",
+      "thesis": "A single depth axis rules everything.",
+      "palette": ["#0b1e3a", "#39c6d6", "#f4f7f8"],
+      "materials": ["marine snow", "dive-computer digits"],
+      "viewport": "Vertical dive profile.",
+      "risk": "Underwater world is foreign to road and trail planning.",
+      "case": "Audience does not identify; one ruling axis is a good discipline.",
+      "kept": "One minutes axis for all comparisons."
+    },
+    {
+      "id": "challenger-crouwel",
+      "label": "Crouwel Grid Specimen",
+      "verdict": "declined",
+      "lineage": "Wim Crouwel grid posters",
+      "thesis": "The construction grid as the design.",
+      "palette": ["#ffffff", "#2a5bd7", "#111111"],
+      "materials": ["graph-paper grid", "grid letterforms"],
+      "viewport": "Monumental grid type.",
+      "risk": "Square grid contradicts the hexagon coverage model.",
+      "case": "Square-grid poster type obscures a map task; visible grid as state is worth keeping.",
+      "kept": "Grid visibility as a real toggle."
+    },
+    {
+      "id": "challenger-cloud-quarry",
+      "label": "Cloud Quarry",
+      "verdict": "declined",
+      "lineage": "surreal weather architecture",
+      "thesis": "Blocks of weather cut and assembled.",
+      "palette": ["#f7f8fa", "#7fb2e5", "#6b6f76"],
+      "materials": ["cumulus", "stencil tally boards"],
+      "viewport": "Stacked cloud blocks.",
+      "risk": "Whimsy undermines trust in routes.",
+      "case": "Loses both axes; only its tally-board measurements carry over.",
+      "kept": "Measurements set in tabular figures."
+    }
+  ],
+  "reroll": { "registers": ["safer", "bolder"] },
+  "buildPath": { "value": "code" },
+  "canon": true,
+  "canonCard": {
+    "label": "The category standard",
+    "thesis": "Google-Maps-style: white side panel, blue route line, grey alternatives, executed carefully.",
+    "palette": ["#ffffff", "#1a73e8", "#5f6368"],
+    "materials": ["floating search box", "card list", "rounded chips"],
+    "viewport": "Left panel with search and route cards over a full-screen map.",
+    "risk": "Indistinguishable from the app it replaces."
+  },
+  "steer": true
+}

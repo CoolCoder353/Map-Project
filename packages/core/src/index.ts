@@ -20,3 +20,4 @@ export * as adminService from './services/admin.js';
 export * as opsService from './services/ops.js';
 export * as accountService from './services/account.js';
 export * from "./lib/queue.js";
+export * as appSettingsService from './services/app-settings.js';
