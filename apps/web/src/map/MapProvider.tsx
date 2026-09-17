@@ -9,6 +9,11 @@ import type {
 } from 'maplibre-gl';
 import type * as GeoJSON from 'geojson';
 import 'maplibre-gl/dist/maplibre-gl.css';
+// Bundle MapLibre's worker as its own asset and point the library at it. MapLibre otherwise
+// looks for "maplibre-gl-worker.mjs" beside its module, which a production build doesn't emit.
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 import {
   type ReactNode,
   createContext,
