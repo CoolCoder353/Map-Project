@@ -50,7 +50,7 @@ export async function checkHealth(db: DbClient, graphhopper: GraphHopperClient):
     if (s) {
       system = {
         ts: s.ts.toISOString(),
-        cpuPct: s.cpu_pct,
+        cpuPct: Math.round(s.cpu_pct * 10) / 10,
         memUsedBytes: Number(s.mem_used_bytes),
         memTotalBytes: Number(s.mem_total_bytes),
         diskUsedBytes: Number(s.disk_used_bytes),

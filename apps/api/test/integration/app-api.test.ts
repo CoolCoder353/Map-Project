@@ -103,10 +103,11 @@ describe('app API', () => {
     expect(h.services.find((s: { name: string }) => s.name === 'worker').up).toBe(false);
   });
 
-  it('serves the map style with absolute URLs and 503 for tiles before they are built', async () => {
+  it('serves the map style with absolute URLs and 404 for tiles before they are built', async () => {
     const style = await ta.app.inject({ method: 'GET', url: '/map/style.json?theme=dark', headers: { host: 'maps.test' } });
     expect(style.statusCode).toBe(200);
     expect(style.json().sources.openmaptiles.url).toBe('http://maps.test/tiles/tiles.json');
-    expect((await ta.app.inject({ method: 'GET', url: '/tiles/1/0/0.mvt' })).statusCode).toBe(503);
+    expect((await ta.app.inject({ method: 'GET', url: '/tiles/1/0/0.mvt' })).statusCode).toBe(404);
+    expect((await ta.app.inject({ method: 'GET', url: '/tiles/tiles.json' })).json().error.code).toBe('tiles_not_built');
   });
 });

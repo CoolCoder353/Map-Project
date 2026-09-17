@@ -1,0 +1,38 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "db",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev:db"
+      ],
+      "port": 55432
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/postgres JWT_SECRET=dev-secret-dev-secret-dev-secret-0000 TRUST_PROXY=true GRAPHHOPPER_URL=http://127.0.0.1:8989 PMTILES_PATH=../../data/tiles/australia.pmtiles pnpm dev:api"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev:web"
+      ],
+      "port": 5173
+    },
+    {
+      "name": "fake-gh",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "dev:fake-gh"
+      ],
+      "port": 8989
+    }
+  ]
+}

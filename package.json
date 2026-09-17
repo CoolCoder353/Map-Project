@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.26.0",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "build": "pnpm -r --filter ./packages/* build",
     "typecheck": "pnpm -r typecheck",
@@ -11,7 +13,13 @@
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "dev:db": "tsx --conditions=development scripts/dev-pglite.ts",
+    "dev:api": "pnpm --filter @wayfinder/api dev",
+    "dev:worker": "pnpm --filter @wayfinder/worker dev",
+    "dev:web": "pnpm --filter @wayfinder/web dev",
+    "seed:demo": "tsx --conditions=development scripts/seed-demo.ts",
+    "dev:fake-gh": "tsx --conditions=development scripts/fake-graphhopper.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
@@ -20,6 +28,11 @@
     "prettier": "^3.6.0",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.70.0",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.1",
+    "tsx": "^4.23.13",
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
+    "@wayfinder/core": "workspace:*",
+    "@wayfinder/shared": "workspace:*"
   }
 }

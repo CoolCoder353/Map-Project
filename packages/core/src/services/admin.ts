@@ -15,6 +15,7 @@ import { revokeAllSessions } from './auth.js';
 import { type UserRow, countActiveAdmins, findUserById } from './users.js';
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : null);
+const clampTo = (v: number | null, max: number) => (v === null ? null : max > 0 ? Math.min(v, max) : v);
 
 interface AdminUserRow extends UserRow {
   trip_count: string;
@@ -360,8 +361,9 @@ export async function queryMetrics(
       label: m.label,
       count: m.count,
       errorCount: m.err,
-      p50Ms: percentileFromHistogram(m.hist, 0.5),
-      p95Ms: percentileFromHistogram(m.hist, 0.95),
+      // Histogram percentiles are bin midpoints; never report more than the observed max.
+      p50Ms: clampTo(percentileFromHistogram(m.hist, 0.5), m.max),
+      p95Ms: clampTo(percentileFromHistogram(m.hist, 0.95), m.max),
       maxMs: m.max,
     }));
 }
