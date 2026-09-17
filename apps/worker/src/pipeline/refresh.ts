@@ -76,10 +76,17 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
   let dataDate: string | null = null;
 
   const mtime = async (p: string) => (await stat(p).catch(() => null))?.mtimeMs ?? null;
-  /** Reuse an output that is already newer than the extract (makes retries cheap). */
-  const upToDate = async (output: string) => {
-    const [out, src] = await Promise.all([mtime(output), mtime(pbf)]);
-    return out !== null && src !== null && out >= src;
+  /**
+   * Steps mark their output complete so a retry can reuse it (a failure later in the run
+   * then costs minutes instead of another full graph or tile build).
+   */
+  const markDone = (name: string) => writeFile(join(cfg.dataDir, `.${name}-complete`), String(Date.now()));
+  const alreadyDone = async (name: string) => {
+    const done = await mtime(join(cfg.dataDir, `.${name}-complete`));
+    if (done === null) return false;
+    const src = await mtime(pbf);
+    // Reuse unless the extract is newer than the marker.
+    return src === null || done >= src;
   };
 
   await opsService.updatePipelineRun(db, runId, { status: 'running' });
@@ -107,7 +114,7 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
     });
 
     await step('graph', async () => {
-      if (await upToDate(join(ghDir, 'graph-next', 'nodes'))) {
+      if (await alreadyDone('graph')) {
         log('reusing the graph already built for this extract');
         return;
       }
@@ -126,10 +133,11 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
         ],
         log,
       );
+      await markDone('graph');
     });
 
     await step('tiles', async () => {
-      if (await upToDate(tilesNext)) {
+      if (await alreadyDone('tiles')) {
         log('reusing the tiles already built for this extract');
         return;
       }
@@ -150,6 +158,7 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
         ],
         log,
       );
+      await markDone('tiles');
     });
 
     await step('places', async () => {
@@ -178,6 +187,7 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
         await rename(tilesNext, join(tilesDir, 'australia.pmtiles'));
       }
       if (dataDate) await adminService.setAppState(db, opsService.OSM_DATA_DATE_KEY, dataDate);
+      await Promise.all([rm(join(cfg.dataDir, '.graph-complete'), { force: true }), rm(join(cfg.dataDir, '.tiles-complete'), { force: true })]);
     });
 
     await opsService.updatePipelineRun(db, runId, { status: 'succeeded', logTail: lines.join('\n'), osmDataDate: dataDate, finished: true });

@@ -82,22 +82,48 @@ describe('OSM refresh orchestration', () => {
     expect(await readFile(join(dataDir, 'graphhopper', 'graph-current', 'nodes'), 'utf8')).toBe('graph');
     expect(await readFile(join(dataDir, 'tiles', 'australia.pmtiles'), 'utf8')).toBe('pmtiles');
     expect((await readFile(join(dataDir, 'graphhopper', 'graph-version'), 'utf8')).trim()).toMatch(/^\d+$/);
-    // A second run reuses the graph and tiles already built for this extract.
-    const runId2 = await opsService.createPipelineRun(t.db, 'osm_refresh', null);
-    commands.length = 0;
-    await runOsmRefresh(
-      t.db,
-      runId2,
-      { dataDir, pbfUrl: 'https://example.test/au.osm.pbf', graphhopperJar: 'gh.jar', graphhopperConfig: 'c.yml', graphhopperHeap: '1g', planetilerJar: 'p.jar', planetilerHeap: '1g', skip: ['download'] },
-      fake,
-    );
-    expect(commands.filter((c) => c.startsWith('java'))).toEqual([]);
-
-    const [, run] = await opsService.listPipelineRuns(t.db);
+    const [run] = await opsService.listPipelineRuns(t.db);
     expect(run).toMatchObject({ status: 'succeeded', osmDataDate: '2026-09-10T20:21:02Z' });
     expect(run!.logTail).toContain('== graph done');
     expect((await adminService.getAppState<string>(t.db, opsService.OSM_DATA_DATE_KEY))?.value).toBe('2026-09-10T20:21:02Z');
     expect((await t.db.query("SELECT name FROM places")).rows.map((r) => r.name)).toEqual(['Queanbeyan']);
+  });
+
+  it('a retry after a late failure reuses the graph and tiles already built', async () => {
+    const dataDir = join(dir, 'data-retry');
+    await mkdir(join(dataDir, 'graphhopper', 'graph-current'), { recursive: true });
+    const commands: string[] = [];
+    let failPlaces = true;
+    const fake: RunCommand = async (cmd, args, onLine) => {
+      commands.push(`${cmd} ${args[0]}`);
+      const argv = args.join(' ');
+      if (cmd === 'osmium' && args[0] === 'fileinfo') onLine('2026-09-10T20:21:02Z');
+      if (cmd === 'java' && argv.includes('graph.location')) {
+        const loc = args.find((a) => a.includes('graph.location'))!.split('=')[1]!;
+        await mkdir(loc, { recursive: true });
+        await writeFile(join(loc, 'nodes_ch_car'), 'graph');
+      }
+      if (cmd === 'java' && argv.includes('--output=')) await writeFile(args.find((a) => a.startsWith('--output='))!.slice(9), 'pmtiles');
+      if (cmd === 'osmium' && args[0] === 'export') {
+        if (failPlaces) throw new Error('osmium exited with code 1');
+        await writeFile(args[args.indexOf('-o') + 1]!, seq([feature('n9', { place: 'town', name: 'Queanbeyan' }, [149.23, -35.35])]));
+      }
+    };
+    const cfg = { dataDir, pbfUrl: 'https://example.test/au.osm.pbf', graphhopperJar: 'gh.jar', graphhopperConfig: 'c.yml', graphhopperHeap: '1g', planetilerJar: 'p.jar', planetilerHeap: '1g', skip: ['download'] };
+
+    const first = await opsService.createPipelineRun(t.db, 'osm_refresh', null);
+    await expect(runOsmRefresh(t.db, first, cfg, fake)).rejects.toThrow(/osmium/);
+    expect(commands.filter((c) => c.startsWith('java'))).toHaveLength(2); // graph + tiles built
+
+    failPlaces = false;
+    commands.length = 0;
+    const second = await opsService.createPipelineRun(t.db, 'osm_refresh', null);
+    await runOsmRefresh(t.db, second, cfg, fake);
+    expect(commands.filter((c) => c.startsWith('java'))).toEqual([]); // both reused
+    expect(await readFile(join(dataDir, 'tiles', 'australia.pmtiles'), 'utf8')).toBe('pmtiles');
+    expect(await readFile(join(dataDir, 'graphhopper', 'graph-current', 'nodes_ch_car'), 'utf8')).toBe('graph');
+    const run = (await opsService.listPipelineRuns(t.db)).find((r) => r.id === second)!;
+    expect(run.status).toBe('succeeded');
   });
 
   it('marks the run failed and keeps live data when a step fails', async () => {
