@@ -1,3 +1,5 @@
 packages:
   - apps/*
   - packages/*
+minimumReleaseAgeExclude:
+  - pg-boss@12.33.0

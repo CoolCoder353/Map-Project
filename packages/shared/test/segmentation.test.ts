@@ -83,3 +83,19 @@ describe('inferMode', () => {
     expect(inferMode([])).toBe('foot');
   });
 });
+
+describe('timedPathCells', () => {
+  it('assigns interpolated first/last times to each cell', async () => {
+    const { timedPathCells } = await import('../src/segmentation.js');
+    const pts = track(T0, 2, 20, 100); // one 2 km hop in 100 s
+    const cells = timedPathCells(pts);
+    expect(cells.length).toBeGreaterThan(5);
+    for (const c of cells) {
+      expect(c.firstTs).toBeGreaterThanOrEqual(T0);
+      expect(c.lastTs).toBeLessThanOrEqual(T0 + 100_000);
+    }
+    const sorted = [...cells].sort((a, b) => a.firstTs - b.firstTs);
+    expect(sorted[0]!.firstTs).toBe(T0);
+    expect(sorted.at(-1)!.lastTs).toBe(T0 + 100_000);
+  });
+});

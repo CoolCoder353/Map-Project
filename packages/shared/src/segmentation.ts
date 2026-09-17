@@ -1,4 +1,6 @@
 import { type LngLat, haversineM, lineLengthM } from './geo.js';
+import { getHexagonEdgeLengthAvg, UNITS } from 'h3-js';
+import { VISIT_RES, pointToCell } from './h3.js';
 import type { Mode } from './schemas/common.js';
 
 export interface TrackPoint {
@@ -20,7 +22,7 @@ export interface FilterOptions {
 }
 
 /** Sort, de-duplicate, and drop inaccurate points and implausible jumps. */
-export function filterPoints(points: readonly TrackPoint[], opts: FilterOptions = {}): TrackPoint[] {
+export function filterPoints<T extends TrackPoint>(points: readonly T[], opts: FilterOptions = {}): T[] {
   const maxAcc = opts.maxAccuracyM ?? 50;
   const maxSpeed = opts.maxSpeedMps ?? 70;
   const sorted = points
@@ -33,7 +35,7 @@ export function filterPoints(points: readonly TrackPoint[], opts: FilterOptions 
         (p.accuracyM == null || p.accuracyM <= maxAcc),
     )
     .sort((a, b) => a.ts - b.ts);
-  const out: TrackPoint[] = [];
+  const out: T[] = [];
   for (const p of sorted) {
     const last = out[out.length - 1];
     if (last) {
@@ -57,14 +59,14 @@ export interface SegmentOptions {
  * Split a filtered, time-ordered track into trips. A trip ends at a time gap, or when the
  * device stays within a small radius for too long (the stationary points are discarded).
  */
-export function segmentTrips(points: readonly TrackPoint[], opts: SegmentOptions = {}): TrackPoint[][] {
+export function segmentTrips<T extends TrackPoint>(points: readonly T[], opts: SegmentOptions = {}): T[][] {
   const gapMs = opts.gapMs ?? 10 * 60_000;
   const stationaryMs = opts.stationaryMs ?? 5 * 60_000;
   const radius = opts.stationaryRadiusM ?? 50;
   const minDist = opts.minTripDistanceM ?? 100;
 
-  const trips: TrackPoint[][] = [];
-  let current: TrackPoint[] = [];
+  const trips: T[][] = [];
+  let current: T[] = [];
   const flush = () => {
     if (current.length >= 2 && lineLengthM(current.map(toLngLat)) >= minDist) trips.push(current);
     current = [];
@@ -120,4 +122,41 @@ export function inferMode(points: readonly TrackPoint[]): Mode {
   speeds.sort((x, y) => x - y);
   const median = speeds[Math.floor(speeds.length / 2)]!;
   return median > 25 / 3.6 ? 'car' : 'foot';
+}
+
+export interface TimedCell {
+  cell: string;
+  firstTs: number;
+  lastTs: number;
+}
+
+/**
+ * Cells covered by a track with the time each was first and last passed, interpolating
+ * timestamps between fixes (see pathCells for the sampling approach).
+ */
+export function timedPathCells(points: readonly TrackPoint[], res = VISIT_RES): TimedCell[] {
+  const map = new Map<string, TimedCell>();
+  const stepM = getHexagonEdgeLengthAvg(res, UNITS.m) / 3;
+  const touch = (lon: number, lat: number, ts: number) => {
+    const cell = pointToCell([lon, lat], res);
+    const e = map.get(cell);
+    if (!e) map.set(cell, { cell, firstTs: ts, lastTs: ts });
+    else {
+      e.firstTs = Math.min(e.firstTs, ts);
+      e.lastTs = Math.max(e.lastTs, ts);
+    }
+  };
+  let prev: TrackPoint | undefined;
+  for (const p of points) {
+    if (prev) {
+      const steps = Math.ceil(haversineM(toLngLat(prev), toLngLat(p)) / stepM);
+      for (let i = 1; i < steps; i++) {
+        const t = i / steps;
+        touch(prev.lon + (p.lon - prev.lon) * t, prev.lat + (p.lat - prev.lat) * t, prev.ts + (p.ts - prev.ts) * t);
+      }
+    }
+    touch(p.lon, p.lat, p.ts);
+    prev = p;
+  }
+  return [...map.values()];
 }
