@@ -1,0 +1,21 @@
+# Local development dependencies: Postgres and GraphHopper (run api/worker/web with pnpm dev).
+name: wayfinder-dev
+services:
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: wayfinder
+      POSTGRES_PASSWORD: wayfinder
+      POSTGRES_DB: wayfinder
+    ports: ["5432:5432"]
+    volumes: [devpg:/var/lib/postgresql/data]
+  graphhopper:
+    build:
+      context: ..
+      dockerfile: infra/docker/graphhopper.Dockerfile
+    environment:
+      GRAPHHOPPER_HEAP: ${GRAPHHOPPER_HEAP:-4g}
+    ports: ["8989:8989"]
+    volumes: ["../data:/data"]
+volumes:
+  devpg:

@@ -17,5 +17,8 @@ coverage/
 android/
 ios/
 /data/
+infra/.env
+infra/map-assets/fonts/
 test-results/
 playwright-report/
+!.env.example

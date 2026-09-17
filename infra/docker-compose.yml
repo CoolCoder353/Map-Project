@@ -1,0 +1,94 @@
+name: wayfinder
+
+x-node-env: &node-env
+  DATABASE_URL: postgres://wayfinder:${POSTGRES_PASSWORD}@db:5432/wayfinder
+  GRAPHHOPPER_URL: http://graphhopper:8989
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+services:
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wayfinder
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: wayfinder
+    command: ["postgres", "-c", "shared_buffers=2GB", "-c", "work_mem=32MB", "-c", "max_connections=100"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wayfinder -d wayfinder"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  graphhopper:
+    build:
+      context: ..
+      dockerfile: infra/docker/graphhopper.Dockerfile
+    restart: unless-stopped
+    environment:
+      GRAPHHOPPER_HEAP: ${GRAPHHOPPER_HEAP:-8g}
+    volumes:
+      - osmdata:/data
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/docker/api.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *node-env
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      PUBLIC_WEB_URL: https://${SITE_ADDRESS}
+      CORS_ORIGINS: https://${SITE_ADDRESS}
+      COOKIE_SECURE: "true"
+      TRUST_PROXY: "true"
+      PMTILES_PATH: /data/tiles/australia.pmtiles
+      MAP_ASSETS_DIR: /app/map-assets
+    volumes:
+      - osmdata:/data:ro
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/docker/worker.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *node-env
+      DATA_DIR: /data
+      GRAPHHOPPER_IMPORT_HEAP: ${GRAPHHOPPER_IMPORT_HEAP:-12g}
+      PLANETILER_HEAP: ${PLANETILER_HEAP:-8g}
+      OSM_REFRESH_CRON: ${OSM_REFRESH_CRON:-0 3 2 * *}
+      DISK_PATH: /data
+    volumes:
+      - osmdata:/data
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/docker/web.Dockerfile
+    restart: unless-stopped
+    depends_on: [api]
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in .env}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  osmdata:
+  caddy_data:
+  caddy_config:
