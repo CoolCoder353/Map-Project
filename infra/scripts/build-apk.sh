@@ -6,8 +6,14 @@
 # Without a keystore a debug-signed APK is produced (fine for sideloading to friends).
 set -eu
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-IMAGE="${ANDROID_BUILD_IMAGE:-reactnativecommunity/react-native-android:latest}"
+IMAGE="${ANDROID_BUILD_IMAGE:-wayfinder-android-build}"
 : "${EXPO_PUBLIC_API_URL:?set EXPO_PUBLIC_API_URL to your server, e.g. https://maps.example.com}"
+
+# Build the Android SDK image on first use (accepts the Android SDK licences).
+if [ -z "${ANDROID_BUILD_IMAGE:-}" ] && ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  echo "Building $IMAGE (one-off, downloads the Android SDK and NDK)..."
+  docker build -t "$IMAGE" -f "$ROOT/infra/docker/android.Dockerfile" "$ROOT/infra"
+fi
 
 docker run --rm -t \
   -v "$ROOT":/workspace -w /workspace \
@@ -15,7 +21,7 @@ docker run --rm -t \
   -e ANDROID_KEYSTORE_PASSWORD -e ANDROID_KEY_ALIAS -e ANDROID_KEY_PASSWORD \
   "$IMAGE" sh -c '
     set -eu
-    corepack enable >/dev/null 2>&1 || npm install -g pnpm@11.26.0
+    command -v pnpm >/dev/null 2>&1 || npm install -g pnpm@11.26.0
     pnpm install --frozen-lockfile
     cd apps/mobile
     npx expo prebuild --platform android --clean
