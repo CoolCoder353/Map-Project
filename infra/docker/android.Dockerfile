@@ -1,6 +1,11 @@
 # Android build environment for the Expo app: JDK 21, Android SDK/NDK and pnpm.
 # Building this image accepts the Android SDK licences non-interactively.
+FROM node:24-bookworm-slim AS node
 FROM eclipse-temurin:21-jdk
+# Node (for Expo prebuild and pnpm) on top of the JDK image.
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 
 ARG CMDLINE_TOOLS_VERSION=13114758
 ARG ANDROID_PLATFORM=android-36
