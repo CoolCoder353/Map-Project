@@ -28,6 +28,9 @@ ADD https://github.com/onthegomap/planetiler/releases/download/v${PLANETILER_VER
 COPY infra/graphhopper/config.yml /opt/graphhopper/config.yml
 COPY infra/graphhopper/custom_models /opt/graphhopper/custom_models
 RUN chmod 0644 /opt/graphhopper/graphhopper-web.jar /opt/planetiler/planetiler.jar
+# The data volume is owned by the app user: a fresh named volume inherits this ownership,
+# so the worker can write the OSM extract, graph, tiles and temp files.
+RUN mkdir -p /data/osm /data/graphhopper /data/tiles /data/sources /data/tmp && chown -R node:node /data
 WORKDIR /app
 COPY --from=build /out /app
 USER node
