@@ -163,7 +163,7 @@ export function MapProvider({
       id: 'fog',
       type: 'fill',
       source: 'fog',
-      paint: { 'fill-color': dark ? '#000000' : '#26303a', 'fill-opacity': dark ? 0.62 : 0.34 },
+      paint: { 'fill-color': cssVar('--fog') || '#26303a', 'fill-opacity': Number(cssVar('--fog-opacity')) || 0.34 },
     });
     map.addLayer({
       id: 'coverage-fill',

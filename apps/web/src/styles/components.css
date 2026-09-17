@@ -188,8 +188,8 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  background: var(--switch-knob);
+  box-shadow: var(--shadow-1);
   transition: transform 150ms var(--ease-out);
 }
 .switch:checked {
@@ -385,6 +385,18 @@
   padding: var(--space-5);
   display: grid;
   gap: var(--space-4);
+}
+.dialog-title {
+  font-size: var(--text-lg);
+}
+.dialog-text {
+  display: grid;
+  gap: var(--space-2);
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
+.dialog-confirm-word {
+  color: var(--text);
 }
 .dialog-actions {
   display: flex;

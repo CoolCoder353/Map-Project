@@ -37,14 +37,14 @@ export function ConfirmDialog({ open, title, body, confirmLabel, typeToConfirm, 
           if (matches && !busy) onConfirm(typed.trim());
         }}
       >
-        <h2 id={`${id}-title`} style={{ fontSize: 'var(--text-lg)' }}>
+        <h2 id={`${id}-title`} className="dialog-title">
           {title}
         </h2>
-        <div style={{ color: 'var(--text-2)', fontSize: 'var(--text-sm)', display: 'grid', gap: 8 }}>{body}</div>
+        <div className="dialog-text">{body}</div>
         {typeToConfirm && (
           <div className="field">
             <label className="field-label" htmlFor={`${id}-confirm`}>
-              Type <strong style={{ color: 'var(--text)' }}>{typeToConfirm}</strong> to confirm
+              Type <strong className="dialog-confirm-word">{typeToConfirm}</strong> to confirm
             </label>
             <input id={`${id}-confirm`} className="input" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" autoFocus />
           </div>

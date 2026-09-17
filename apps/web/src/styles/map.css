@@ -506,16 +506,11 @@ a.trip-row:hover,
   border: 1.5px solid var(--accent);
 }
 .legend-fog {
-  background: color-mix(in srgb, #26303a 55%, var(--surface));
+  /* Same fog colour and opacity the map layer uses, over the map's own ground. */
+  background:
+    linear-gradient(color-mix(in srgb, var(--fog) calc(var(--fog-opacity) * 100%), transparent), color-mix(in srgb, var(--fog) calc(var(--fog-opacity) * 100%), transparent)),
+    var(--surface-3);
   border: 1px solid var(--border-strong);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .legend-fog {
-    background: #0a0b0d;
-  }
-}
-:root[data-theme='dark'] .legend-fog {
-  background: #0a0b0d;
 }
 .legend-recent {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
@@ -739,7 +734,7 @@ a.trip-row:hover,
   .sheet-grip {
     width: 40px;
     height: 4px;
-    border-radius: 2px;
+    border-radius: var(--radius-pill);
     background: var(--border-strong);
   }
   .panel.is-collapsed ~ .map-controls {

@@ -23,6 +23,7 @@
 
   --danger: #c5221f;
   --on-danger: #ffffff;
+  --switch-knob: #ffffff;
   --toast-bg: #2b2f34;
   --toast-fg: #f1f3f4;
   --danger-soft: #fce8e6;
@@ -30,6 +31,10 @@
   --warning-soft: #fdf1dc;
   --success: #137333;
   --success-soft: #e6f4ea;
+
+  /* Coverage fog (read by the map layer via getComputedStyle and by the legend swatch). */
+  --fog: #26303a;
+  --fog-opacity: 0.34;
 
   --shadow-1: 0 1px 2px rgba(32, 38, 45, 0.18), 0 1px 3px 1px rgba(32, 38, 45, 0.08);
   --shadow-2: 0 1px 3px rgba(32, 38, 45, 0.2), 0 4px 12px 2px rgba(32, 38, 45, 0.12);
@@ -76,6 +81,7 @@
     --explore-line: #49c28c;
     --danger: #f28b82;
     --on-danger: #2a0c0a;
+    --switch-knob: #e8eaed;
     --toast-bg: #e8eaed;
     --toast-fg: #202124;
     --danger-soft: #3c1f1d;
@@ -83,6 +89,8 @@
     --warning-soft: #3a2c12;
     --success: #81c995;
     --success-soft: #1c3424;
+    --fog: #000000;
+    --fog-opacity: 0.62;
     --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 3px 1px rgba(0, 0, 0, 0.3);
     --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.5), 0 6px 16px 2px rgba(0, 0, 0, 0.35);
   }
@@ -108,6 +116,7 @@
   --explore-line: #49c28c;
   --danger: #f28b82;
   --on-danger: #2a0c0a;
+  --switch-knob: #e8eaed;
   --toast-bg: #e8eaed;
   --toast-fg: #202124;
   --danger-soft: #3c1f1d;
@@ -115,6 +124,8 @@
   --warning-soft: #3a2c12;
   --success: #81c995;
   --success-soft: #1c3424;
+  --fog: #000000;
+  --fog-opacity: 0.62;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 3px 1px rgba(0, 0, 0, 0.3);
   --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.5), 0 6px 16px 2px rgba(0, 0, 0, 0.35);
 }

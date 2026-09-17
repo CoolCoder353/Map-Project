@@ -327,7 +327,7 @@ code {
 .chart-key {
   width: 10px;
   height: 10px;
-  border-radius: 2px;
+  border-radius: 4px;
 }
 .recharts-legend-item-text {
   color: var(--text-2) !important;
