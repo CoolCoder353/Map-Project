@@ -46,7 +46,7 @@ export function PerformancePage() {
       />
       <QueryState isLoading={http.isLoading} error={http.error}>
         <div className="admin-grid-2">
-          <ChartCard title="Requests" description="All API requests per interval" data={series} xKey="bucket" kind="line" series={[{ key: 'count', label: 'Requests', slot: 1 }]} xFormat={xFormat} format={(v) => formatNumber(Math.round(v))} />
+          <ChartCard title="Requests" description="All API requests per interval" data={series} xKey="bucket" kind="line" series={[{ key: 'count', label: 'Requests', slot: 1 }]} integer xFormat={xFormat} format={(v) => formatNumber(Math.round(v))} />
           <ChartCard title="Server errors, %" description="Share of requests answered with 5xx" data={series} xKey="bucket" kind="line" series={[{ key: 'errorPct', label: 'Errors', slot: 1 }]} xFormat={xFormat} format={(v) => `${v.toFixed(1)}%`} />
           <ChartCard title="Response time" description="Across all endpoints (upper bound of the busiest endpoint)" data={series} xKey="bucket" kind="line" series={[{ key: 'p50', label: 'p50', slot: 1 }, { key: 'p95', label: 'p95', slot: 2 }]} xFormat={xFormat} format={formatMs} />
           <ChartCard title="Route requests by kind" description="Count over the whole range" data={byRoute.map((r) => ({ name: r.label, count: r.count }))} xKey="name" kind="bar" layout="vertical" series={[{ key: 'count', label: 'Requests', slot: 1 }]} format={(v) => formatNumber(v)} height={180} />

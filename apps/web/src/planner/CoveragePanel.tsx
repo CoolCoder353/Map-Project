@@ -37,7 +37,7 @@ export function CoveragePanel() {
           <div>
             <dt>Area explored</dt>
             <dd className="num">
-              {formatNumber(s.areaKm2)} <small>km²</small>
+              {formatNumber(Math.round(s.areaKm2 * 10) / 10)} <small>km²</small>
             </dd>
           </div>
           <div>

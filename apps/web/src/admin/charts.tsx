@@ -50,6 +50,8 @@ interface ChartCardProps<T> {
   xFormat?: (v: string) => string;
   empty?: ReactNode;
   layout?: 'horizontal' | 'vertical';
+  /** Whole-number axis ticks (counts). */
+  integer?: boolean;
 }
 
 /** A chart with a title, legend (2+ series), hover tooltip and a table view. */
@@ -65,6 +67,7 @@ export function ChartCard<T extends Record<string, unknown>>({
   xFormat = (v) => v,
   empty,
   layout = 'horizontal',
+  integer = false,
 }: ChartCardProps<T>) {
   const [table, setTable] = useState(false);
   const id = useId();
@@ -113,7 +116,7 @@ export function ChartCard<T extends Record<string, unknown>>({
               <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
                 <CartesianGrid stroke="var(--border)" vertical={false} />
                 <XAxis dataKey={xKey as string} tick={axisTick} tickFormatter={xFormat} stroke="var(--border-strong)" minTickGap={28} />
-                <YAxis tick={axisTick} tickFormatter={(v: number) => format(v)} stroke="transparent" width={56} />
+                <YAxis tick={axisTick} tickFormatter={(v: number) => format(v)} stroke="transparent" width={56} allowDecimals={!integer} />
                 <Tooltip content={<TooltipBox format={format} labelFormat={xFormat} />} cursor={{ stroke: 'var(--border-strong)' }} />
                 {series.length > 1 && <Legend iconType="plainline" wrapperStyle={{ fontSize: 12, color: 'var(--text-2)' }} />}
                 {series.map((s) => (

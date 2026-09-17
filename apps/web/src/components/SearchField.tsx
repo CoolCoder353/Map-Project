@@ -139,7 +139,7 @@ export function SearchField({ label, placeholder, value, onChange, near, allowCu
           placeholder={placeholder}
           value={text}
           autoFocus={autoFocus}
-          onFocus={() => setOpen(true)}
+          onClick={() => setOpen(true)}
           onChange={(e) => {
             setText(e.target.value);
             setOpen(true);

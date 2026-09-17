@@ -80,7 +80,7 @@ export function OverviewPage() {
       <section className="admin-grid-3" aria-label="System, last 24 hours">
         <ChartCard title="CPU, %" data={samples} xKey="ts" kind="line" series={[{ key: 'cpuPct', label: 'CPU', slot: 1 }]} height={140} xFormat={hourLabel} format={(v) => `${Math.round(v)}%`} empty="No samples yet. Is the worker running?" />
         <ChartCard title="Memory used, GB" data={samples} xKey="ts" kind="line" series={[{ key: 'memGb', label: 'Memory', slot: 1 }]} height={140} xFormat={hourLabel} format={(v) => v.toFixed(1)} empty="No samples yet." />
-        <ChartCard title="Job queue depth" data={samples} xKey="ts" kind="line" series={[{ key: 'queueDepth', label: 'Queued jobs', slot: 1 }]} height={140} xFormat={hourLabel} format={(v) => String(Math.round(v))} empty="No samples yet." />
+        <ChartCard title="Job queue depth" data={samples} xKey="ts" kind="line" series={[{ key: 'queueDepth', label: 'Queued jobs', slot: 1 }]} integer height={140} xFormat={hourLabel} format={(v) => String(Math.round(v))} empty="No samples yet." />
       </section>
     </>
   );
