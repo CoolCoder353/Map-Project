@@ -24,3 +24,4 @@ playwright-report/
 !.env.example
 dist-check/
 infra/android/*.keystore
+.gradle-docker/

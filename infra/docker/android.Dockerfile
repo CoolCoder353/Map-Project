@@ -29,3 +29,6 @@ RUN apt-get update \
  && npm install -g pnpm@11.26.0
 
 WORKDIR /workspace
+
+# npx (used by `expo prebuild`) — kept in its own layer so the SDK layer stays cached.
+RUN ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx

@@ -1,0 +1,24 @@
+/**
+ * @license lucide-react-native v1.47.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+'use strict';
+
+var createLucideIcon = require('../createLucideIcon.js');
+
+const iconData = {
+  name: "asterisk",
+  size: 24,
+  node: [
+    ["path", { d: "M12 5v14", key: "s699le" }],
+    ["path", { d: "m18.065 8.496-12.125 7", key: "1h26g9" }],
+    ["path", { d: "m5.94 8.504 12.125 7", key: "k77sdm" }]
+  ]
+};
+const Asterisk = createLucideIcon(iconData);
+
+module.exports = Asterisk;
+//# sourceMappingURL=asterisk.js.map

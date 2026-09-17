@@ -1,0 +1,16 @@
+import * as ___types from '../lucide-react-native.js';
+
+/**
+ * @component @name UserGroup
+ * @description Lucide SVG icon component, renders SVG Element with children.
+ *
+ * @preview ![img](data:image/svg+xml;base64,PHN2ZyAgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIgogIHdpZHRoPSIyNCIKICBoZWlnaHQ9IjI0IgogIHZpZXdCb3g9IjAgMCAyNCAyNCIKICBmaWxsPSJub25lIgogIHN0cm9rZT0iIzAwMCIgc3R5bGU9ImJhY2tncm91bmQtY29sb3I6ICNmZmY7IGJvcmRlci1yYWRpdXM6IDJweCIKICBzdHJva2Utd2lkdGg9IjIiCiAgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIgogIHN0cm9rZS1saW5lam9pbj0icm91bmQiCj4KICA8cGF0aCBkPSJNMTcgMjF2LTFhMiAyIDAgMDAtMi0ySDlhMiAyIDAgMDAtMiAydjEiIC8+CiAgPHBhdGggZD0iTTE5IDEwaDFhMiAyIDAgMDEyIDJ2MSIgLz4KICA8cGF0aCBkPSJNNSAxMEg0YTIgMiAwIDAwLTIgMnYxIiAvPgogIDxjaXJjbGUgY3g9IjEyIiBjeT0iMTEiIHI9IjMiIC8+CiAgPGNpcmNsZSBjeD0iMTgiIGN5PSI0IiByPSIyIiAvPgogIDxjaXJjbGUgY3g9IjYiIGN5PSI0IiByPSIyIiAvPgo8L3N2Zz4K) - https://lucide.dev/icons/user-group
+ * @see https://lucide.dev/guide/packages/lucide-react-native - Documentation
+ *
+ * @param {Object} props - Lucide icons props and any valid SVG attribute
+ * @returns {JSX.Element} JSX Element
+ *
+ */
+declare const UserGroup: ___types.LucideIcon;
+
+export { UserGroup as default };

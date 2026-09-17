@@ -1,0 +1,23 @@
+/**
+ * @license lucide-react-native v1.47.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+'use strict';
+
+var createLucideIcon = require('../createLucideIcon.js');
+
+const iconData = {
+  name: "clock-1",
+  size: 24,
+  node: [
+    ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
+    ["path", { d: "M12 6v6l2-4", key: "miptyd" }]
+  ]
+};
+const Clock1 = createLucideIcon(iconData);
+
+module.exports = Clock1;
+//# sourceMappingURL=clock-1.js.map

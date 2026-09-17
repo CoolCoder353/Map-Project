@@ -1,0 +1,23 @@
+/**
+ * @license lucide-react-native v1.47.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+'use strict';
+
+var createLucideIcon = require('../createLucideIcon.js');
+
+const iconData = {
+  name: "move-up",
+  size: 24,
+  node: [
+    ["path", { d: "M8 6L12 2L16 6", key: "1yvkyx" }],
+    ["path", { d: "M12 2V22", key: "r89rzk" }]
+  ]
+};
+const MoveUp = createLucideIcon(iconData);
+
+module.exports = MoveUp;
+//# sourceMappingURL=move-up.js.map

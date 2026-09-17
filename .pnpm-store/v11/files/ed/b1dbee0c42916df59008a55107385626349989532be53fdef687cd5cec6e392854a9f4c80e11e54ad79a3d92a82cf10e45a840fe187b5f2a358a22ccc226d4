@@ -1,0 +1,23 @@
+/**
+ * @license lucide-react-native v1.47.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */
+
+'use strict';
+
+var createLucideIcon = require('../createLucideIcon.js');
+
+const iconData = {
+  name: "corner-up-left",
+  size: 24,
+  node: [
+    ["path", { d: "M20 20v-7a4 4 0 0 0-4-4H4", key: "1nkjon" }],
+    ["path", { d: "M9 14 4 9l5-5", key: "102s5s" }]
+  ]
+};
+const CornerUpLeft = createLucideIcon(iconData);
+
+module.exports = CornerUpLeft;
+//# sourceMappingURL=corner-up-left.js.map

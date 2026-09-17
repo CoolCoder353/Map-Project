@@ -1,0 +1,26 @@
+import type * as types from './types.ts';
+declare class Contractor {
+    static constructionPlans(schema?: string, options?: types.ConstructionPlanOptions): string;
+    static migrationPlans(schema?: string, version?: number, options?: types.MigrationPlanOptions): string;
+    static rollbackPlans(schema?: string, version?: number, options?: types.PlanOptions): string;
+    private config;
+    private db;
+    private migrations;
+    constructor(db: types.IDatabase, config: types.ResolvedConstructorOptions);
+    schemaVersion(): Promise<number | null>;
+    isInstalled(): Promise<boolean>;
+    start(): Promise<void>;
+    private assertNoSchemaCaseVariant;
+    detectDrift(options?: {
+        clockOverride?: boolean;
+    }): Promise<types.SchemaDriftReport>;
+    detectClockOverride(): Promise<boolean>;
+    restoreClockFunction(): Promise<void>;
+    check(): Promise<void>;
+    create(): Promise<void>;
+    migrate(version: number): Promise<void>;
+    next(version: number): Promise<void>;
+    rollback(version: number): Promise<void>;
+}
+export default Contractor;
+//# sourceMappingURL=contractor.d.ts.map
