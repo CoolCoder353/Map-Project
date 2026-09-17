@@ -49,6 +49,9 @@ test('@capture mobile', async ({ browser }) => {
   await expect(page.getByRole('list', { name: 'Fastest route' })).toBeVisible();
   await settle(page);
   await page.screenshot({ path: `${OUT}/mobile.png` });
+  await page.goto('/coverage');
+  await settle(page);
+  await page.screenshot({ path: `${OUT}/mobile-coverage.png` });
   await page.goto('/admin/users');
   await settle(page);
   await page.screenshot({ path: `${OUT}/mobile-admin.png`, fullPage: true });

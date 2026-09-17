@@ -1,7 +1,7 @@
 import type { LngLat, Mode, TripDetail } from '@wayfinder/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Pause, Play, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { api, errorMessage } from '../lib/api';
@@ -20,7 +20,6 @@ export function TripDetailPanel() {
   const [position, setPosition] = useState(1);
   const [playing, setPlaying] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const raf = useRef<number | null>(null);
   useOverlayCleanup();
 
   const points = trip.data?.points ?? [];
@@ -55,24 +54,20 @@ export function TripDetailPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip.data?.id]);
 
+  // Replay at ~15 updates/s. Per-frame state updates would starve router transitions, so
+  // navigating away mid-replay would change the URL without re-rendering.
   useEffect(() => {
     if (!playing) return;
-    let last = performance.now();
     const durationMs = 12_000; // whole trip replays in 12 s
-    const tick = (now: number) => {
-      const dt = now - last;
-      last = now;
+    const stepMs = 66;
+    const timer = setInterval(() => {
       setPosition((p) => {
-        const next = Math.min(1, p + dt / durationMs);
+        const next = Math.min(1, p + stepMs / durationMs);
         if (next >= 1) setPlaying(false);
         return next;
       });
-      raf.current = requestAnimationFrame(tick);
-    };
-    raf.current = requestAnimationFrame(tick);
-    return () => {
-      if (raf.current) cancelAnimationFrame(raf.current);
-    };
+    }, stepMs);
+    return () => clearInterval(timer);
   }, [playing]);
 
   const updateMode = useMutation({
@@ -97,7 +92,7 @@ export function TripDetailPanel() {
   const t = trip.data;
   return (
     <div className="panel-section">
-      <Link to="/trips" className="back-link">
+      <Link to="/trips" className="back-link" onClick={() => setPlaying(false)}>
         <ArrowLeft aria-hidden /> All trips
       </Link>
       {trip.isLoading && <div className="skeleton" style={{ height: 160 }} />}
@@ -147,7 +142,14 @@ export function TripDetailPanel() {
             <span className="field-hint">Change this if the trip was detected with the wrong mode.</span>
           </div>
 
-          <button type="button" className="btn btn-danger-outline" onClick={() => setConfirmDelete(true)}>
+          <button
+            type="button"
+            className="btn btn-danger-outline"
+            onClick={() => {
+              setPlaying(false);
+              setConfirmDelete(true);
+            }}
+          >
             <Trash2 aria-hidden /> Delete trip
           </button>
           <ConfirmDialog

@@ -42,6 +42,9 @@ describe('app API', () => {
     const cov = await ta.app.inject({ method: 'GET', url: '/api/coverage?bbox=149.05,-35.35,149.15,-35.25&zoom=14', headers: auth });
     expect(cov.statusCode).toBe(200);
     expect(cov.json().cells.length).toBeGreaterThan(3);
+    const geo = (await ta.app.inject({ method: 'GET', url: '/api/coverage?bbox=149.05,-35.35,149.15,-35.25&zoom=14&format=geojson', headers: auth })).json();
+    expect(geo.type).toBe('FeatureCollection');
+    expect(geo.features[0].geometry.coordinates[0].length).toBeGreaterThanOrEqual(7);
     const stats = (await ta.app.inject({ method: 'GET', url: '/api/coverage/stats', headers: auth })).json();
     expect(stats.tripCount).toBe(1);
     const badBbox = await ta.app.inject({ method: 'GET', url: '/api/coverage?bbox=1,2&zoom=14', headers: auth });

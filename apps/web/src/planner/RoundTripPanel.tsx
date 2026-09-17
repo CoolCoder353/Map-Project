@@ -21,14 +21,16 @@ export function RoundTripPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
   useOverlayCleanup();
 
   useEffect(() => {
-    map.setRoutes(loops ?? [], selectedLoopId);
+    map.setRoutes(loops ?? [], selectedLoopId, hovered);
     map.setMarkers(loopStart ? [{ id: 'start', lngLat: loopStart.location, kind: 'start', label: loopStart.name }] : []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loops, selectedLoopId, loopStart, map.ready]);
+  }, [loops, selectedLoopId, hovered, loopStart, map.ready]);
   useEffect(() => map.onRouteClick((id) => planner.setSelectedLoopId(id)), [map, planner]);
+  useEffect(() => map.onRouteHover(setHovered), [map]);
 
   const generate = async () => {
     if (!loopStart) return;
@@ -118,6 +120,8 @@ export function RoundTripPanel() {
                 route={r}
                 title={`Loop ${i + 1}`}
                 selected={selectedLoopId === r.id}
+                hovered={hovered === r.id}
+                onHover={(h) => setHovered(h ? r.id : null)}
                 onSelect={() => planner.setSelectedLoopId(r.id)}
                 onSend={() => void send(r)}
                 sending={sending === r.id}

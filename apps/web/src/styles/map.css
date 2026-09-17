@@ -275,6 +275,10 @@ body.is-picking .map-canvas canvas {
   border-radius: var(--radius-control);
   transition: border-color 150ms, box-shadow 150ms var(--ease-out);
 }
+.route-option.is-hovered:not(.is-selected) {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
 .route-option.is-selected {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
@@ -502,7 +506,70 @@ a.trip-row:hover,
   border: 1.5px solid var(--accent);
 }
 .legend-fog {
-  background: color-mix(in srgb, #5d6670 40%, transparent);
+  background: color-mix(in srgb, #26303a 55%, var(--surface));
+}
+.legend-recent {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 2.5px solid var(--explore-line);
+}
+.coverage-lead {
+  display: grid;
+  gap: var(--space-1);
+}
+.coverage-lead-value {
+  font-size: 2rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.coverage-lead-value small {
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--text-2);
+  letter-spacing: 0;
+}
+.panel-search {
+  display: grid;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-3);
+}
+.place-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+}
+.sheet-handle {
+  display: none;
+}
+/* Map chrome drawn by MapLibre, themed from tokens. */
+.maplibregl-ctrl-scale {
+  background: color-mix(in srgb, var(--surface) 85%, transparent) !important;
+  border-color: var(--text-2) !important;
+  color: var(--text-2) !important;
+  font-family: var(--font-ui);
+}
+.maplibregl-ctrl.maplibregl-ctrl-attrib,
+.maplibregl-ctrl-attrib.maplibregl-compact {
+  background: var(--surface) !important;
+  color: var(--text-2);
+  box-shadow: var(--shadow-1);
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--text-2) !important;
+}
+.maplibregl-ctrl-attrib-button {
+  filter: var(--attrib-icon-filter, none);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --attrib-icon-filter: invert(1);
+  }
+}
+:root[data-theme='dark'] {
+  --attrib-icon-filter: invert(1);
 }
 
 /* ---------- Settings ---------- */
@@ -542,13 +609,10 @@ a.trip-row:hover,
   height: 40px;
   border-radius: 50%;
   border: 2px solid var(--surface);
-  background: var(--explore);
-  color: #fff;
+  background: var(--accent);
+  color: var(--on-accent);
   font-weight: 650;
   box-shadow: var(--shadow-1);
-}
-:root[data-theme='dark'] .avatar {
-  color: #0b1f16;
 }
 .menu-email {
   padding: var(--space-2) var(--space-4);
@@ -642,6 +706,35 @@ a.trip-row:hover,
     width: auto;
     height: 58%;
     border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+    transition: transform 260ms var(--ease-out);
+  }
+  /* Collapse by sliding the sheet down (transform, not height) so only its top 172px shows. */
+  .panel.is-collapsed {
+    transform: translateY(calc(100% - 172px));
+  }
+  .sheet-handle {
+    display: grid;
+    grid-auto-flow: column;
+    place-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    height: 22px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-3);
+  }
+  .sheet-handle svg {
+    display: none;
+  }
+  .sheet-grip {
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border-strong);
+  }
+  .panel.is-collapsed ~ .map-controls {
+    bottom: calc(172px + var(--space-3));
   }
   .map-controls {
     bottom: calc(58% + var(--space-3));

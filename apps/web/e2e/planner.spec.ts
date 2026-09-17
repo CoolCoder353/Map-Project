@@ -34,11 +34,12 @@ test('plan fastest and explore routes, send one to the phone', async ({ page }) 
 
 test('coverage stats, trip replay, and deleting a trip', async ({ page }) => {
   await signIn(page, 'sam@demo.test');
-  await page.getByRole('link', { name: 'Explored' }).click();
+  await page.getByRole('link', { name: 'Coverage' }).click();
   await expect(page.getByText('Hexagons visited')).toBeVisible();
 
   await page.getByRole('link', { name: 'Trips' }).click();
   const trips = page.locator('a.trip-row');
+  await expect(trips.first()).toBeVisible();
   const before = await trips.count();
   expect(before).toBeGreaterThan(0);
   await trips.first().click();

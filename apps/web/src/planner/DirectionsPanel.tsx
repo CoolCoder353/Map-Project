@@ -22,6 +22,7 @@ export function DirectionsPanel() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState<string | null>(null);
+  const [hovered, setHovered] = useState<string | null>(null);
   useOverlayCleanup();
   const [params, setParams] = useSearchParams();
 
@@ -85,15 +86,16 @@ export function DirectionsPanel() {
   const all: Route[] = routes ? [routes.fastest, ...routes.explore] : [];
 
   useEffect(() => {
-    map.setRoutes(all, selectedRouteId);
+    map.setRoutes(all, selectedRouteId, hovered);
     const markers: MapMarker[] = [];
-    if (from) markers.push({ id: 'from', lngLat: from.location, kind: 'start' });
+    if (from) markers.push({ id: 'from', lngLat: from.location, kind: 'start', label: from.name });
     if (to) markers.push({ id: 'to', lngLat: to.location, kind: 'end', label: to.name });
     map.setMarkers(markers);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routes, selectedRouteId, from, to, map.ready]);
+  }, [routes, selectedRouteId, hovered, from, to, map.ready]);
 
   useEffect(() => map.onRouteClick((id) => planner.setSelectedRouteId(id)), [map, planner]);
+  useEffect(() => map.onRouteHover(setHovered), [map]);
 
   useEffect(() => {
     if (!from && !to) return;
@@ -205,6 +207,8 @@ export function DirectionsPanel() {
               route={routes.fastest}
               title="Fastest"
               selected={selectedRouteId === routes.fastest.id}
+              hovered={hovered === routes.fastest.id}
+              onHover={(h) => setHovered(h ? routes.fastest.id : null)}
               onSelect={() => planner.setSelectedRouteId(routes.fastest.id)}
               onSend={() => void send(routes.fastest)}
               sending={sending === routes.fastest.id}
@@ -219,6 +223,8 @@ export function DirectionsPanel() {
                   route={r}
                   title={`Explore ${i + 1}`}
                   selected={selectedRouteId === r.id}
+                  hovered={hovered === r.id}
+                  onHover={(h) => setHovered(h ? r.id : null)}
                   onSelect={() => planner.setSelectedRouteId(r.id)}
                   onSend={() => void send(r)}
                   sending={sending === r.id}

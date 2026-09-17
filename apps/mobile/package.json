@@ -1,0 +1,48 @@
+{
+  "name": "@wayfinder/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "prebuild": "expo prebuild --platform android",
+    "bundle:check": "expo export --platform android --output-dir dist-check",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "expo": "~57.0.23",
+    "@wayfinder/nav": "workspace:*",
+    "@wayfinder/shared": "workspace:*",
+    "expo-router": "~57.0.21",
+    "react-native": "0.86.3",
+    "react": "19.2.3",
+    "expo-location": "~57.0.18",
+    "expo-task-manager": "~57.0.18",
+    "expo-sqlite": "~57.0.3",
+    "expo-secure-store": "~57.0.4",
+    "expo-speech": "~57.0.3",
+    "expo-keep-awake": "~57.0.2",
+    "expo-constants": "~57.0.18",
+    "expo-linking": "~57.0.10",
+    "expo-status-bar": "~57.0.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "@react-native-community/netinfo": "12.0.1",
+    "expo-crypto": "~57.0.3",
+    "expo-dev-client": "~57.0.19",
+    "expo-build-properties": "~57.0.18",
+    "@maplibre/maplibre-react-native": "^11.3.10",
+    "@tanstack/react-query": "^5.103.1",
+    "lucide-react-native": "^1.47.0",
+    "react-native-svg": "15.15.4",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.0",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.1",
+    "@types/geojson": "^7946.0.16"
+  }
+}

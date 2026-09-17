@@ -8,6 +8,26 @@
       "development": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./schemas": {
+      "development": "./src/schemas/index.ts",
+      "types": "./dist/schemas/index.d.ts",
+      "default": "./dist/schemas/index.js"
+    },
+    "./copy": {
+      "development": "./src/copy.ts",
+      "types": "./dist/copy.d.ts",
+      "default": "./dist/copy.js"
+    },
+    "./geo": {
+      "development": "./src/geo.ts",
+      "types": "./dist/geo.d.ts",
+      "default": "./dist/geo.js"
+    },
+    "./constants": {
+      "development": "./src/constants.ts",
+      "types": "./dist/constants.d.ts",
+      "default": "./dist/constants.js"
     }
   },
   "scripts": {

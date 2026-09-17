@@ -33,7 +33,7 @@ export interface MapMarker {
 interface MapApi {
   ready: boolean;
   tilesAvailable: boolean | null;
-  setRoutes(routes: Route[], selectedId: string | null): void;
+  setRoutes(routes: Route[], selectedId: string | null, hoveredId?: string | null): void;
   setMarkers(markers: MapMarker[]): void;
   setCoverageEnabled(enabled: boolean): void;
   coverageEnabled: boolean;
@@ -44,6 +44,8 @@ interface MapApi {
   /** Subscribe to map clicks; returns an unsubscribe function. */
   onClick(handler: (p: LngLat) => void): () => void;
   onRouteClick(handler: (routeId: string) => void): () => void;
+  onRouteHover(handler: (routeId: string | null) => void): () => void;
+  setSearchPin(p: { lngLat: LngLat; label: string } | null): void;
   zoomBy(delta: number): void;
   attach(container: HTMLDivElement | null): void;
 }
@@ -84,15 +86,20 @@ const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: 
  */
 function panelOffset(inset: boolean): [number, number] {
   if (!inset) return [0, 0];
-  return window.innerWidth >= 900 ? [228, 0] : [0, -140];
+  const p = panelPadding();
+  return [(p.left - p.right) / 2, (p.top - p.bottom) / 2];
 }
 
-/** Left inset so fitted content isn't hidden under the floating panel. */
+/** Insets so fitted content isn't hidden under the floating panel, the bottom sheet or the banner. */
 function panelPadding() {
-  const wide = window.innerWidth >= 900;
-  return wide
-    ? { top: 64, bottom: 64, left: 400 + 56, right: 72 }
-    : { top: 80, bottom: 280, left: 32, right: 32 };
+  const panel = document.querySelector('.panel')?.getBoundingClientRect();
+  const banner = document.querySelector('.map-banner')?.getBoundingClientRect();
+  const top = Math.max(48, (banner?.bottom ?? 0) + 24);
+  if (window.innerWidth >= 900) {
+    return { top, bottom: 56, left: (panel?.right ?? 416) + 40, right: 80 };
+  }
+  const sheetTop = panel?.top ?? window.innerHeight * 0.42;
+  return { top, bottom: Math.max(56, window.innerHeight - sheetTop + 24), left: 32, right: 72 };
 }
 
 export function MapProvider({
@@ -117,9 +124,11 @@ export function MapProvider({
     fog: EMPTY,
     track: EMPTY,
     travelled: EMPTY,
+    search: EMPTY,
   });
   const clickHandlers = useRef(new Set<(p: LngLat) => void>());
   const routeClickHandlers = useRef(new Set<(id: string) => void>());
+  const routeHoverHandlers = useRef(new Set<(id: string | null) => void>());
   const coverageAbort = useRef<AbortController | null>(null);
   const coverageOn = useRef(false);
 
@@ -135,16 +144,19 @@ export function MapProvider({
     const surface = cssVar('--surface') || '#ffffff';
     const text = cssVar('--text') || '#1d2126';
     const dark = prefersDark();
+    const hasGlyphs = !!map.getStyle().glyphs;
     for (const id of Object.keys(data.current) as Array<keyof typeof data.current>) {
       if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: data.current[id] });
     }
 
-    // Coverage: unexplored land sits under a light fog; explored cells are clear with a thin outline.
+    // Coverage: unexplored land is fogged; explored cells are cut out of the fog, tinted and
+    // outlined (so the difference is lightness + outline, not hue alone). Cells first reached in
+    // the last week get a heavier explore-green outline.
     map.addLayer({
       id: 'fog',
       type: 'fill',
       source: 'fog',
-      paint: { 'fill-color': dark ? '#0b0d10' : '#5d6670', 'fill-opacity': dark ? 0.45 : 0.28 },
+      paint: { 'fill-color': dark ? '#000000' : '#26303a', 'fill-opacity': dark ? 0.62 : 0.34 },
     });
     map.addLayer({
       id: 'coverage-fill',
@@ -152,18 +164,21 @@ export function MapProvider({
       source: 'coverage',
       paint: {
         'fill-color': accent,
-        'fill-opacity': ['interpolate', ['linear'], ['get', 'fraction'], 0, 0.04, 1, 0.16],
+        'fill-opacity': ['interpolate', ['linear'], ['get', 'fraction'], 0, dark ? 0.1 : 0.06, 1, dark ? 0.32 : 0.22],
       },
     });
     map.addLayer({
       id: 'coverage-line',
       type: 'line',
       source: 'coverage',
-      paint: {
-        'line-color': accent,
-        'line-opacity': 0.55,
-        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.3, 15, 1],
-      },
+      paint: { 'line-color': accent, 'line-opacity': 0.85, 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 15, 1.4] },
+    });
+    map.addLayer({
+      id: 'coverage-recent',
+      type: 'line',
+      source: 'coverage',
+      filter: ['>', ['get', 'recent'], 0],
+      paint: { 'line-color': explore, 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.5, 15, 3] },
     });
 
     // Recorded track (trip replay)
@@ -182,28 +197,33 @@ export function MapProvider({
       paint: { 'line-color': accent, 'line-width': 5 },
     });
 
-    // Routes: unselected under selected; explore routes dashed so type isn't colour-only.
-    const routeColor = [
-      'case',
-      ['==', ['get', 'kind'], 'fastest'],
-      accent,
-      explore,
-    ] as ExpressionSpecification;
+    // Routes. Type is carried by colour AND pattern at every state: fastest = solid blue,
+    // explore = dashed green. Unselected routes are thinner and translucent; hover thickens.
+    const isFastest = ['==', ['get', 'kind'], 'fastest'] as ExpressionSpecification;
+    const width = (base: number) => ['case', ['get', 'hovered'], base + 2, base] as ExpressionSpecification;
     map.addLayer({
       id: 'routes-alt-casing',
       type: 'line',
       source: 'routes',
       filter: ['!', ['get', 'selected']],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': surface, 'line-width': 8 },
+      paint: { 'line-color': surface, 'line-width': width(8), 'line-opacity': 0.9 },
     });
     map.addLayer({
       id: 'routes-alt',
       type: 'line',
       source: 'routes',
-      filter: ['!', ['get', 'selected']],
+      filter: ['all', ['!', ['get', 'selected']], isFastest],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': dark ? '#6d747c' : '#9aa1a9', 'line-width': 5 },
+      paint: { 'line-color': accent, 'line-width': width(5), 'line-opacity': 0.6 },
+    });
+    map.addLayer({
+      id: 'routes-alt-explore',
+      type: 'line',
+      source: 'routes',
+      filter: ['all', ['!', ['get', 'selected']], ['!', isFastest]],
+      layout: { 'line-join': 'round' },
+      paint: { 'line-color': explore, 'line-width': width(5), 'line-opacity': 0.65, 'line-dasharray': [2, 1] },
     });
     map.addLayer({
       id: 'routes-selected-casing',
@@ -217,18 +237,56 @@ export function MapProvider({
       id: 'routes-selected',
       type: 'line',
       source: 'routes',
-      filter: ['all', ['get', 'selected'], ['==', ['get', 'kind'], 'fastest']],
+      filter: ['all', ['get', 'selected'], isFastest],
       layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: { 'line-color': routeColor, 'line-width': 7 },
+      paint: { 'line-color': accent, 'line-width': 7 },
     });
     map.addLayer({
       id: 'routes-selected-explore',
       type: 'line',
       source: 'routes',
-      filter: ['all', ['get', 'selected'], ['!=', ['get', 'kind'], 'fastest']],
+      filter: ['all', ['get', 'selected'], ['!', isFastest]],
       layout: { 'line-join': 'round' },
-      paint: { 'line-color': routeColor, 'line-width': 7, 'line-dasharray': [2, 0.6] },
+      paint: { 'line-color': explore, 'line-width': 7, 'line-dasharray': [2, 0.6] },
     });
+    if (hasGlyphs) {
+      map.addLayer({
+        id: 'route-callouts',
+        type: 'symbol',
+        source: 'routes',
+        filter: ['has', 'label'],
+        layout: {
+          'symbol-placement': 'line-center',
+          'text-field': ['get', 'label'],
+          'text-font': ['Noto Sans Bold'],
+          'text-size': ['case', ['get', 'selected'], 13, 11],
+          'text-allow-overlap': false,
+          'symbol-sort-key': ['case', ['get', 'selected'], 0, 1],
+        },
+        paint: {
+          'text-color': ['case', isFastest, accent, explore],
+          'text-halo-color': surface,
+          'text-halo-width': 2,
+        },
+      });
+    }
+
+    // Place picked from the panel search
+    map.addLayer({
+      id: 'search-pin',
+      type: 'circle',
+      source: 'search',
+      paint: { 'circle-radius': 8, 'circle-color': cssVar('--danger') || '#c5221f', 'circle-stroke-color': surface, 'circle-stroke-width': 3 },
+    });
+    if (hasGlyphs) {
+      map.addLayer({
+        id: 'search-pin-label',
+        type: 'symbol',
+        source: 'search',
+        layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Bold'], 'text-size': 13, 'text-offset': [0, 1.3], 'text-anchor': 'top' },
+        paint: { 'text-color': text, 'text-halo-color': surface, 'text-halo-width': 1.5 },
+      });
+    }
 
     // Markers as circles + labels (no sprite sheet)
     map.addLayer({
@@ -254,7 +312,7 @@ export function MapProvider({
         'circle-stroke-width': ['match', ['get', 'kind'], 'me', 3, 'position', 3, 2.5],
       },
     });
-    if (map.getStyle().glyphs) {
+    if (hasGlyphs) {
       map.addLayer({
         id: 'marker-labels',
         type: 'symbol',
@@ -419,8 +477,17 @@ export function MapProvider({
       }
       clickHandlers.current.forEach((h) => h([e.lngLat.lng, e.lngLat.lat]));
     });
-    map.on('mouseenter', 'routes-alt', () => (map.getCanvas().style.cursor = 'pointer'));
-    map.on('mouseleave', 'routes-alt', () => (map.getCanvas().style.cursor = ''));
+    for (const layer of ['routes-alt', 'routes-alt-explore']) {
+      map.on('mousemove', layer, (e) => {
+        map.getCanvas().style.cursor = 'pointer';
+        const id = e.features?.[0]?.properties?.id as string | undefined;
+        routeHoverHandlers.current.forEach((h) => h(id ?? null));
+      });
+      map.on('mouseleave', layer, () => {
+        map.getCanvas().style.cursor = '';
+        routeHoverHandlers.current.forEach((h) => h(null));
+      });
+    }
 
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const onScheme = () => {
@@ -443,16 +510,21 @@ export function MapProvider({
       tilesAvailable,
       coverageEnabled,
       attach,
-      setRoutes(routes, selectedId) {
+      setRoutes(routes, selectedId, hoveredId = null) {
         // Draw selected last so it sits on top within its layer.
-        const ordered = [...routes].sort(
-          (a, b) => Number(a.id === selectedId) - Number(b.id === selectedId),
-        );
+        const ordered = [...routes].sort((a, b) => Number(a.id === selectedId) - Number(b.id === selectedId));
+        const minutes = (sec: number) => (sec >= 3600 ? `${Math.floor(sec / 3600)} h ${Math.round((sec % 3600) / 60)} min` : `${Math.round(sec / 60)} min`);
         setSource('routes', {
           type: 'FeatureCollection',
           features: ordered.map((r) => ({
             type: 'Feature',
-            properties: { id: r.id, kind: r.kind, selected: r.id === selectedId },
+            properties: {
+              id: r.id,
+              kind: r.kind,
+              selected: r.id === selectedId,
+              hovered: r.id === hoveredId,
+              label: r.novelty.newKm >= 0.1 ? `${minutes(r.durationS)} · ${r.novelty.newKm.toFixed(r.novelty.newKm < 10 ? 1 : 0)} km new` : minutes(r.durationS),
+            },
             geometry: { type: 'LineString', coordinates: r.geometry },
           })),
         });
@@ -553,6 +625,18 @@ export function MapProvider({
       onClick(handler) {
         clickHandlers.current.add(handler);
         return () => clickHandlers.current.delete(handler);
+      },
+      onRouteHover(handler) {
+        routeHoverHandlers.current.add(handler);
+        return () => routeHoverHandlers.current.delete(handler);
+      },
+      setSearchPin(p) {
+        setSource(
+          'search',
+          p
+            ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: { kind: 'poi', label: p.label }, geometry: { type: 'Point', coordinates: p.lngLat } }] }
+            : EMPTY,
+        );
       },
       onRouteClick(handler) {
         routeClickHandlers.current.add(handler);

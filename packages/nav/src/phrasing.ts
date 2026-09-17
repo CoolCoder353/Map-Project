@@ -1,4 +1,4 @@
-import type { Instruction } from '@wayfinder/shared';
+import type { Instruction } from '@wayfinder/shared/schemas';
 
 /** Spoken distance, rounded the way people say it. */
 export function formatSpokenDistance(m: number): string {

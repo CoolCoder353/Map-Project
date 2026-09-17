@@ -37,11 +37,11 @@ export function UsersPage() {
                 <th scope="col">Email</th>
                 <th scope="col">Role</th>
                 <th scope="col">Status</th>
-                <th scope="col">Joined</th>
-                <th scope="col">Last seen</th>
+                <th scope="col" className="hide-sm">Joined</th>
+                <th scope="col" className="hide-sm">Last seen</th>
                 <th scope="col" className="num-col">Trips</th>
-                <th scope="col" className="num-col">Hexagons</th>
-                <th scope="col">Tracking</th>
+                <th scope="col" className="num-col hide-sm">Hexagons</th>
+                <th scope="col" className="hide-sm">Tracking</th>
               </tr>
             </thead>
             <tbody>
@@ -52,11 +52,11 @@ export function UsersPage() {
                   <td>
                     {u.deletedAt ? <StatusPill kind="bad">Deleted</StatusPill> : u.disabledAt ? <StatusPill kind="warn">Disabled</StatusPill> : <StatusPill kind="ok">Active</StatusPill>}
                   </td>
-                  <td className="num">{formatDate(u.createdAt)}</td>
-                  <td className="num">{formatRelative(u.lastSeenAt)}</td>
+                  <td className="num hide-sm">{formatDate(u.createdAt)}</td>
+                  <td className="num hide-sm">{formatRelative(u.lastSeenAt)}</td>
                   <td className="num-col num">{formatNumber(u.tripCount)}</td>
-                  <td className="num-col num">{formatNumber(u.cellCount)}</td>
-                  <td>{u.settings.trackingEnabled ? 'On' : 'Off'}</td>
+                  <td className="num-col num hide-sm">{formatNumber(u.cellCount)}</td>
+                  <td className="hide-sm">{u.settings.trackingEnabled ? 'On' : 'Off'}</td>
                 </tr>
               ))}
               {users.data?.items.length === 0 && (

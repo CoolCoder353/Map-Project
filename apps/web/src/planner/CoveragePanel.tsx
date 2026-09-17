@@ -33,20 +33,22 @@ export function CoveragePanel() {
       {stats.isError && <p className="notice notice-error">Couldn’t load your stats. {String((stats.error as Error).message)}</p>}
       {s && s.cellsVisited === 0 && <p className="empty">{copy.coverageEmpty}</p>}
       {s && s.cellsVisited > 0 && (
+        <div className="coverage-lead">
+          <p className="coverage-lead-value num">
+            {formatNumber(Math.round(s.areaKm2 * 10) / 10)} <small>km² explored</small>
+          </p>
+          {s.newCellsWeek > 0 && (
+            <p className="coverage-lead-delta">
+              <span className="badge badge-new">+{formatNumber(s.newCellsWeek)} hexagons this week</span>
+            </p>
+          )}
+        </div>
+      )}
+      {s && s.cellsVisited > 0 && (
         <dl className="stat-list">
-          <div>
-            <dt>Area explored</dt>
-            <dd className="num">
-              {formatNumber(Math.round(s.areaKm2 * 10) / 10)} <small>km²</small>
-            </dd>
-          </div>
           <div>
             <dt>Hexagons visited</dt>
             <dd className="num">{formatNumber(s.cellsVisited)}</dd>
-          </div>
-          <div>
-            <dt>New this week</dt>
-            <dd className="num">{formatNumber(s.newCellsWeek)}</dd>
           </div>
           <div>
             <dt>New this month</dt>
@@ -76,6 +78,9 @@ export function CoveragePanel() {
       <div className="legend" aria-label="Map legend">
         <span className="legend-item">
           <span className="legend-swatch legend-explored" aria-hidden /> Explored
+        </span>
+        <span className="legend-item">
+          <span className="legend-swatch legend-recent" aria-hidden /> First reached this week (green outline)
         </span>
         <span className="legend-item">
           <span className="legend-swatch legend-fog" aria-hidden /> Not yet explored (shaded)

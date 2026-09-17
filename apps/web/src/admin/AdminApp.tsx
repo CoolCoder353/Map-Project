@@ -1,5 +1,6 @@
 import { Activity, ArrowLeft, Bug, Cog, Gauge, History, KeyRound, Layers, Trash2, Users, UsersRound } from 'lucide-react';
-import { NavLink, Route, Routes } from 'react-router';
+import { useEffect } from 'react';
+import { NavLink, Route, Routes, useLocation } from 'react-router';
 import { useAuth } from '../lib/auth';
 import { useAppConfig } from '../lib/config';
 import { AppSettingsPage } from './pages/AppSettingsPage';
@@ -34,6 +35,10 @@ const NAV = [
 export default function AdminApp() {
   const { user } = useAuth();
   const { config } = useAppConfig();
+  const location = useLocation();
+  useEffect(() => {
+    document.querySelector('.admin-nav-link.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [location.pathname]);
   return (
     <div className="admin">
       <aside className="admin-side">

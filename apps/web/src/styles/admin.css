@@ -608,3 +608,9 @@ code {
 .table .code {
   white-space: nowrap;
 }
+
+@media (max-width: 600px) {
+  .hide-sm {
+    display: none;
+  }
+}

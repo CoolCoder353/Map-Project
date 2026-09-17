@@ -1,4 +1,4 @@
-import { gridDisk } from 'h3-js';
+import { cellToBoundary, gridDisk } from 'h3-js';
 import {
   type BBox,
   type CoverageResponse,
@@ -34,31 +34,40 @@ export function r5CellsForBBox(bbox: BBox): string[] | null {
 
 /** Visited VISIT_RES cells (hex strings) for a user, optionally limited to a bbox. */
 export async function loadVisitedCells(db: DbClient, userId: string, bbox?: BBox): Promise<string[]> {
+  return (await loadVisitedCellRows(db, userId, bbox)).map((r) => r.cell);
+}
+
+async function loadVisitedCellRows(db: DbClient, userId: string, bbox?: BBox): Promise<Array<{ cell: string; recent: boolean }>> {
   const r5 = bbox ? r5CellsForBBox(bbox) : null;
   const rows = (
-    await db.query<{ cell: string }>(
-      r5
-        ? 'SELECT cell FROM visited_cells WHERE user_id = $1 AND r5 = ANY($2::bigint[])'
-        : 'SELECT cell FROM visited_cells WHERE user_id = $1',
+    await db.query<{ cell: string; recent: boolean }>(
+      `SELECT cell, first_visited_at > now() - interval '7 days' AS recent FROM visited_cells
+       WHERE user_id = $1 ${r5 ? 'AND r5 = ANY($2::bigint[])' : ''}`,
       r5 ? [userId, r5] : [userId],
     )
   ).rows;
-  return rows.map((r) => bigIntToCell(r.cell));
+  return rows.map((r) => ({ cell: bigIntToCell(r.cell), recent: r.recent }));
 }
 
 export async function getCoverage(db: DbClient, userId: string, bbox: BBox, zoom: number): Promise<CoverageResponse> {
   const res = coverageResForZoom(zoom);
-  const visited = await loadVisitedCells(db, userId, bbox);
+  const visited = await loadVisitedCellRows(db, userId, bbox);
   let cells: CoverageResponse['cells'];
   if (res === VISIT_RES) {
-    cells = visited.map((h3) => ({ h3, fraction: 1 }));
+    cells = visited.map((v) => ({ h3: v.cell, fraction: 1, recent: v.recent ? 1 : 0 }));
   } else {
-    const counts = new Map<string, number>();
-    for (const c of visited) {
-      const p = parentCell(c, res);
-      counts.set(p, (counts.get(p) ?? 0) + 1);
+    const counts = new Map<string, { n: number; recent: number }>();
+    for (const v of visited) {
+      const p = parentCell(v.cell, res);
+      const c = counts.get(p) ?? { n: 0, recent: 0 };
+      c.n++;
+      if (v.recent) c.recent++;
+      counts.set(p, c);
     }
-    cells = [...counts].map(([h3, n]) => ({ h3, fraction: Math.min(1, n / childCount(h3, VISIT_RES)) }));
+    cells = [...counts].map(([h3, c]) => {
+      const total = childCount(h3, VISIT_RES);
+      return { h3, fraction: Math.min(1, c.n / total), recent: Math.min(1, c.recent / total) };
+    });
   }
   const truncated = cells.length > MAX_CELLS_OUT;
   if (truncated) cells = cells.sort((a, b) => b.fraction - a.fraction).slice(0, MAX_CELLS_OUT);
@@ -122,5 +131,19 @@ export async function getCoverageStats(db: DbClient, userId: string): Promise<Co
     firstVisitAt: s.first ? s.first.toISOString() : null,
     tripCount: Number(t.n),
     distanceKm: Math.round((Number(t.d ?? 0) / 1000) * 10) / 10,
+  };
+}
+
+/** Coverage as GeoJSON polygons with a `fraction` property. */
+export function coverageToGeoJson(cov: CoverageResponse) {
+  return {
+    type: 'FeatureCollection' as const,
+    truncated: cov.truncated,
+    res: cov.res,
+    features: cov.cells.map((c) => ({
+      type: 'Feature' as const,
+      properties: { h3: c.h3, fraction: c.fraction, recent: c.recent },
+      geometry: { type: 'Polygon' as const, coordinates: [cellToBoundary(c.h3, true)] },
+    })),
   };
 }

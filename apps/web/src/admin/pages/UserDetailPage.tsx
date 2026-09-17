@@ -92,7 +92,7 @@ export function UserDetailPage() {
           <>
             <PageHeader
               title={u.email}
-              description={`Joined ${formatDate(u.createdAt)} · last seen ${formatRelative(u.lastSeenAt)}`}
+              description={`Joined ${formatDate(u.createdAt)} · last seen ${formatRelative(u.lastSeenAt, { midSentence: true })}`}
               actions={
                 u.deletedAt ? <StatusPill kind="bad">Deleted {formatRelative(u.deletedAt)}</StatusPill> : u.disabledAt ? <StatusPill kind="warn">Disabled</StatusPill> : <StatusPill kind="ok">Active</StatusPill>
               }

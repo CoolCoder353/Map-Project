@@ -11,7 +11,8 @@ export const coverageRoutes =
 
     app.get('/', async (req) => {
       const q = parse(CoverageQuerySchema, req.query);
-      return coverageService.getCoverage(deps.ctx.db, currentUser(req).id, q.bbox, q.zoom);
+      const cov = await coverageService.getCoverage(deps.ctx.db, currentUser(req).id, q.bbox, q.zoom);
+      return q.format === 'geojson' ? coverageService.coverageToGeoJson(cov) : cov;
     });
 
     app.get('/stats', async (req) => coverageService.getCoverageStats(deps.ctx.db, currentUser(req).id));

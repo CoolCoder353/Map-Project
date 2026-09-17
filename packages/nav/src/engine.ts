@@ -1,13 +1,5 @@
-import {
-  type Instruction,
-  type LngLat,
-  type Mode,
-  type Route,
-  destination,
-  haversineM,
-  bearingDeg,
-  projectOntoSegment,
-} from '@wayfinder/shared';
+import { type LngLat, bearingDeg, destination, haversineM, projectOntoSegment } from '@wayfinder/shared/geo';
+import type { Instruction, Mode, Route } from '@wayfinder/shared/schemas';
 import { announcementText } from './phrasing.js';
 
 export interface NavFix {

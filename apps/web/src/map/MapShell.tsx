@@ -1,7 +1,10 @@
-import { Compass, Hexagon, History, Navigation, Repeat, TriangleAlert } from 'lucide-react';
-import { NavLink, Outlet, useLocation } from 'react-router';
+import { ChevronDown, ChevronUp, Compass, Hexagon, History, Navigation, Repeat, TriangleAlert, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { AccountMenu } from '../components/AccountMenu';
+import { type ChosenPlace, SearchField } from '../components/SearchField';
 import { useAppConfig } from '../lib/config';
+import { usePlanner } from '../planner/PlannerState';
 import { usePickOnMap } from '../planner/usePlannerMap';
 import { MapControls } from './MapControls';
 import { useMapApi } from './MapProvider';
@@ -10,21 +13,47 @@ const TABS = [
   { to: '/directions', label: 'Directions', icon: Navigation },
   { to: '/loop', label: 'Round trip', icon: Repeat },
   { to: '/discover', label: 'Discover', icon: Compass },
-  { to: '/coverage', label: 'Explored', icon: Hexagon },
+  { to: '/coverage', label: 'Coverage', icon: Hexagon },
   { to: '/trips', label: 'Trips', icon: History },
 ];
 
 export function MapShell() {
   const map = useMapApi();
-  const { config } = useAppConfig();
+  const planner = usePlanner();
+  const navigate = useNavigate();
+  const { config, copy } = useAppConfig();
   const location = useLocation();
+  const [collapsed, setCollapsed] = useState(false);
+  const [place, setPlace] = useState<ChosenPlace | null>(null);
   usePickOnMap();
   const onSettings = location.pathname.startsWith('/settings');
+  // On Directions the start/destination fields are the search.
+  const showSearch = !onSettings && !location.pathname.startsWith('/directions');
+
+  useEffect(() => {
+    map.setSearchPin(place && showSearch ? { lngLat: place.location, label: place.name } : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [place, showSearch, map.ready]);
+
+  const choose = (p: ChosenPlace | null) => {
+    setPlace(p);
+    if (p) map.flyTo(p.location, 15);
+  };
 
   return (
     <div className="map-shell">
       <div className="map-canvas" ref={map.attach} role="region" aria-label="Map" />
-      <aside className="panel" aria-label={`${config.appName} planner`}>
+      <aside className={`panel ${collapsed ? 'is-collapsed' : ''}`} aria-label={`${config.appName} planner`}>
+        <button
+          type="button"
+          className="sheet-handle"
+          aria-expanded={!collapsed}
+          aria-label={collapsed ? 'Expand panel' : 'Collapse panel'}
+          onClick={() => setCollapsed((c) => !c)}
+        >
+          <span aria-hidden className="sheet-grip" />
+          {collapsed ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
+        </button>
         <header className="panel-header">
           <span className="brand">
             <svg viewBox="0 0 32 32" aria-hidden className="brand-mark">
@@ -35,6 +64,33 @@ export function MapShell() {
             <span className="brand-name">{onSettings ? 'Settings' : config.appName}</span>
           </span>
         </header>
+        {showSearch && (
+          <div className="panel-search">
+            <SearchField label="Search" placeholder={copy.searchPlaceholder} value={place} onChange={choose} near={map.center()} />
+            {place && (
+              <div className="place-card">
+                <div className="place-body">
+                  <span className="place-name">{place.name}</span>
+                  {place.description && <span className="place-meta">{place.description}</span>}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => {
+                    planner.setTo(place);
+                    setPlace(null);
+                    navigate('/directions');
+                  }}
+                >
+                  <Navigation aria-hidden /> Directions
+                </button>
+                <button type="button" className="icon-btn" aria-label="Clear place" onClick={() => setPlace(null)}>
+                  <X />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {!onSettings && (
           <nav className="panel-tabs" aria-label="Planner">
             {TABS.map(({ to, label, icon: Icon }) => (

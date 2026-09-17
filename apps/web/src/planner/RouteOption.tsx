@@ -25,14 +25,20 @@ interface Props {
   onSelect(): void;
   onSend?: (() => void) | undefined;
   sending?: boolean;
+  hovered?: boolean;
+  onHover?: ((hovering: boolean) => void) | undefined;
 }
 
-export function RouteOption({ route, title, selected, onSelect, onSend, sending }: Props) {
+export function RouteOption({ route, title, selected, onSelect, onSend, sending, hovered, onHover }: Props) {
   const { copy } = useAppConfig();
   const [showSteps, setShowSteps] = useState(false);
   const isFastest = route.kind === 'fastest';
   return (
-    <li className={`route-option ${selected ? 'is-selected' : ''} route-${route.kind}`}>
+    <li
+      className={`route-option ${selected ? 'is-selected' : ''} ${hovered ? 'is-hovered' : ''} route-${route.kind}`}
+      onMouseEnter={() => onHover?.(true)}
+      onMouseLeave={() => onHover?.(false)}
+    >
       <button type="button" className="route-option-main" aria-pressed={selected} onClick={onSelect}>
         <span className="route-option-swatch" aria-hidden>
           {isFastest ? <Zap /> : <Sparkles />}

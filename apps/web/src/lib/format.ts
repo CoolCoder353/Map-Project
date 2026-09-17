@@ -8,10 +8,10 @@ export const formatDate = (iso: string) => dateFmt.format(new Date(iso));
 export const formatTime = (iso: string | number) => timeFmt.format(new Date(iso));
 export const formatDateTime = (iso: string) => dateTimeFmt.format(new Date(iso));
 
-export function formatRelative(iso: string | null): string {
-  if (!iso) return 'Never';
+export function formatRelative(iso: string | null, opts: { midSentence?: boolean } = {}): string {
+  if (!iso) return opts.midSentence ? 'never' : 'Never';
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (s < 60) return 'Just now';
+  if (s < 60) return opts.midSentence ? 'just now' : 'Just now';
   if (s < 3600) return `${Math.floor(s / 60)} min ago`;
   if (s < 86_400) return `${Math.floor(s / 3600)} h ago`;
   if (s < 7 * 86_400) return `${Math.floor(s / 86_400)} d ago`;
