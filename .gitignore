@@ -10,3 +10,12 @@ dist/
 *.osm.pbf
 *.pmtiles
 graphhopper-data/
+coverage/
+.turbo/
+*.tsbuildinfo
+.expo/
+android/
+ios/
+/data/
+test-results/
+playwright-report/
