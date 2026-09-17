@@ -91,7 +91,7 @@ export async function refresh(
   refreshToken: string,
   userAgent: string | null,
 ): Promise<{ response: AuthResponse; tokens: IssuedTokens }> {
-  return withTransaction(db, async (tx) => {
+  const result = await withTransaction(db, async (tx) => {
     const row = (
       await tx.query<{ id: string; user_id: string; family_id: string; expires_at: Date; revoked_at: Date | null }>(
         'SELECT * FROM refresh_tokens WHERE token_hash = $1 FOR UPDATE',
@@ -99,12 +99,8 @@ export async function refresh(
       )
     ).rows[0];
     if (!row) throw unauthorized('Session expired');
-    if (row.revoked_at) {
-      await tx.query('UPDATE refresh_tokens SET revoked_at = now() WHERE family_id = $1 AND revoked_at IS NULL', [
-        row.family_id,
-      ]);
-      throw unauthorized('Session expired');
-    }
+    // Reuse of a rotated token: handled after this transaction so the revocation commits.
+    if (row.revoked_at) return { reusedFamily: row.family_id } as const;
     if (row.expires_at < new Date()) throw unauthorized('Session expired');
     const user = await findUserById(tx, row.user_id);
     if (!user || !isActive(user)) throw unauthorized('Session expired');
@@ -116,6 +112,13 @@ export async function refresh(
     await tx.query('UPDATE users SET last_seen_at = now() WHERE id = $1', [user.id]);
     return { response: { accessToken: issued.accessToken, user: toPublicUser(user) }, tokens: issued };
   });
+  if ('reusedFamily' in result) {
+    await db.query('UPDATE refresh_tokens SET revoked_at = now() WHERE family_id = $1 AND revoked_at IS NULL', [
+      result.reusedFamily,
+    ]);
+    throw unauthorized('Session expired');
+  }
+  return result;
 }
 
 export async function logout(db: DbClient, refreshToken: string): Promise<void> {
