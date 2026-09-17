@@ -1,0 +1,14 @@
+# Publishes the API and routing engine on localhost for verification from the host:
+#   docker compose -f docker-compose.yml -f docker-compose.expose.yml up -d
+# Useful for `pnpm verify:stack`, `pnpm bench:explore` and running the web app against
+# real tiles. Don't use this on a public server — Caddy is the only intended entry point.
+services:
+  api:
+    ports:
+      - "127.0.0.1:3000:3000"
+  graphhopper:
+    ports:
+      - "127.0.0.1:8989:8989"
+  db:
+    ports:
+      - "127.0.0.1:5432:5432"
