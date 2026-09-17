@@ -515,7 +515,7 @@ export function MapProvider({
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const onScheme = () => {
       setReady(false);
-      map.setStyle(styleUrl());
+      map.setStyle(tilesOk ? styleUrl() : fallbackStyle());
     };
     mq.addEventListener('change', onScheme);
 

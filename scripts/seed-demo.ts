@@ -44,7 +44,7 @@ const now = Date.now();
 const canberra: [number, number] = [149.13, -35.28];
 let batchCount = 0;
 for (let d = 1; d <= 14; d++) {
-  for (const [who, mode, km, speed] of [
+  for (const [who, _mode, km, speed] of [
     [adminId, 'car', 12 + d, 14],
     [samId, 'foot', 2 + (d % 4), 1.4],
   ] as const) {

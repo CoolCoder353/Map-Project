@@ -19,7 +19,8 @@
     "dev:worker": "pnpm --filter @wayfinder/worker dev",
     "dev:web": "pnpm --filter @wayfinder/web dev",
     "seed:demo": "tsx --conditions=development scripts/seed-demo.ts",
-    "dev:fake-gh": "tsx --conditions=development scripts/fake-graphhopper.ts"
+    "dev:fake-gh": "tsx --conditions=development scripts/fake-graphhopper.ts",
+    "bench:explore": "tsx --conditions=development scripts/bench-explore.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
@@ -33,6 +34,8 @@
     "@electric-sql/pglite": "^0.5.8",
     "@electric-sql/pglite-socket": "^0.2.11",
     "@wayfinder/core": "workspace:*",
-    "@wayfinder/shared": "workspace:*"
+    "@wayfinder/shared": "workspace:*",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^16.0.0"
   }
 }

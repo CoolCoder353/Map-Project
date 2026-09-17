@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-bookworm
+        env:
+          POSTGRES_USER: wayfinder
+          POSTGRES_PASSWORD: wayfinder
+          POSTGRES_DB: wayfinder
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U wayfinder" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.26.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - name: Unit tests
+        run: pnpm test:unit
+      - name: Integration tests (real Postgres)
+        run: pnpm test:integration
+        env:
+          TEST_DATABASE_URL: postgres://wayfinder:wayfinder@localhost:5432/wayfinder
+      - name: Build server packages and web
+        run: pnpm -r --filter "./packages/*" --filter @wayfinder/api --filter @wayfinder/worker --filter @wayfinder/web build
+      - name: Android JS bundle
+        run: pnpm --filter @wayfinder/mobile exec expo export --platform android --output-dir dist-check
+        env:
+          CI: '1'
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: checks
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.26.0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @wayfinder/web exec playwright install --with-deps chromium
+      - name: Playwright (PGlite + fake routing engine)
+        run: pnpm --filter @wayfinder/web e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: apps/web/test-results

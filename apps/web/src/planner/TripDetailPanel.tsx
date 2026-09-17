@@ -22,7 +22,7 @@ export function TripDetailPanel() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   useOverlayCleanup();
 
-  const points = trip.data?.points ?? [];
+  const points = useMemo(() => trip.data?.points ?? [], [trip.data]);
   const t0 = points[0]?.ts ?? 0;
   const t1 = points.at(-1)?.ts ?? 0;
   const currentTs = t0 + (t1 - t0) * position;

@@ -27,7 +27,8 @@ export async function importPlacesFromGeoJsonSeq(db: Db, path: string, log: (m: 
     if (total % 100_000 < BATCH) log(`imported ${total} places`);
   };
   for await (const rawLine of rl) {
-    const line = rawLine.replace(/^\x1e/, '').trim(); // RFC 8142 record separator
+    const RECORD_SEPARATOR = String.fromCharCode(0x1e); // RFC 8142 GeoJSON text sequences
+    const line = (rawLine.startsWith(RECORD_SEPARATOR) ? rawLine.slice(1) : rawLine).trim();
     if (!line) continue;
     let feature: GeoJsonFeature;
     try {
