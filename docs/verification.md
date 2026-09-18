@@ -8,16 +8,17 @@ What has been checked, how to repeat it, and what is still open. Update this whe
 |---|---|---|
 | Lint | `pnpm lint` | clean |
 | Types (7 packages) | `pnpm typecheck` | clean |
-| Unit tests | `pnpm test:unit` | passing (geo/H3/novelty/segmentation, schemas, nav engine with simulated drives, OSM tag mapping, mobile queue and API client) |
-| Integration tests, PGlite | `pnpm test:integration` | passing |
+| Unit tests | `pnpm test:unit` | passing, 60 tests (geo/H3/novelty/segmentation, schemas, nav engine with simulated drives, OSM tag mapping, GraphHopper error wording, mobile queue and API client) |
+| Android screen tests | `pnpm test:mobile` | passing, 11 tests (sign-in, settings tracking toggle and permission paths, route card) |
+| Integration tests, PGlite | `pnpm test:integration` | passing, 79 tests including 4 against the live Australia graph |
 | Integration tests, real Postgres 17 | `TEST_DATABASE_URL=… pnpm test:integration` | passing (68 tests; run against `postgres:17-bookworm`) |
 | Web end-to-end | `pnpm --filter @wayfinder/web e2e` | passing (6 specs) |
 | Android JS bundle | `pnpm --filter @wayfinder/mobile exec expo export --platform android` | builds (Hermes bytecode) |
 | Web production build | `pnpm --filter @wayfinder/web build` | builds; smoke-tested under `vite preview` |
 | Design detector | `impeccable detect --json src` (in `apps/web`) | no findings |
 | Docker images | `cd infra && docker compose build` | api, worker, web, graphhopper all build |
-| Deployment smoke test | `pnpm verify:stack` | see *Live stack* below |
-| Explore performance | `pnpm bench:explore 50000 20` | see *Live stack* below |
+| Deployment smoke test | `pnpm verify:stack` | 15/15 on the Australia build (see *Live stack*) |
+| Explore performance | `pnpm bench:explore 50000 20` | explore p95 1.05 s, round trip p95 0.19 s (targets 2 s / 3 s) |
 
 ### What the end-to-end specs cover
 
@@ -37,6 +38,9 @@ What has been checked, how to repeat it, and what is still open. Update this whe
 - A rejected refresh token rolled back its own family revocation (a stolen-token path).
 - Coverage cells were sent to the map without their `recent` flag, so "first reached this week" never showed.
 - The worker container could not write to the data volume (ownership), which failed the first OSM refresh.
+- Vector tiles were labelled gzip after pmtiles had already decompressed them, so browsers could not decode any real tile (found by `verify:stack`).
+- Routes and the coverage fog were drawn over place labels; in dark mode the fog made unexplored place names unreadable (found in live screenshots).
+- The explore benchmark could never finish (a 40 km disc cannot hold 50k res-9 cells), and 21 integration tests were also running in the unit project.
 
 ## Live stack (Docker, real data)
 
@@ -59,6 +63,5 @@ Results are recorded in [live-stack-results.md](live-stack-results.md).
 ## Open / manual
 
 - **Android on a device.** Install the APK (`infra/scripts/build-apk.sh`) and check: background tracking survives the app being killed and Doze; a real walk appears as new coverage on the web; turn-by-turn with a deliberate wrong turn triggers a reroute; the offline queue uploads when connectivity returns.
-- **No Android screen tests.** The phone app's logic (queue, API client, navigation engine) is unit-tested and the bundle is built in CI, but there are no rendered-screen tests; device testing covers those.
-- **Map contrast over real tiles.** The design review ran with the base map absent. Re-check the coverage fog and route callout contrast over real tiles (see live results).
+- **Screens beyond sign-in, settings and the route card** (plan, discover, coverage, navigation) render a native map, so they are covered by device testing rather than Jest.
 - **Restore drill.** `infra/scripts/backup.sh` and `restore.sh` are written but a full restore has not been rehearsed on this machine.
