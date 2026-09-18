@@ -10,21 +10,45 @@ The design spec is in [docs/superpowers/specs/2026-09-17-explore-maps-design.md]
 
 ## Repository layout
 
-| Path | What it is |
-|---|---|
-| `apps/api` | Fastify REST API, map style/tile serving, admin CLI |
-| `apps/worker` | Background jobs: track processing, coverage rebuilds, purges, metrics, OSM refresh pipeline |
-| `apps/web` | Web app and admin dashboard (Vite + React) |
-| `apps/mobile` | Android app (Expo) |
-| `packages/shared` | Zod schemas, H3/geo helpers, novelty scoring, trip segmentation, copy catalogue |
-| `packages/nav` | Turn-by-turn navigation engine (pure TypeScript) |
-| `packages/core` | Server services shared by API and worker (database, auth, routing, admin, metrics) |
-| `infra` | Docker Compose, Dockerfiles, Caddy, GraphHopper config, ops scripts |
-| `scripts` | Dev database, demo seed, fake routing engine, performance benchmark |
+| Path              | What it is                                                                                  |
+| ----------------- | ------------------------------------------------------------------------------------------- |
+| `apps/api`        | Fastify REST API, map style/tile serving, admin CLI                                         |
+| `apps/worker`     | Background jobs: track processing, coverage rebuilds, purges, metrics, OSM refresh pipeline |
+| `apps/web`        | Web app and admin dashboard (Vite + React)                                                  |
+| `apps/mobile`     | Android app (Expo)                                                                          |
+| `packages/shared` | Zod schemas, H3/geo helpers, novelty scoring, trip segmentation, copy catalogue             |
+| `packages/nav`    | Turn-by-turn navigation engine (pure TypeScript)                                            |
+| `packages/core`   | Server services shared by API and worker (database, auth, routing, admin, metrics)          |
+| `infra`           | Docker Compose, Dockerfiles, Caddy, GraphHopper config, ops scripts                         |
+| `scripts`         | Dev database, demo seed, fake routing engine, performance benchmark                         |
 
 ## How exploring works
 
-Travel history is stored as GPS tracks and summarised as **H3 hexagons** (resolution 9, ~0.1 km²). For an explore route the API asks GraphHopper for the fastest route, then for alternatives that **penalise roads inside your visited hexagons** (a per-request custom model) and routes via the most unexplored nearby areas. Candidates that fit your extra-time budget are ranked by *kilometres you've never been*. Round trips and Discover use the same data. See [docs/adr/0001-h3-instead-of-postgis.md](docs/adr/0001-h3-instead-of-postgis.md).
+Travel history is stored as GPS tracks and summarised as **H3 hexagons** (resolution 9, ~0.1 km²). For an explore route the API asks GraphHopper for the fastest route, then for alternatives that **penalise roads inside your visited hexagons** (a per-request custom model) and routes via the most unexplored nearby areas. Candidates that fit your extra-time budget are ranked by _kilometres you've never been_. Round trips and Discover use the same data. See [docs/adr/0001-h3-instead-of-postgis.md](docs/adr/0001-h3-instead-of-postgis.md).
+
+## Quick Run
+
+How to run it
+
+The stack (database, routing engine, API, worker, website) is already up. To start or stop it later:
+
+cd ~/Documents/Maps/infra && docker compose -f docker-compose.yml -f docker-compose.expose.yml up -d
+cd ~/Documents/Maps/infra && docker compose down
+
+1. Create your own admin account. The only admin I made is a test account whose password sits in my session's temp folder, so make your own. The command prompts for nothing; put your email and password in it:
+
+cd ~/Documents/Maps/infra && docker compose exec api node dist/cli.js bootstrap-admin you@example.com 'your-password'
+
+2. Open https://localhost. Your browser will warn about the certificate, because Caddy signs it locally for localhost. Accept it. Sign in, plan a trip (try Braddon to Lanyon Homestead in Canberra), look at Coverage, and open the admin dashboard from your avatar menu. Invite friends from the dashboard's Invite codes page.
+
+3. Android. The APK is at dist/wayfinder.apk. Install it by copying it to the phone and opening it. The phone can't use https://localhost, so to try the app for real, set SITE_ADDRESS in infra/.env to a domain that points at this machine. Caddy then gets a proper certificate automatically.
+
+How to test it
+cd ~/Documents/Maps && pnpm lint && pnpm typecheck && pnpm test:unit && pnpm test:mobile
+cd ~/Documents/Maps && GRAPHHOPPER_LIVE_URL=http://localhost:8989 pnpm test:integration
+cd ~/Documents/Maps && pnpm --filter @wayfinder/web e2e
+
+Use pnpm verify:stack for a check of the running deployment; the exact command is in docs/verification.md.
 
 ## Local development
 
@@ -66,7 +90,7 @@ Open http://localhost:5173 and sign in as `admin@demo.test` / `demo password` (d
 docker compose -f infra/docker-compose.dev.yml up -d db
 ```
 
-GraphHopper needs a built graph under `./data/graphhopper/graph-current` (see *Map data* below).
+GraphHopper needs a built graph under `./data/graphhopper/graph-current` (see _Map data_ below).
 
 ## Tests
 
