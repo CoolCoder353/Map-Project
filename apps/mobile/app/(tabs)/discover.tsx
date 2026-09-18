@@ -11,6 +11,7 @@ import { radius, space, useTheme } from '../../src/lib/theme';
 import { MapCanvas, type MapCanvasHandle } from '../../src/map/MapCanvas';
 import { type ChosenPlace, PlaceSearch } from '../../src/ui/PlaceSearch';
 import { Body, Button, Card, Empty, NewBadge, Notice, Segmented, Small } from '../../src/ui/kit';
+import { useApproxLocation } from '../../src/lib/useApproxLocation';
 
 const LABEL: Record<PoiCategory, string> = {
   viewpoint: 'Lookouts', peak: 'Peaks', waterfall: 'Waterfalls', park: 'Parks', beach: 'Beaches', attraction: 'Attractions',
@@ -18,6 +19,7 @@ const LABEL: Record<PoiCategory, string> = {
 };
 
 export default function Discover() {
+  const here = useApproxLocation();
   const t = useTheme();
   const { copy } = useAppConfig();
   const map = useRef<MapCanvasHandle>(null);
@@ -51,7 +53,7 @@ export default function Discover() {
       <MapCanvas ref={map} style={{ height: '34%' }} markers={[...(origin ? [{ id: 'o', lngLat: origin.location, kind: 'start' as const }] : []), ...(items ?? []).map((i) => ({ id: i.id, lngLat: i.location, kind: 'poi' as const }))]} />
       <ScrollView style={{ flex: 1, backgroundColor: t.surface }} contentContainerStyle={{ padding: space[4], gap: space[3] }} keyboardShouldPersistTaps="handled">
         <Body muted>{copy.discoverIntro}</Body>
-        <PlaceSearch label="Search from" placeholder="Where are you starting?" tone="start" value={origin} onChange={setOrigin} allowCurrentLocation />
+        <PlaceSearch label="Search from" placeholder="Where are you starting?" tone="start" value={origin} onChange={setOrigin} allowCurrentLocation near={here} />
         <Segmented<Mode> label="Travel mode" value={mode} onChange={setMode} options={[{ value: 'car', label: 'Drive', icon: Car }, { value: 'foot', label: 'Walk', icon: Footprints }]} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
           <Button label="−" kind="secondary" compact onPress={() => setMinutes((m) => Math.max(5, m - 5))} />

@@ -45,6 +45,7 @@ describe('OSM place mapping', () => {
     const [shop] = featureToPlaces(point('n6', { shop: 'outdoor', name: 'Paddy Pallin' }));
     expect(shop).toMatchObject({ kind: 'poi', category: null, description: 'outdoor' });
     expect(featureToPlaces(point('n7', { tourism: 'viewpoint' }))).toEqual([]);
+    expect(featureToPlaces(point('n8', { amenity: 'bench' }))).toEqual([]);
     expect(featureToPlaces({ ...point('', { place: 'city', name: 'X' }), id: undefined })).toEqual([]);
   });
 
@@ -52,5 +53,28 @@ describe('OSM place mapping', () => {
     const square = { type: 'Polygon', coordinates: [[[0, 0], [2, 0], [2, 2], [0, 2], [0, 0]]] };
     expect(representativePoint(square)).toEqual([1, 1]);
     expect(representativePoint(null)).toBeNull();
+  });
+
+  it('keeps business type, brand, hours and tagged address parts', () => {
+    const [store] = featureToPlaces(
+      point('n20', { shop: 'supermarket', brand: 'Woolworths', name: 'Woolworths Dickson', opening_hours: 'Mo-Su 07:00-22:00', 'addr:suburb': 'Dickson', 'addr:state': 'ACT', 'addr:postcode': '2602' }),
+    );
+    expect(store).toMatchObject({ poiType: 'shop=supermarket', brand: 'Woolworths', openingHours: 'Mo-Su 07:00-22:00', suburb: 'Dickson', state: 'ACT', postcode: '2602' });
+    const [fuel] = featureToPlaces(point('n21', { amenity: 'fuel', 'addr:state': 'New South Wales' }));
+    expect(fuel).toBeUndefined(); // unnamed and unbranded
+    const [branded] = featureToPlaces(point('n22', { amenity: 'fuel', brand: 'Ampol', 'addr:state': 'New South Wales' }));
+    expect(branded).toMatchObject({ name: 'Ampol', poiType: 'amenity=fuel', state: 'NSW' });
+  });
+
+  it('uses addr:city only as a fallback, never as the suburb', () => {
+    const [addr] = featureToPlaces(point('n23', { 'addr:housenumber': '1', 'addr:street': 'A Street', 'addr:city': 'Canberra' }));
+    expect(addr).toMatchObject({ suburb: null, cityTag: 'Canberra', description: 'Canberra' });
+  });
+
+  it('keys streets by suburb when known, so each suburb keeps its own Main Street', () => {
+    const street = (suburb: string | undefined, lon: number) =>
+      featureToPlaces({ type: 'Feature', id: `w${lon}`, properties: { highway: 'residential', name: 'Main Street', ...(suburb ? { 'addr:suburb': suburb } : {}) }, geometry: { type: 'LineString', coordinates: [[lon, -35.3], [lon + 0.001, -35.3]] } })[0]!;
+    expect(streetKey(street('Queanbeyan', 149.2))).toBe('main street|queanbeyan|');
+    expect(streetKey(street(undefined, 149.2))).toBe('main street|14920|-3530');
   });
 });

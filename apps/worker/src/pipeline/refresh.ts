@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { type Db, adminService, opsService } from '@wayfinder/core';
+import { loadBoundaries } from './boundaries.js';
 import { importPlacesFromGeoJsonSeq } from './import-places.js';
 import { OSMIUM_FILTERS } from './osm-places.js';
 
@@ -162,6 +163,15 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
     });
 
     await step('places', async () => {
+      // State and suburb boundaries first, so every place can say where it is.
+      const boundariesPbf = join(osmDir, 'boundaries.osm.pbf');
+      const boundariesJson = join(osmDir, 'boundaries.geojsonseq');
+      await run('osmium', ['tags-filter', '--overwrite', '-o', boundariesPbf, pbf, 'r/boundary=administrative'], log);
+      await run('osmium', ['export', '--overwrite', '-f', 'geojsonseq', '-o', boundariesJson, boundariesPbf], log);
+      const boundaries = await loadBoundaries(boundariesJson, log);
+      await rm(boundariesPbf, { force: true });
+      await rm(boundariesJson, { force: true });
+
       const filtered = join(osmDir, 'places-filtered.osm.pbf');
       const geojson = join(osmDir, 'places.geojsonseq');
       await run('osmium', ['tags-filter', '--overwrite', '-o', filtered, pbf, ...OSMIUM_FILTERS], log);
@@ -170,7 +180,7 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
         ['export', '--overwrite', '-f', 'geojsonseq', '--add-unique-id=type_id', '-o', geojson, filtered],
         log,
       );
-      await importPlacesFromGeoJsonSeq(db, geojson, log);
+      await importPlacesFromGeoJsonSeq(db, geojson, log, boundaries);
       await rm(filtered, { force: true });
       await rm(geojson, { force: true });
     });

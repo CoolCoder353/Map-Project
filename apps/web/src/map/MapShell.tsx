@@ -112,6 +112,7 @@ export function MapShell() {
                 <div className="place-body">
                   <span className="place-name">{place.name}</span>
                   {place.description && <span className="place-meta">{place.description}</span>}
+                  {place.hours && <span className={`place-meta place-hours ${place.hours.openNow ? 'is-open' : ''}`}>{place.hours.label}</span>}
                 </div>
                 <button
                   type="button"

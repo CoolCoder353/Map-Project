@@ -1,3 +1,4 @@
+import { placeDetail } from '@wayfinder/shared/australia';
 import type { LngLat } from '@wayfinder/shared/geo';
 import type { Place } from '@wayfinder/shared/schemas';
 import * as Location from 'expo-location';
@@ -5,6 +6,7 @@ import { LocateFixed, MapPin, Search, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { api, errorMessage } from '../lib/api';
+import { formatDistanceShort } from '../lib/format';
 import { radius, space, useTheme } from '../lib/theme';
 
 export interface ChosenPlace {
@@ -12,6 +14,9 @@ export interface ChosenPlace {
   description: string;
   location: LngLat;
 }
+
+/** What a chosen place keeps: its type and suburb (distance depends on where you start). */
+const chosen = (p: Place): ChosenPlace => ({ name: p.name, description: placeDetail({ ...p, distanceM: undefined }, formatDistanceShort), location: p.location });
 
 export function PlaceSearch({ label, placeholder, value, onChange, near, allowCurrentLocation, tone = 'search' }: {
   label: string;
@@ -104,11 +109,12 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
             </Pressable>
           ) : null}
           {results.map((p) => (
-            <Pressable key={p.id} accessibilityRole="button" style={{ flexDirection: 'row', gap: space[3], padding: space[3] }} onPress={() => choose({ name: p.name, description: p.description, location: p.location })}>
+            <Pressable key={p.id} accessibilityRole="button" style={{ flexDirection: 'row', gap: space[3], padding: space[3] }} onPress={() => choose(chosen(p))}>
               <MapPin size={18} color={t.text3} />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: t.text, fontWeight: '600' }}>{p.name}</Text>
-                {p.description ? <Text style={{ color: t.text2, fontSize: 13 }}>{p.description}</Text> : null}
+                <Text style={{ color: t.text2, fontSize: 13 }}>{placeDetail(p, formatDistanceShort)}</Text>
+                {p.hours ? <Text style={{ color: p.hours.openNow ? t.explore : t.text2, fontSize: 13, fontWeight: p.hours.openNow ? '600' : '400' }}>{p.hours.label}</Text> : null}
               </View>
             </Pressable>
           ))}

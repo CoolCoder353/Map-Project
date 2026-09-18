@@ -5,3 +5,5 @@ export * from './segmentation.js';
 export * from './schemas/index.js';
 export * from './constants.js';
 export * from './copy.js';
+export * from './australia.js';
+export * from './categories.js';

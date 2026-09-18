@@ -28,6 +28,11 @@
       "development": "./src/constants.ts",
       "types": "./dist/constants.d.ts",
       "default": "./dist/constants.js"
+    },
+    "./australia": {
+      "development": "./src/australia.ts",
+      "types": "./dist/australia.d.ts",
+      "default": "./dist/australia.js"
     }
   },
   "scripts": {

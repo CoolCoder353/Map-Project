@@ -99,6 +99,40 @@ await check('search (fuzzy POI)', async () => {
   return `first "${r.results[0]!.name}"`;
 });
 
+const km = (m: number | undefined) => (m === undefined ? '?' : `${(m / 1000).toFixed(1)} km`);
+
+await check('search (nearest branch of a chain)', async () => {
+  const r = await api<{ results: Place[] }>(`/api/search?q=Woolworths&lon=${braddon[0]}&lat=${braddon[1]}`);
+  const first = r.results[0];
+  if (!first || (first.distanceM ?? Infinity) > 5000) throw new Error(`first is ${first?.name} at ${km(first?.distanceM)}`);
+  if (!/ACT 26\d\d/.test(first.context ?? '')) throw new Error(`context "${first.context ?? ''}"`);
+  return `${first.name} · ${first.context} · ${km(first.distanceM)}`;
+});
+
+await check('search (category word)', async () => {
+  const r = await api<{ results: Place[] }>(`/api/search?q=petrol&lon=${braddon[0]}&lat=${braddon[1]}`);
+  const fuel = r.results.filter((p) => p.typeLabel === 'Fuel');
+  if (fuel.length === 0 || (fuel[0]!.distanceM ?? Infinity) > 10_000) throw new Error(`no fuel nearby: ${r.results.map((p) => p.name).join(', ')}`);
+  return `${fuel.length} fuel stations, nearest ${fuel[0]!.name} at ${km(fuel[0]!.distanceM)}`;
+});
+
+await check('search (same street name, nearest suburb first)', async () => {
+  const q = [149.232, -35.354];
+  const r = await api<{ results: Place[] }>(`/api/search?q=Main%20Street&lon=${q[0]}&lat=${q[1]}`);
+  if (!r.results[0]?.context?.startsWith('Queanbeyan')) throw new Error(`first context "${r.results[0]?.context ?? ''}"`);
+  return r.results.slice(0, 3).map((p) => p.context).join(' | ');
+});
+
+await check('search (opening hours)', async () => {
+  const withHours: Place[] = [];
+  for (const q of ['Woolworths', 'Coles', 'Aldi', 'Bunnings']) {
+    const r = await api<{ results: Place[] }>(`/api/search?q=${q}&lon=${braddon[0]}&lat=${braddon[1]}`);
+    withHours.push(...r.results.filter((p) => p.hours));
+  }
+  if (withHours.length === 0) throw new Error('no nearby store has parseable hours');
+  return `${withHours[0]!.name}: ${withHours[0]!.hours!.label}`;
+});
+
 await check('reverse geocode', async () => {
   const r = await api<{ place: Place | null }>(`/api/reverse?lon=${braddon[0]}&lat=${braddon[1]}`);
   if (!r.place) throw new Error('nothing found');

@@ -14,10 +14,12 @@ import { MapCanvas, type MapCanvasHandle } from '../../src/map/MapCanvas';
 import { type ChosenPlace, PlaceSearch } from '../../src/ui/PlaceSearch';
 import { RouteCard } from '../../src/ui/RouteCard';
 import { Body, Button, Empty, Heading, Loading, Notice, Segmented, Small } from '../../src/ui/kit';
+import { useApproxLocation } from '../../src/lib/useApproxLocation';
 
 type Tab = 'directions' | 'loop';
 
 export default function Plan() {
+  const here = useApproxLocation();
   const t = useTheme();
   const { user } = useSession();
   const { copy } = useAppConfig();
@@ -98,9 +100,9 @@ export default function Plan() {
             { value: 'loop', label: 'Round trip', icon: Repeat },
           ]}
         />
-        <PlaceSearch label="Starting point" placeholder="Choose starting point" tone="start" value={from} onChange={setFrom} allowCurrentLocation near={to?.location} />
+        <PlaceSearch label="Starting point" placeholder="Choose starting point" tone="start" value={from} onChange={setFrom} allowCurrentLocation near={to?.location ?? here} />
         {tab === 'directions' ? (
-          <PlaceSearch label="Destination" placeholder={copy.searchPlaceholder} tone="end" value={to} onChange={setTo} near={from?.location} />
+          <PlaceSearch label="Destination" placeholder={copy.searchPlaceholder} tone="end" value={to} onChange={setTo} near={from?.location ?? here} />
         ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[3], flexWrap: 'wrap' }}>
           <Segmented<Mode> label="Travel mode" value={mode} onChange={setMode} options={[{ value: 'car', label: 'Drive', icon: Car }, { value: 'foot', label: 'Walk', icon: Footprints }]} />

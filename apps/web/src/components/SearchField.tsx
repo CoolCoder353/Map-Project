@@ -1,14 +1,24 @@
-import type { LngLat, Place } from '@wayfinder/shared';
+import { type LngLat, type Place, placeDetail } from '@wayfinder/shared';
 import { Crosshair, LocateFixed, MapPin, Search, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { api, errorMessage } from '../lib/api';
+import { formatDistanceShort } from '../lib/format';
 import { currentPosition } from '../lib/geolocation';
 
 export interface ChosenPlace {
   name: string;
   description: string;
   location: LngLat;
+  hours?: Place['hours'];
 }
+
+/** What a chosen place keeps: its type and suburb (distance depends on where you start). */
+const chosen = (p: Place): ChosenPlace => ({
+  name: p.name,
+  description: placeDetail({ ...p, distanceM: undefined }, formatDistanceShort),
+  location: p.location,
+  ...(p.hours ? { hours: p.hours } : {}),
+});
 
 interface Props {
   label: string;
@@ -111,8 +121,7 @@ export function SearchField({ label, placeholder, value, onChange, near, allowCu
       e.preventDefault();
       if (active < extras.length) void extras[active]!.run();
       else {
-        const p = results[active - extras.length]!;
-        choose({ name: p.name, description: p.description, location: p.location });
+        choose(chosen(results[active - extras.length]!));
       }
     } else if (e.key === 'Escape') {
       setOpen(false);
@@ -190,12 +199,13 @@ export function SearchField({ label, placeholder, value, onChange, near, allowCu
                 aria-selected={active === idx}
                 className="search-option"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => choose({ name: p.name, description: p.description, location: p.location })}
+                onClick={() => choose(chosen(p))}
               >
                 <MapPin aria-hidden />
                 <span>
                   <span className="search-option-name">{p.name}</span>
-                  {p.description && <span className="search-option-desc">{p.description}</span>}
+                  <span className="search-option-desc">{placeDetail(p, formatDistanceShort)}</span>
+                  {p.hours && <span className={`search-option-hours ${p.hours.openNow ? 'is-open' : ''}`}>{p.hours.label}</span>}
                 </span>
               </li>
             );

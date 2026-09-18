@@ -220,10 +220,16 @@ body.is-picking .map-canvas canvas {
   font-size: var(--text-sm);
   font-weight: 550;
 }
-.search-option-desc {
+.search-option-desc,
+.search-option-hours {
   display: block;
   font-size: var(--text-xs);
   color: var(--text-2);
+}
+.search-option-hours.is-open,
+.place-hours.is-open {
+  color: var(--explore);
+  font-weight: 600;
 }
 .search-error {
   padding: var(--space-2) var(--space-3);

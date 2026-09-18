@@ -1,4 +1,4 @@
-import type { PoiCategory } from '@wayfinder/shared';
+import { type PoiCategory, stateAbbreviation } from '@wayfinder/shared';
 
 export interface GeoJsonFeature {
   type: 'Feature';
@@ -16,7 +16,20 @@ export interface PlaceRecord {
   lon: number;
   lat: number;
   importance: number;
+  /** Filled from tags here, or from boundaries during import. */
+  suburb: string | null;
+  state: string | null;
+  postcode: string | null;
+  /** OSM key=value, e.g. shop=supermarket */
+  poiType: string | null;
+  brand: string | null;
+  openingHours: string | null;
+  /** addr:city: often the city rather than the suburb, so only a fallback. Not stored. */
+  cityTag?: string | null;
 }
+
+/** Keys that say what a business or amenity is, most specific first. */
+const TYPE_KEYS = ['shop', 'amenity', 'tourism', 'leisure', 'healthcare', 'office', 'craft', 'historic', 'natural', 'waterway', 'highway'];
 
 const PLACE_KIND: Record<string, PlaceRecord['kind']> = {
   city: 'city',
@@ -108,15 +121,26 @@ export function featureToPlaces(f: GeoJsonFeature): PlaceRecord[] {
   // Exported with `osmium export --add-unique-id=type_id`, so ids look like "n123" / "w456".
   const id = f.id === undefined ? '' : String(f.id);
   if (!id) return [];
-  const name = typeof tags.name === 'string' ? tags.name.trim() : '';
+  const str = (k: string) => (typeof tags[k] === 'string' && (tags[k] as string).trim() ? (tags[k] as string).trim() : null);
+  const brand = str('brand');
+  const typeKey = TYPE_KEYS.find((k) => str(k) && !(k === 'highway' && str(k) !== 'trailhead'));
+  const poiType = typeKey ? `${typeKey}=${str(typeKey)}` : null;
+  // Brand-only stores ("brand=Woolworths", no name) are still worth finding.
+  const name = str('name') ?? (brand && (tags.shop || tags.amenity) ? brand : '');
+  const suburb = str('addr:suburb');
+  const state = str('addr:state') ? (stateAbbreviation({ iso: str('addr:state')!, name: str('addr:state')! }) ?? null) : null;
+  const postcode = str('addr:postcode');
+  const base = { suburb, state, postcode, poiType: null, brand: null, openingHours: null, cityTag: str('addr:city') } satisfies Partial<PlaceRecord>;
   const out: PlaceRecord[] = [];
-  const suburb = (tags['addr:suburb'] as string | undefined) ?? (tags['addr:city'] as string | undefined) ?? '';
 
   const placeKind = typeof tags.place === 'string' ? PLACE_KIND[tags.place] : undefined;
   if (placeKind && name) {
     const population = Number(tags.population ?? 0);
-    const base = placeKind === 'city' ? 0.8 : placeKind === 'town' ? 0.5 : 0.2;
+    const importanceBase = placeKind === 'city' ? 0.8 : placeKind === 'town' ? 0.5 : 0.2;
     out.push({
+      ...base,
+      // A settlement is its own suburb (used to share postcodes with its addresses).
+      suburb: name,
       id,
       name,
       kind: placeKind,
@@ -124,29 +148,31 @@ export function featureToPlaces(f: GeoJsonFeature): PlaceRecord[] {
       description: tags.place === 'locality' ? 'Locality' : String(tags.place).replace(/^\w/, (c) => c.toUpperCase()),
       lon,
       lat,
-      importance: Math.min(1, base + (population > 0 ? Math.log10(population) / 20 : 0)),
+      importance: Math.min(1, importanceBase + (population > 0 ? Math.log10(population) / 20 : 0)),
     });
     return out;
   }
 
+  const poi = { ...base, poiType, brand, openingHours: str('opening_hours') };
   const category = poiCategory(tags);
   if (category && name) {
-    out.push({ id, name, kind: 'poi', category, description: [CATEGORY_LABEL[category], suburb].filter(Boolean).join(', '), lon, lat, importance: 0.1 });
+    out.push({ ...poi, id, name, kind: 'poi', category, description: [CATEGORY_LABEL[category], suburb ?? base.cityTag].filter(Boolean).join(', '), lon, lat, importance: 0.1 });
     return out;
   }
 
   if (typeof tags.highway === 'string' && STREET_HIGHWAYS.has(tags.highway) && name && f.geometry?.type !== 'Point') {
-    out.push({ id, name, kind: 'street', category: null, description: suburb, lon, lat, importance: 0 });
+    out.push({ ...base, id, name, kind: 'street', category: null, description: suburb ?? base.cityTag ?? '', lon, lat, importance: 0 });
     return out;
   }
 
   if (typeof tags['addr:housenumber'] === 'string' && typeof tags['addr:street'] === 'string') {
     out.push({
+      ...base,
       id,
       name: `${tags['addr:housenumber']} ${tags['addr:street']}`,
       kind: 'address',
       category: null,
-      description: [suburb, tags['addr:postcode']].filter(Boolean).join(' '),
+      description: [suburb ?? base.cityTag, postcode].filter(Boolean).join(' '),
       lon,
       lat,
       importance: 0,
@@ -154,16 +180,20 @@ export function featureToPlaces(f: GeoJsonFeature): PlaceRecord[] {
     return out;
   }
 
-  // Other named amenities/tourism features: searchable, not suggested.
-  if (name && (tags.amenity || tags.tourism || tags.shop || tags.leisure)) {
-    out.push({ id, name, kind: 'poi', category: null, description: String(tags.amenity ?? tags.tourism ?? tags.shop ?? tags.leisure).replace(/_/g, ' '), lon, lat, importance: 0.05 });
+  // Other named businesses and amenities: searchable, not suggested by Discover.
+  if (name && (tags.amenity || tags.tourism || tags.shop || tags.leisure || tags.healthcare || tags.office || tags.craft)) {
+    out.push({ ...poi, id, name, kind: 'poi', category: null, description: String(tags.amenity ?? tags.tourism ?? tags.shop ?? tags.leisure ?? tags.healthcare ?? tags.office ?? tags.craft).replace(/_/g, ' '), lon, lat, importance: 0.05 });
   }
   return out;
 }
 
-/** Streets are mapped as many short ways: keep one record per name within ~1 km. */
+/**
+ * Streets are mapped as many short ways: keep one record per name per suburb, or per ~1 km
+ * square where the suburb is unknown.
+ */
 export function streetKey(p: PlaceRecord): string | null {
   if (p.kind !== 'street') return null;
+  if (p.suburb) return `${p.name.toLowerCase()}|${p.suburb.toLowerCase()}|${p.state ?? ''}`;
   return `${p.name.toLowerCase()}|${Math.round(p.lon * 100)}|${Math.round(p.lat * 100)}`;
 }
 
@@ -178,6 +208,11 @@ export const OSMIUM_FILTERS = [
   'nwr/amenity',
   'nwr/historic',
   'nwr/shop',
+  'nwr/brand',
+  'nwr/healthcare',
+  'nwr/office',
+  'nwr/craft',
+  'nwr/leisure',
   'w/highway',
   'n/highway=trailhead',
   'nwr/addr:housenumber',

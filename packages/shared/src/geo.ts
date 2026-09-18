@@ -151,3 +151,21 @@ export function simplifyLine(coords: readonly LngLat[], toleranceM: number): Lng
   }
   return coords.filter((_, i) => keep[i] === 1);
 }
+
+/** Ray-casting point-in-polygon for a single ring. */
+export function pointInRing(p: LngLat, ring: readonly LngLat[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i]!;
+    const [xj, yj] = ring[j]!;
+    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** Point in a GeoJSON-style polygon: inside the outer ring and outside every hole. */
+export function pointInPolygon(p: LngLat, rings: readonly (readonly LngLat[])[]): boolean {
+  if (!rings[0] || !pointInRing(p, rings[0])) return false;
+  for (let i = 1; i < rings.length; i++) if (pointInRing(p, rings[i]!)) return false;
+  return true;
+}

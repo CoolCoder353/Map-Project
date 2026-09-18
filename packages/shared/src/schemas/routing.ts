@@ -117,12 +117,27 @@ export const SearchQuerySchema = z.object({
   lat: z.coerce.number().min(-90).max(90).optional(),
   limit: z.coerce.number().int().min(1).max(20).default(10),
 });
+export const PlaceHoursSchema = z.object({
+  openNow: z.boolean(),
+  /** e.g. "Open until 9 pm", "Closed · opens 7 am", "Open 24 hours" */
+  label: z.string(),
+});
+export type PlaceHours = z.infer<typeof PlaceHoursSchema>;
+
 export const PlaceSchema = z.object({
   id: z.string(),
   name: z.string(),
   kind: z.string(),
+  /** typeLabel and context joined, for older app builds. */
   description: z.string(),
   location: LngLatSchema,
+  /** "Supermarket", "Street", "Suburb" */
+  typeLabel: z.string().optional(),
+  /** "Dickson ACT 2602" */
+  context: z.string().optional(),
+  /** From the search origin, when one was given. */
+  distanceM: z.number().optional(),
+  hours: PlaceHoursSchema.optional(),
 });
 export type Place = z.infer<typeof PlaceSchema>;
 export const SearchResponseSchema = z.object({ results: z.array(PlaceSchema) });

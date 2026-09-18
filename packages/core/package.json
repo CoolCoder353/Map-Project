@@ -19,6 +19,7 @@
     "@wayfinder/shared": "workspace:*",
     "h3-js": "^4.5.0",
     "jose": "^6.2.12",
+    "opening_hours": "3.14.0",
     "pg": "^8.23.0",
     "pg-boss": "^12.33.0",
     "pino": "^10.3.1",

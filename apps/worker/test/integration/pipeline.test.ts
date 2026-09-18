@@ -46,6 +46,21 @@ describe('places import', () => {
   });
 });
 
+const square = (x0: number, y0: number, x1: number, y1: number) => [[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]];
+const BOUNDARIES = seq([
+  feature('r1', { boundary: 'administrative', admin_level: '4', name: 'New South Wales' }, square(149.2, -36, 150, -35), 'Polygon'),
+  feature('r2', { boundary: 'administrative', admin_level: '10', name: 'Queanbeyan' }, square(149.21, -35.37, 149.25, -35.33), 'Polygon'),
+]);
+const PLACES = seq([
+  feature('n9', { place: 'town', name: 'Queanbeyan' }, [149.23, -35.35]),
+  // The same town mapped again as an area: dropped in favour of the node.
+  feature('w10', { place: 'town', name: 'Queanbeyan' }, [[[149.22, -35.36], [149.24, -35.36], [149.24, -35.34], [149.22, -35.36]]], 'Polygon'),
+  feature('n11', { 'addr:housenumber': '1', 'addr:street': 'Monaro Street', 'addr:postcode': '2620' }, [149.232, -35.352]),
+  feature('n12', { shop: 'supermarket', brand: 'Woolworths', opening_hours: 'Mo-Su 07:00-22:00' }, [149.233, -35.353]),
+  // Outside the locality polygon but 3 km from the town node.
+  feature('w13', { highway: 'residential', name: 'Edge Road' }, [[149.26, -35.35], [149.261, -35.35]], 'LineString'),
+]);
+
 describe('OSM refresh orchestration', () => {
   it('runs the steps in order, swaps outputs, records data date and log', async () => {
     const dataDir = join(dir, 'data');
@@ -67,7 +82,8 @@ describe('OSM refresh orchestration', () => {
         await writeFile(out, 'pmtiles');
       }
       if (cmd === 'osmium' && args[0] === 'export') {
-        await writeFile(args[args.indexOf('-o') + 1]!, seq([feature('n9', { place: 'town', name: 'Queanbeyan' }, [149.23, -35.35])]));
+        const out = args[args.indexOf('-o') + 1]!;
+        await writeFile(out, out.includes('boundaries') ? BOUNDARIES : PLACES);
       }
       onLine(`ran ${cmd}`);
     };
@@ -78,7 +94,7 @@ describe('OSM refresh orchestration', () => {
       { dataDir, pbfUrl: 'https://example.test/au.osm.pbf', graphhopperJar: 'gh.jar', graphhopperConfig: 'c.yml', graphhopperHeap: '1g', planetilerJar: 'p.jar', planetilerHeap: '1g', skip: ['download'] },
       fake,
     );
-    expect(commands).toEqual(['osmium fileinfo', 'java -Xmx1g', 'java -Xmx1g', 'osmium tags-filter', 'osmium export']);
+    expect(commands).toEqual(['osmium fileinfo', 'java -Xmx1g', 'java -Xmx1g', 'osmium tags-filter', 'osmium export', 'osmium tags-filter', 'osmium export']);
     expect(await readFile(join(dataDir, 'graphhopper', 'graph-current', 'nodes'), 'utf8')).toBe('graph');
     expect(await readFile(join(dataDir, 'tiles', 'australia.pmtiles'), 'utf8')).toBe('pmtiles');
     expect((await readFile(join(dataDir, 'graphhopper', 'graph-version'), 'utf8')).trim()).toMatch(/^\d+$/);
@@ -86,7 +102,13 @@ describe('OSM refresh orchestration', () => {
     expect(run).toMatchObject({ status: 'succeeded', osmDataDate: '2026-09-10T20:21:02Z' });
     expect(run!.logTail).toContain('== graph done');
     expect((await adminService.getAppState<string>(t.db, opsService.OSM_DATA_DATE_KEY))?.value).toBe('2026-09-10T20:21:02Z');
-    expect((await t.db.query("SELECT name FROM places")).rows.map((r) => r.name)).toEqual(['Queanbeyan']);
+    const rows = (await t.db.query('SELECT id, kind, suburb, state, postcode, poi_type, opening_hours FROM places ORDER BY id')).rows;
+    expect(rows).toEqual([
+      { id: 'n11', kind: 'address', suburb: 'Queanbeyan', state: 'NSW', postcode: '2620', poi_type: null, opening_hours: null },
+      { id: 'n12', kind: 'poi', suburb: 'Queanbeyan', state: 'NSW', postcode: '2620', poi_type: 'shop=supermarket', opening_hours: 'Mo-Su 07:00-22:00' },
+      { id: 'n9', kind: 'town', suburb: 'Queanbeyan', state: 'NSW', postcode: '2620', poi_type: null, opening_hours: null },
+      { id: 'w13', kind: 'street', suburb: 'Queanbeyan', state: 'NSW', postcode: '2620', poi_type: null, opening_hours: null },
+    ]);
   });
 
   it('a retry after a late failure reuses the graph and tiles already built', async () => {
@@ -105,8 +127,9 @@ describe('OSM refresh orchestration', () => {
       }
       if (cmd === 'java' && argv.includes('--output=')) await writeFile(args.find((a) => a.startsWith('--output='))!.slice(9), 'pmtiles');
       if (cmd === 'osmium' && args[0] === 'export') {
-        if (failPlaces) throw new Error('osmium exited with code 1');
-        await writeFile(args[args.indexOf('-o') + 1]!, seq([feature('n9', { place: 'town', name: 'Queanbeyan' }, [149.23, -35.35])]));
+        const out = args[args.indexOf('-o') + 1]!;
+        if (failPlaces && !out.includes('boundaries')) throw new Error('osmium exited with code 1');
+        await writeFile(out, out.includes('boundaries') ? BOUNDARIES : PLACES);
       }
     };
     const cfg = { dataDir, pbfUrl: 'https://example.test/au.osm.pbf', graphhopperJar: 'gh.jar', graphhopperConfig: 'c.yml', graphhopperHeap: '1g', planetilerJar: 'p.jar', planetilerHeap: '1g', skip: ['download'] };
@@ -128,6 +151,7 @@ describe('OSM refresh orchestration', () => {
 
   it('marks the run failed and keeps live data when a step fails', async () => {
     const dataDir = join(dir, 'data2');
+    const before = (await t.db.query('SELECT id FROM places ORDER BY id')).rows;
     const runId = await opsService.createPipelineRun(t.db, 'osm_refresh', null);
     const failing: RunCommand = async (cmd) => {
       if (cmd === 'java') throw new Error('java exited with code 137');
@@ -138,6 +162,6 @@ describe('OSM refresh orchestration', () => {
     const run = (await opsService.listPipelineRuns(t.db)).find((r) => r.id === runId)!;
     expect(run.status).toBe('failed');
     expect(run.logTail).toContain('!! java exited with code 137');
-    expect((await t.db.query("SELECT name FROM places")).rows.map((r) => r.name)).toEqual(['Queanbeyan']);
+    expect((await t.db.query('SELECT id FROM places ORDER BY id')).rows).toEqual(before);
   });
 });
