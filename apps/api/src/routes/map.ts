@@ -32,8 +32,8 @@ export const mapRoutes =
       reply.header('cache-control', 'public, max-age=86400');
       if (!tile) return reply.status(204).send();
       reply.header('content-type', 'application/vnd.mapbox-vector-tile');
-      if (tile.gzip) reply.header('content-encoding', 'gzip');
-      return reply.send(Buffer.from(tile.data));
+      // Sent uncompressed; Caddy compresses responses on the way out.
+      return reply.send(Buffer.from(tile));
     });
 
     // Style JSON with absolute URLs for this deployment.
@@ -50,6 +50,10 @@ export const mapRoutes =
         prefix: '/map/assets/',
         decorateReply: false,
         maxAge: '7d',
+        // Glyph ranges are protobuf; a specific type lets Caddy compress them.
+        setHeaders: (res, path) => {
+          if (path.endsWith('.pbf')) res.header('content-type', 'application/x-protobuf');
+        },
       });
     }
   };

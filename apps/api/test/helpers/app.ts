@@ -20,7 +20,7 @@ export interface TestApp {
   close(): Promise<void>;
 }
 
-export async function createTestApp(): Promise<TestApp> {
+export async function createTestApp(opts: { tiles?: Parameters<typeof buildApp>[0]['tiles'] } = {}): Promise<TestApp> {
   const t = await createTestDb();
   const queue = new FakeQueue();
   const metrics = new MetricsAggregator(metricsWriter(t.db));
@@ -61,7 +61,7 @@ export async function createTestApp(): Promise<TestApp> {
       AUTH_RATE_LIMIT_PER_MIN: 100_000,
       NODE_ENV: 'test',
     },
-    tiles: null,
+    tiles: opts.tiles ?? null,
     jobs: { retry: async (name, id) => void retried.push({ name, id }) },
   });
   await app.ready();

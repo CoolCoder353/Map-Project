@@ -1,5 +1,5 @@
 import { open, stat, type FileHandle } from 'node:fs/promises';
-import { Compression, PMTiles, type RangeResponse, type Source } from 'pmtiles';
+import { PMTiles, type RangeResponse, type Source } from 'pmtiles';
 
 class NodeFileSource implements Source {
   private handle: Promise<FileHandle>;
@@ -22,7 +22,8 @@ class NodeFileSource implements Source {
 }
 
 export interface TileArchive {
-  getTile(z: number, x: number, y: number): Promise<{ data: Uint8Array; gzip: boolean } | null>;
+  /** Uncompressed tile bytes; pmtiles decodes the archive's tile compression for us. */
+  getTile(z: number, x: number, y: number): Promise<Uint8Array | null>;
   tileJson(tilesUrl: string): Promise<Record<string, unknown>>;
 }
 
@@ -35,7 +36,7 @@ export function openTileArchive(path: string): TileArchive {
       if (z < header.minZoom || z > header.maxZoom) return null;
       const tile = await archive.getZxy(z, x, y);
       if (!tile) return null;
-      return { data: new Uint8Array(tile.data), gzip: header.tileCompression === Compression.Gzip };
+      return new Uint8Array(tile.data);
     },
     async tileJson(tilesUrl) {
       const header = await archive.getHeader();

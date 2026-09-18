@@ -78,7 +78,7 @@ services:
     depends_on: [api]
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in .env}
-      ACME_EMAIL: ${ACME_EMAIL:-}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env (any address for a localhost site)}
     ports:
       - "80:80"
       - "443:443"

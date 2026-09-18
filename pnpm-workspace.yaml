@@ -2,9 +2,9 @@ packages:
   - apps/*
   - packages/*
 allowBuilds:
-  '@parcel/watcher': set this to true or false
+  '@parcel/watcher': false
   esbuild: true
-  unrs-resolver: set this to true or false
+  unrs-resolver: false
 minimumReleaseAgeExclude:
   - pg-boss@12.33.0
   - fastify@5.12.5
