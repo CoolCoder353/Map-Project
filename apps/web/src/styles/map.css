@@ -46,6 +46,11 @@ body.is-picking .map-canvas canvas {
   width: 36px;
   height: 36px;
 }
+.panel-back {
+  /* Optically align the arrow with the panel's text edge. */
+  margin-left: calc(-1 * var(--space-2));
+}
+
 .brand-name {
   font-size: var(--text-lg);
   font-weight: 650;

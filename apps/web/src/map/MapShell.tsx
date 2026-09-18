@@ -1,5 +1,16 @@
-import { ChevronDown, ChevronUp, Compass, Hexagon, History, Navigation, Repeat, TriangleAlert, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  Compass,
+  Hexagon,
+  History,
+  Navigation,
+  Repeat,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { AccountMenu } from '../components/AccountMenu';
 import { type ChosenPlace, SearchField } from '../components/SearchField';
@@ -27,6 +38,12 @@ export function MapShell() {
   const [place, setPlace] = useState<ChosenPlace | null>(null);
   usePickOnMap();
   const onSettings = location.pathname.startsWith('/settings');
+  // Settings hides the tabs, so remember where to go back to (query string included, so a
+  // planned trip is still there).
+  const lastPlannerPath = useRef('/directions');
+  useEffect(() => {
+    if (!onSettings) lastPlannerPath.current = location.pathname + location.search;
+  }, [onSettings, location.pathname, location.search]);
   // On Directions the start/destination fields are the search.
   const showSearch = !onSettings && !location.pathname.startsWith('/directions');
 
@@ -43,7 +60,10 @@ export function MapShell() {
   return (
     <div className="map-shell">
       <div className="map-canvas" ref={map.attach} role="region" aria-label="Map" />
-      <aside className={`panel ${collapsed ? 'is-collapsed' : ''}`} aria-label={`${config.appName} planner`}>
+      <aside
+        className={`panel ${collapsed ? 'is-collapsed' : ''}`}
+        aria-label={`${config.appName} planner`}
+      >
         <button
           type="button"
           className="sheet-handle"
@@ -55,18 +75,38 @@ export function MapShell() {
           {collapsed ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
         </button>
         <header className="panel-header">
-          <span className="brand">
-            <svg viewBox="0 0 32 32" aria-hidden className="brand-mark">
-              <path d="M16 2 28.1 9v14L16 30 3.9 23V9z" fill="var(--accent)" />
-              <path d="M16 9.5 22 13v7l-6 3.5-6-3.5v-7z" fill="var(--surface)" />
-              <circle cx="16" cy="16.5" r="2.6" fill="var(--explore)" />
-            </svg>
-            <span className="brand-name">{onSettings ? 'Settings' : config.appName}</span>
-          </span>
+          {onSettings ? (
+            <span className="brand">
+              <button
+                type="button"
+                className="icon-btn panel-back"
+                aria-label="Back to map"
+                onClick={() => navigate(lastPlannerPath.current)}
+              >
+                <ArrowLeft aria-hidden />
+              </button>
+              <h1 className="brand-name">Settings</h1>
+            </span>
+          ) : (
+            <span className="brand">
+              <svg viewBox="0 0 32 32" aria-hidden className="brand-mark">
+                <path d="M16 2 28.1 9v14L16 30 3.9 23V9z" fill="var(--accent)" />
+                <path d="M16 9.5 22 13v7l-6 3.5-6-3.5v-7z" fill="var(--surface)" />
+                <circle cx="16" cy="16.5" r="2.6" fill="var(--explore)" />
+              </svg>
+              <span className="brand-name">{config.appName}</span>
+            </span>
+          )}
         </header>
         {showSearch && (
           <div className="panel-search">
-            <SearchField label="Search" placeholder={copy.searchPlaceholder} value={place} onChange={choose} near={map.center()} />
+            <SearchField
+              label="Search"
+              placeholder={copy.searchPlaceholder}
+              value={place}
+              onChange={choose}
+              near={map.center()}
+            />
             {place && (
               <div className="place-card">
                 <div className="place-body">
@@ -84,7 +124,12 @@ export function MapShell() {
                 >
                   <Navigation aria-hidden /> Directions
                 </button>
-                <button type="button" className="icon-btn" aria-label="Clear place" onClick={() => setPlace(null)}>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label="Clear place"
+                  onClick={() => setPlace(null)}
+                >
                   <X />
                 </button>
               </div>
@@ -110,7 +155,8 @@ export function MapShell() {
       </div>
       {map.tilesAvailable === false && (
         <p className="map-banner" role="status">
-          <TriangleAlert aria-hidden /> Map tiles haven’t been built on the server yet, so the base map is blank. Routes and search still work.
+          <TriangleAlert aria-hidden /> Map tiles haven’t been built on the server yet, so the base
+          map is blank. Routes and search still work.
         </p>
       )}
       <MapControls showCoverageToggle={!location.pathname.startsWith('/coverage')} />

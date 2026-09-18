@@ -28,8 +28,14 @@ test('plan fastest and explore routes, send one to the phone', async ({ page }) 
   await page.getByRole('button', { name: 'Send to phone' }).click();
   await expect(page.getByRole('status').getByText(/Planned routes/)).toBeVisible();
 
-  await page.goto('/settings');
+  await page.getByRole('button', { name: /^Account:/ }).click();
+  await page.getByRole('menuitem', { name: 'Settings' }).click();
   await expect(page.getByText(/Explore to Lanyon Homestead/)).toBeVisible();
+
+  // Back returns to the same trip, not a blank planner.
+  await page.getByRole('button', { name: 'Back to map' }).click();
+  await expect(page).toHaveURL(/\/directions\?from=.*to=.*mode=car/);
+  await expect(fastest.getByText('Fastest')).toBeVisible();
 });
 
 test('coverage stats, trip replay, and deleting a trip', async ({ page }) => {
