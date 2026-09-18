@@ -2,7 +2,7 @@ import type { PlannedRoute, PublicUser, UserSettings } from '@wayfinder/shared/s
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
-import { Car, Footprints, LogOut, Navigation, RefreshCw, Trash2 } from 'lucide-react-native';
+import { Car, Footprints, LogOut, MessageSquarePlus, Navigation, RefreshCw, Trash2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ScrollView, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -124,6 +124,14 @@ export default function SettingsScreen() {
             </View>
           </Card>
         ))}
+
+        {config.feedbackEnabled ? (
+          <>
+            <Heading>Feedback</Heading>
+            <Small>Found a bug or have an idea? Tell the people who run {config.appName}.</Small>
+            <Button label="Send feedback" kind="secondary" icon={MessageSquarePlus} onPress={() => router.push('/feedback')} style={{ alignSelf: 'flex-start' }} />
+          </>
+        ) : null}
 
         <Button label="Sign out" kind="secondary" icon={LogOut} onPress={() => void signOut().then(() => router.replace('/sign-in'))} style={{ marginTop: space[4] }} />
         <Small>Delete your account or download your data from the website’s Settings.</Small>

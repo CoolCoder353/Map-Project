@@ -21,6 +21,10 @@ jest.mock('../src/tracking/background', () => ({
 }));
 jest.mock('../src/tracking/sqliteStore', () => ({ sqliteQueueStore: { count: async () => 0 } }));
 jest.mock('../src/tracking/sync', () => ({ syncQueue: jest.fn() }));
+let mockFeedbackEnabled = false;
+jest.mock('../src/lib/appConfig', () => ({
+  useAppConfig: () => ({ config: { appName: 'Wayfinder', voice: 'plain', feedbackEnabled: mockFeedbackEnabled, osmDataDate: null } }),
+}));
 
 function renderSettings() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -33,6 +37,7 @@ function renderSettings() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockFeedbackEnabled = false;
   mockCurrent = user(false);
   mockRequest.mockImplementation(async (path: string, init?: { body?: object }) => {
     if (path === 'api/planned-routes') return { items: [] };
@@ -80,4 +85,14 @@ it('turns tracking off without asking for permission', async () => {
 it('lists planned routes sent from the website, or says there are none', async () => {
   await renderSettings();
   expect(await screen.findByText('Nothing planned yet.')).toBeOnTheScreen();
+});
+
+it('offers Send feedback only when an admin has switched it on', async () => {
+  await renderSettings();
+  await screen.findByText('Everything is uploaded');
+  expect(screen.queryByRole('button', { name: 'Send feedback' })).toBeNull();
+  screen.unmount();
+  mockFeedbackEnabled = true;
+  await renderSettings();
+  expect(await screen.findByRole('button', { name: 'Send feedback' })).toBeOnTheScreen();
 });

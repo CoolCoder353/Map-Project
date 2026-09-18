@@ -5,6 +5,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import type { StyleProp, ViewStyle } from 'react-native';
 import { getServerUrl } from '../lib/server';
 import { useTheme } from '../lib/theme';
+import { rememberMapView } from '../lib/mapView';
 
 export interface MapMarker {
   id: string;
@@ -84,9 +85,11 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       logo={false}
       compass={false}
       onPress={onPress ? (e) => onPress(e.nativeEvent.lngLat as LngLat) : undefined}
-      onRegionDidChange={
-        onRegionChange ? (e) => onRegionChange(e.nativeEvent.bounds as [number, number, number, number], e.nativeEvent.zoom) : undefined
-      }
+      onRegionDidChange={(e) => {
+        const bounds = e.nativeEvent.bounds as [number, number, number, number];
+        rememberMapView(bounds, e.nativeEvent.zoom);
+        onRegionChange?.(bounds, e.nativeEvent.zoom);
+      }}
     >
       <Camera ref={camera} initialViewState={{ center: [134.5, -27.5], zoom: 3.6 }} trackUserLocation={followUser ? 'course' : undefined} />
       {coverage ? (
