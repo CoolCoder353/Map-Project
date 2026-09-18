@@ -156,16 +156,21 @@ export function MapProvider({
       if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: data.current[id] });
     }
 
+    // Lines and fills go beneath the basemap's labels, as in other map apps, so place names stay
+    // readable over routes and through the fog. Callouts, pins and markers are added on top.
+    const firstLabel = map.getStyle().layers.find((l) => l.type === 'symbol')?.id;
+    const addUnderLabels = (layer: maplibregl.AddLayerObject) => map.addLayer(layer, firstLabel);
+
     // Coverage: unexplored land is fogged; explored cells are cut out of the fog, tinted and
     // outlined (so the difference is lightness + outline, not hue alone). Cells first reached in
     // the last week get a heavier explore-green outline.
-    map.addLayer({
+    addUnderLabels({
       id: 'fog',
       type: 'fill',
       source: 'fog',
       paint: { 'fill-color': cssVar('--fog') || '#26303a', 'fill-opacity': Number(cssVar('--fog-opacity')) || 0.34 },
     });
-    map.addLayer({
+    addUnderLabels({
       id: 'coverage-fill',
       type: 'fill',
       source: 'coverage',
@@ -174,13 +179,13 @@ export function MapProvider({
         'fill-opacity': ['interpolate', ['linear'], ['get', 'fraction'], 0, dark ? 0.1 : 0.06, 1, dark ? 0.32 : 0.22],
       },
     });
-    map.addLayer({
+    addUnderLabels({
       id: 'coverage-line',
       type: 'line',
       source: 'coverage',
       paint: { 'line-color': accent, 'line-opacity': 0.85, 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 15, 1.4] },
     });
-    map.addLayer({
+    addUnderLabels({
       id: 'coverage-recent',
       type: 'line',
       source: 'coverage',
@@ -189,14 +194,14 @@ export function MapProvider({
     });
 
     // Recorded track (trip replay)
-    map.addLayer({
+    addUnderLabels({
       id: 'track',
       type: 'line',
       source: 'track',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': text, 'line-opacity': 0.35, 'line-width': 5 },
     });
-    map.addLayer({
+    addUnderLabels({
       id: 'travelled',
       type: 'line',
       source: 'travelled',
@@ -208,7 +213,7 @@ export function MapProvider({
     // explore = dashed green. Unselected routes are thinner and translucent; hover thickens.
     const isFastest = ['==', ['get', 'kind'], 'fastest'] as ExpressionSpecification;
     const width = (base: number) => ['case', ['get', 'hovered'], base + 2, base] as ExpressionSpecification;
-    map.addLayer({
+    addUnderLabels({
       id: 'routes-alt-casing',
       type: 'line',
       source: 'routes',
@@ -216,7 +221,7 @@ export function MapProvider({
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': surface, 'line-width': width(8), 'line-opacity': 0.9 },
     });
-    map.addLayer({
+    addUnderLabels({
       id: 'routes-alt',
       type: 'line',
       source: 'routes',
@@ -224,7 +229,7 @@ export function MapProvider({
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': accent, 'line-width': width(5), 'line-opacity': 0.6 },
     });
-    map.addLayer({
+    addUnderLabels({
       id: 'routes-alt-explore',
       type: 'line',
       source: 'routes',
@@ -232,7 +237,7 @@ export function MapProvider({
       layout: { 'line-join': 'round' },
       paint: { 'line-color': explore, 'line-width': width(5), 'line-opacity': 0.65, 'line-dasharray': [2, 1] },
     });
-    map.addLayer({
+    addUnderLabels({
       id: 'routes-selected-casing',
       type: 'line',
       source: 'routes',
@@ -240,7 +245,7 @@ export function MapProvider({
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': dark ? '#0b0d10' : '#ffffff', 'line-width': 11 },
     });
-    map.addLayer({
+    addUnderLabels({
       id: 'routes-selected',
       type: 'line',
       source: 'routes',
@@ -248,7 +253,7 @@ export function MapProvider({
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': accent, 'line-width': 7 },
     });
-    map.addLayer({
+    addUnderLabels({
       id: 'routes-selected-explore',
       type: 'line',
       source: 'routes',

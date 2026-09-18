@@ -1,6 +1,6 @@
 /**
  * Capture review screenshots against a REAL stack (Docker: api on :3000 with built tiles).
- * Start a Vite dev server pointed at it first:
+ * Point it at Caddy (https://localhost, the production build) or at a Vite dev server:
  *   WAYFINDER_API=http://127.0.0.1:3000 pnpm --filter @wayfinder/web exec vite --port 5175 --strictPort
  * then:
  *   node e2e/capture-live.mjs http://localhost:5175 admin@example.com 'password'
@@ -14,7 +14,7 @@ const TRIP = '/directions?from=149.13500,-35.27100,Braddon&to=149.08480,-35.4917
 
 const browser = await chromium.launch();
 for (const scheme of ['light', 'dark']) {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: scheme, reducedMotion: 'reduce' });
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: scheme, reducedMotion: 'reduce', ignoreHTTPSErrors: true });
   const page = await ctx.newPage();
   const suffix = scheme === 'light' ? '' : '-dark';
   await page.goto(`${base}/sign-in`);
