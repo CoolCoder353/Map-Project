@@ -1,0 +1,81 @@
+{
+  "name": "test-renderer",
+  "version": "1.2.0",
+  "description": "A lightweight test renderer for React and a modern replacement for the deprecated React Test Renderer.",
+  "keywords": [
+    "jest",
+    "react",
+    "react-19",
+    "react-test-renderer",
+    "test-renderer",
+    "testing"
+  ],
+  "homepage": "https://github.com/mdjastrzebski/test-renderer",
+  "license": "MIT",
+  "author": "Maciej Jastrzebski <mdjastrzebski@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mdjastrzebski/test-renderer.git"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": {
+      "default": "./package.json"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "check:react-release-guard": "node scripts/check-react-release-guard.mjs",
+    "dev": "tsdown --watch",
+    "test": "jest",
+    "test:ci": "jest --coverage",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test:watch": "jest --watch",
+    "validate": "bun run typecheck && bun run test && bun run lint && bun run format",
+    "validate:fix": "bun run format:fix && bun run lint --fix && bun run typecheck && bun run test -u",
+    "format": "oxfmt --check .",
+    "format:check": "oxfmt --check .",
+    "format:fix": "oxfmt .",
+    "release": "release-it"
+  },
+  "dependencies": {
+    "@types/react-reconciler": "~0.33.0",
+    "react-reconciler": "~0.33.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@jest/globals": "^30.3.0",
+    "@release-it/conventional-changelog": "^10.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "eslint": "^10.2.0",
+    "eslint-plugin-simple-import-sort": "^13.0.0",
+    "jest": "^30.3.0",
+    "oxfmt": "^0.44.0",
+    "react": "^19.2.5",
+    "release-it": "^19.2.4",
+    "ts-jest": "^29.4.9",
+    "tsdown": "^0.21.7",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.58.1"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "testRenderer": {
+    "supportedReactRange": ">=19.0.0 <19.3.0"
+  }
+}

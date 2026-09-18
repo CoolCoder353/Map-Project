@@ -34,7 +34,24 @@ What it does, in order: download the Australia extract (~1 GB, md5-checked) → 
 docker compose logs -f worker
 ```
 
-If a step fails, the run is marked failed, the log tail is kept, and the **live data is untouched** — the new graph and tiles only replace the old ones after every step succeeds.
+If a step fails, the run is marked failed, the log tail is kept, and the **live data is untouched** — the new graph and tiles only replace the old ones after every step succeeds. Running the refresh again reuses a graph and tiles already built from the same extract, so a retry after a late failure takes minutes, not hours.
+
+### Running only some steps
+
+After an update that changes how places are imported (search data), rebuild just the places, which takes about 7 minutes, instead of the whole refresh:
+
+```bash
+docker compose run --rm --no-deps worker node dist/refresh-cli.js places
+```
+
+Steps are `download`, `graph`, `tiles` and `places`; name any combination. The run shows up in the dashboard like any other.
+
+### What the places import records
+
+Every place gets a suburb, state and postcode for search suggestions ("Main Street · Queanbeyan NSW 2620"):
+- **State and suburb** come from OSM administrative boundaries: states are admin level 4, suburbs and localities are levels 9 and 10. A tagged `addr:suburb` wins. Without a boundary, the place takes `addr:city`, then the nearest suburb or town within about 5 km.
+- **Postcode** comes from `addr:postcode`, or else the postcode most of the suburb's addresses use. Suburbs with no addresses mapped in OSM (for example Richardson, ACT) have no postcode to learn, so none is shown.
+- **Businesses** keep their type (`shop=supermarket`), brand and `opening_hours`. Hours are shown as "Open until 9 pm" in the place's own time zone.
 
 ## Verifying a deployment
 
@@ -49,6 +66,10 @@ Performance for a heavy user (50,000 visited hexagons):
 ```bash
 DATABASE_URL=postgres://wayfinder:...@localhost:5432/wayfinder GRAPHHOPPER_URL=http://localhost:8989 pnpm bench:explore 50000 20
 ```
+
+## User feedback
+
+Off by default. An admin turns it on under **Admin → App settings → User feedback**. People then see **Send feedback** in the web account menu and in Android Settings, within a minute. Reports arrive under **Admin → Feedback**: `dev` can read them, and `admin` can set a status, keep private notes and delete. Opening, changing and deleting a report are audited. Each person can send 5 reports an hour; screenshots are capped at 2 MB. Reports are deleted with the account when it is purged.
 
 ## Accounts
 

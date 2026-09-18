@@ -44,6 +44,28 @@ the road network are sampled.
 roads with turn instructions, walking slower than driving, explore routes adding new ground
 within the budget, and round trips returning near the target time.
 
+## Search (after the 2026-09-18 places re-import)
+
+The places-only refresh took 6.7 min. It found 9 states and territories and 15,650 suburb/locality boundaries. 4,537 settlements mapped twice were removed.
+
+| Kind | Rows | With suburb | With state | With postcode |
+|---|---|---|---|---|
+| Address | 5,088,934 | 100% | 100% | 95% |
+| Street | 607,076 | 99.9% | 100% | 78% |
+| Business / POI | 380,567 | 99.8% | 99.8% | 84% |
+| Suburb / town | 24,623 | — | 99.8% | ~30% (mostly localities and hamlets with no addresses in OSM) |
+
+Sample queries from Braddon (Canberra), straight against the live database:
+
+| Query | Top result | Time |
+|---|---|---|
+| Woolworths | Woolworths · Supermarket · Dickson ACT 2602 · 2.3 km, then the next four nearest branches | 140 ms |
+| petrol / servo | 7/11 Braddon · Petrol station · 0.6 km (from Queanbeyan: Ampol, 0.3 km) | 77–87 ms |
+| Main Street (from Queanbeyan) | Main Street · Moruya NSW 2537 · 98.7 km; Queanbeyan's own Erin and Monaro Streets no longer come first | 104 ms |
+| Bunnings | Bunnings Belconnen · Hardware store · 7.0 km · Open until 9 pm | 84 ms |
+| Sydney | Sydney · City · NSW · 246 km, then Sydney Avenue, Barton | 79 ms |
+| 12 Lonsdale St | Lonsdale Street · Braddon ACT 2612 (St read as Street) | 98 ms |
+
 ## Map over real tiles
 
 Screenshots are in `apps/web/.impeccable/review/live-*.png` (light and dark). Route chips read
