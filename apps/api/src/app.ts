@@ -8,6 +8,7 @@ import type { AppDeps } from './deps.js';
 import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { coverageRoutes } from './routes/coverage.js';
+import { feedbackRoutes } from './routes/feedback.js';
 import { healthRoutes } from './routes/health.js';
 import { mapRoutes } from './routes/map.js';
 import { meRoutes } from './routes/me.js';
@@ -77,6 +78,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(routingRoutes(deps), { prefix: '/api' });
   await app.register(trackRoutes(deps), { prefix: '/api' });
   await app.register(coverageRoutes(deps), { prefix: '/api/coverage' });
+  await app.register(feedbackRoutes(deps), { prefix: '/api' });
   await app.register(adminRoutes(deps), { prefix: '/api/admin' });
   await app.register(mapRoutes(deps));
   return app;

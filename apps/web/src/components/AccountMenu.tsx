@@ -1,11 +1,28 @@
-import { LayoutDashboard, LogOut, Settings } from 'lucide-react';
+import { LayoutDashboard, LogOut, MessageSquarePlus, Settings } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '../lib/auth';
+import { useAppConfig } from '../lib/config';
+import { captureScreen } from '../lib/screenshot';
+import { useMapApi } from '../map/MapProvider';
+import { FeedbackDialog } from './FeedbackDialog';
+
+const nextPaint = () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
 
 export function AccountMenu() {
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
+  const { config } = useAppConfig();
+  const map = useMapApi();
+  const [feedback, setFeedback] = useState<{ open: boolean; shot: Blob | null }>({ open: false, shot: null });
+
+  const startFeedback = async () => {
+    setOpen(false);
+    // Let the menu close first so the capture shows the screen, not the menu.
+    await nextPaint();
+    const shot = await captureScreen(map).catch(() => null);
+    setFeedback({ open: true, shot });
+  };
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const close = (e: MouseEvent | KeyboardEvent) => {
@@ -37,12 +54,18 @@ export function AccountMenu() {
               <LayoutDashboard aria-hidden /> Admin dashboard
             </Link>
           )}
+          {config.feedbackEnabled && (
+            <button role="menuitem" type="button" onClick={() => void startFeedback()}>
+              <MessageSquarePlus aria-hidden /> Send feedback
+            </button>
+          )}
           <div className="menu-sep" />
           <button role="menuitem" type="button" onClick={() => void logout()}>
             <LogOut aria-hidden /> Sign out
           </button>
         </div>
       )}
+      <FeedbackDialog open={feedback.open} screenshot={feedback.shot} map={map} onClose={() => setFeedback({ open: false, shot: null })} />
     </div>
   );
 }

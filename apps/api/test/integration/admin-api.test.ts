@@ -51,6 +51,10 @@ const cases: Case[] = [
   { method: 'GET', url: () => '/api/admin/invites', mutation: false },
   { method: 'GET', url: () => '/api/admin/audit', mutation: false },
   { method: 'GET', url: () => '/api/admin/app-settings', mutation: false },
+  { method: 'GET', url: () => '/api/admin/feedback?status=new', mutation: false },
+  { method: 'GET', url: () => '/api/admin/feedback/summary', mutation: false },
+  { method: 'PATCH', url: () => `/api/admin/feedback/${randomUUID()}`, body: () => ({ status: 'done' }), mutation: true },
+  { method: 'DELETE', url: () => `/api/admin/feedback/${randomUUID()}`, body: () => ({ confirm: 'DELETE' }), mutation: true },
   { method: 'PATCH', url: () => '/api/admin/app-settings', body: () => ({ voice: 'plain' }), mutation: true },
   { method: 'POST', url: () => '/api/admin/invites', body: () => ({ count: 1 }), mutation: true },
   { method: 'POST', url: () => '/api/admin/invites/NOPE-NOPE-NOPE/revoke', mutation: true },
@@ -159,11 +163,11 @@ describe('app settings', () => {
     const before = (await ta.app.inject({ method: 'GET', url: '/api/config' })).json();
     expect(before).toMatchObject({ appName: 'Wayfinder', voice: 'plain' });
     const res = await ta.app.inject({ method: 'PATCH', url: '/api/admin/app-settings', headers: { authorization: await tokenFor(ta, admin, 'admin') }, payload: { appName: 'Fogline', voice: 'playful' } });
-    expect(res.json()).toEqual({ appName: 'Fogline', voice: 'playful' });
+    expect(res.json()).toEqual({ appName: 'Fogline', voice: 'playful', feedbackEnabled: false });
     const bad = await ta.app.inject({ method: 'PATCH', url: '/api/admin/app-settings', headers: { authorization: await tokenFor(ta, admin, 'admin') }, payload: { voice: 'shouty' } });
     expect(bad.statusCode).toBe(400);
     expect((await ta.app.inject({ method: 'GET', url: '/api/config' })).json()).toMatchObject({ appName: 'Fogline', voice: 'playful' });
     const [entry] = (await ta.app.inject({ method: 'GET', url: '/api/admin/audit?action=app.', headers: { authorization: await tokenFor(ta, admin, 'admin') } })).json().items;
-    expect(entry.details).toEqual({ before: { appName: 'Wayfinder', voice: 'plain' }, after: { appName: 'Fogline', voice: 'playful' } });
+    expect(entry.details).toEqual({ before: { appName: 'Wayfinder', voice: 'plain', feedbackEnabled: false }, after: { appName: 'Fogline', voice: 'playful', feedbackEnabled: false } });
   });
 });

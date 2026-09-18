@@ -35,12 +35,30 @@ export function AppSettingsPage() {
       void qc.invalidateQueries({ queryKey: ['admin', 'app-settings'] });
     },
   });
+  // The switch flips at once and flips back if saving fails.
+  const [feedbackOn, setFeedbackOn] = useState(false);
+  useEffect(() => {
+    if (settings.data) setFeedbackOn(settings.data.feedbackEnabled);
+  }, [settings.data]);
+  const toggleFeedback = useMutation({
+    mutationFn: (feedbackEnabled: boolean) => api('/api/admin/app-settings', { method: 'PATCH', body: { feedbackEnabled } }),
+    onMutate: (on) => setFeedbackOn(on),
+    onSuccess: (_d, on) => {
+      toast(on ? 'Feedback is on. “Send feedback” appears for everyone within a minute.' : 'Feedback is off. New reports are refused now; the menu item goes within a minute. Existing reports are kept.');
+      void qc.invalidateQueries({ queryKey: configQueryKey });
+      void qc.invalidateQueries({ queryKey: ['admin', 'app-settings'] });
+    },
+    onError: (err, on) => {
+      setFeedbackOn(!on);
+      toast(errorMessage(err));
+    },
+  });
   const dirty = settings.data && (appName.trim() !== settings.data.appName || voice !== settings.data.voice);
   const sample = COPY[voice];
 
   return (
     <>
-      <PageHeader title="App settings" description="The app’s name and the tone of its wording, for everyone on web and Android." />
+      <PageHeader title="App settings" description="The app’s name, the tone of its wording, and user feedback, for everyone on web and Android." />
       <QueryState isLoading={settings.isLoading} error={settings.error}>
         <form
           className="admin-section settings-form"
@@ -87,6 +105,24 @@ export function AppSettingsPage() {
             <p className="field-hint">Only admins can change these.</p>
           )}
         </form>
+        <section className="admin-section settings-form" aria-labelledby="feedback-setting">
+          <label className="settings-row">
+            <span>
+              <strong id="feedback-setting">User feedback</strong>
+              <span className="field-hint" style={{ display: 'block' }}>
+                Lets people send bug reports and ideas, with an optional screenshot. Reports arrive under Feedback.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              className="switch"
+              checked={feedbackOn}
+              disabled={!isAdmin || toggleFeedback.isPending}
+              onChange={(e) => toggleFeedback.mutate(e.target.checked)}
+            />
+          </label>
+        </section>
       </QueryState>
     </>
   );

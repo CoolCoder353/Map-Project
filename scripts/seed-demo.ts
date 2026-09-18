@@ -77,10 +77,27 @@ const places = [
   ['p7', 'Two Before Ten', 'poi', 'cafe', 'Café, Aranda', 149.0823, -35.2596, 0.1],
   ['r1', 'Northbourne Avenue', 'street', null, 'Braddon', 149.1313, -35.2703, 0],
   ['a1', '10 Lonsdale Street', 'address', null, 'Braddon 2612', 149.1349, -35.2758, 0],
+  ['w1', 'Woolworths Dickson', 'poi', null, 'supermarket', 149.1398, -35.2503, 0.05],
 ] as const;
+// Where each place is, as the OSM import fills it in.
+const located: Record<string, { suburb: string; state: string; postcode?: string; poiType?: string; openingHours?: string }> = {
+  c1: { suburb: 'Canberra', state: 'ACT' },
+  s1: { suburb: 'Braddon', state: 'ACT', postcode: '2612' },
+  s2: { suburb: 'Kingston', state: 'ACT', postcode: '2604' },
+  p1: { suburb: 'Campbell', state: 'ACT', postcode: '2612', poiType: 'tourism=viewpoint' },
+  p2: { suburb: 'Acton', state: 'ACT', postcode: '2601', poiType: 'natural=peak' },
+  p3: { suburb: 'Macgregor', state: 'ACT', postcode: '2615', poiType: 'waterway=waterfall' },
+  p4: { suburb: 'Tharwa', state: 'ACT', postcode: '2620', poiType: 'highway=trailhead' },
+  p5: { suburb: 'Parkes', state: 'ACT', postcode: '2600', poiType: 'leisure=park' },
+  p6: { suburb: 'Tharwa', state: 'ACT', postcode: '2620', poiType: 'historic=manor' },
+  p7: { suburb: 'Aranda', state: 'ACT', postcode: '2614', poiType: 'amenity=cafe', openingHours: 'Mo-Fr 07:00-15:00; Sa,Su 08:00-14:00' },
+  r1: { suburb: 'Braddon', state: 'ACT', postcode: '2612' },
+  a1: { suburb: 'Braddon', state: 'ACT', postcode: '2612' },
+  w1: { suburb: 'Dickson', state: 'ACT', postcode: '2602', poiType: 'shop=supermarket', openingHours: '24/7' },
+};
 await placeService.upsertPlaces(
   db,
-  places.map(([id, name, kind, category, description, lon, lat, importance]) => ({ id, name, kind, category, description, lon, lat, importance })),
+  places.map(([id, name, kind, category, description, lon, lat, importance]) => ({ id, name, kind, category, description, lon, lat, importance, ...located[id] })),
 );
 
 const codes = await inviteService.createInvites(db, { count: 3, expiresInDays: 14, note: 'demo', roleOnSignup: 'user', createdBy: adminId });

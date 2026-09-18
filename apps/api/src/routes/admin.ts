@@ -7,6 +7,8 @@ import {
   CoverageQuerySchema,
   CreateInvitesSchema,
   ErrorListQuerySchema,
+  FeedbackListQuerySchema,
+  FeedbackUpdateSchema,
   InviteListQuerySchema,
   JobListQuerySchema,
   MetricsQuerySchema,
@@ -21,6 +23,7 @@ import {
   authService,
   badRequest,
   coverageService,
+  feedbackService,
 
   inviteService,
   notFound,
@@ -180,6 +183,44 @@ export const adminRoutes =
       const { before, after } = await appSettingsService.updateAppSettings(db, patch);
       await audit(db, { actorId: currentUser(req).id, action: 'app.settings_change', targetType: 'app', targetId: null, details: { before, after }, ip: req.ip });
       return after;
+    });
+
+    // ---- User feedback ----
+    app.get('/feedback', async (req) => ({
+      items: await feedbackService.listFeedback(db, parse(FeedbackListQuerySchema, req.query)),
+      newCount: await feedbackService.countNewFeedback(db),
+    }));
+    app.get('/feedback/summary', async () => ({ newCount: await feedbackService.countNewFeedback(db) }));
+    app.get<{ Params: { id: string } }>('/feedback/:id', async (req) => {
+      const item = await feedbackService.getFeedback(db, req.params.id);
+      if (!item) throw notFound('Report not found');
+      await audit(db, { actorId: currentUser(req).id, action: 'feedback.view', targetType: 'feedback', targetId: item.id, ip: req.ip });
+      return item;
+    });
+    app.get<{ Params: { id: string } }>('/feedback/:id/screenshot', async (req, reply) => {
+      const shot = await feedbackService.getScreenshot(db, req.params.id);
+      reply.header('content-type', shot.mediaType).header('cache-control', 'private, no-store');
+      return reply.send(shot.data);
+    });
+    app.patch<{ Params: { id: string } }>('/feedback/:id', adminOnly, async (req) => {
+      const patch = parse(FeedbackUpdateSchema, req.body);
+      const { before, after } = await feedbackService.updateFeedback(db, req.params.id, patch);
+      await audit(db, {
+        actorId: currentUser(req).id,
+        action: 'feedback.update',
+        targetType: 'feedback',
+        targetId: after.id,
+        details: { from: { status: before.status }, to: { status: after.status }, notesChanged: before.adminNotes !== after.adminNotes },
+        ip: req.ip,
+      });
+      return after;
+    });
+    app.delete<{ Params: { id: string } }>('/feedback/:id', adminOnly, async (req) => {
+      const { confirm } = parse(ConfirmBodySchema, req.body);
+      if (confirm !== 'DELETE') throw new AppError(400, 'confirmation_required', 'Type DELETE to confirm');
+      await feedbackService.deleteFeedback(db, req.params.id);
+      await audit(db, { actorId: currentUser(req).id, action: 'feedback.delete', targetType: 'feedback', targetId: req.params.id, ip: req.ip });
+      return { ok: true };
     });
 
     // ---- Audit ----

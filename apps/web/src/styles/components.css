@@ -488,3 +488,47 @@ select.select {
   background-size: 5px 5px, 5px 5px;
   background-repeat: no-repeat;
 }
+
+/* ---------- Feedback ---------- */
+.feedback-dialog {
+  width: min(520px, calc(100vw - 32px));
+}
+.textarea {
+  min-height: 120px;
+  padding: var(--space-2) var(--space-3);
+  resize: vertical;
+  line-height: 1.45;
+}
+.feedback-shot {
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+.feedback-shot img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.feedback-shot-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+.feedback-add-shot {
+  justify-self: start;
+}
+.check {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  font-size: var(--text-sm);
+}
+.check input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+.check .field-hint {
+  display: block;
+}

@@ -35,7 +35,7 @@ export interface MapMarker {
   label?: string;
 }
 
-interface MapApi {
+export interface MapApi {
   ready: boolean;
   tilesAvailable: boolean | null;
   setRoutes(routes: Route[], selectedId: string | null, hoveredId?: string | null): void;
@@ -52,6 +52,10 @@ interface MapApi {
   onRouteHover(handler: (routeId: string | null) => void): () => void;
   setSearchPin(p: { lngLat: LngLat; label: string } | null): void;
   zoomBy(delta: number): void;
+  /** The current view, for feedback context. */
+  view(): { center: LngLat; zoom: number } | null;
+  /** The rendered map as an image, or null if there is no map. */
+  captureMap(): Promise<{ image: HTMLCanvasElement; rect: DOMRect } | null>;
   attach(container: HTMLDivElement | null): void;
 }
 
@@ -717,6 +721,32 @@ export function MapProvider({
       zoomBy(delta) {
         const map = mapRef.current;
         if (map) map.easeTo({ zoom: map.getZoom() + delta, duration: 250 });
+      },
+      view() {
+        const map = mapRef.current;
+        if (!map) return null;
+        const c = map.getCenter();
+        return { center: [Number(c.lng.toFixed(5)), Number(c.lat.toFixed(5))], zoom: Number(map.getZoom().toFixed(2)) };
+      },
+      captureMap() {
+        const map = mapRef.current;
+        if (!map) return Promise.resolve(null);
+        // WebGL clears its buffer after each frame, so copy it inside the render event.
+        return new Promise((resolve) => {
+          map.once('render', () => {
+            try {
+              const source = map.getCanvas();
+              const copy = document.createElement('canvas');
+              copy.width = source.width;
+              copy.height = source.height;
+              copy.getContext('2d')!.drawImage(source, 0, 0);
+              resolve({ image: copy, rect: source.getBoundingClientRect() });
+            } catch {
+              resolve(null);
+            }
+          });
+          map.triggerRepaint();
+        });
       },
     }),
     [ready, tilesAvailable, coverageEnabled, attach, setSource, refreshCoverage, insetForPanel],

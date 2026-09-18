@@ -21,3 +21,4 @@ export * as opsService from './services/ops.js';
 export * as accountService from './services/account.js';
 export * from "./lib/queue.js";
 export * as appSettingsService from './services/app-settings.js';
+export * as feedbackService from './services/feedback.js';

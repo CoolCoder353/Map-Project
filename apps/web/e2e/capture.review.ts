@@ -16,6 +16,7 @@ const settle = (page: Page) => page.waitForTimeout(1800);
 
 for (const scheme of ['light', 'dark'] as const) {
   test(`@capture desktop ${scheme}`, async ({ browser }) => {
+    test.setTimeout(180_000);
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: scheme, reducedMotion: 'reduce' });
     const page = await ctx.newPage();
     const suffix = scheme === 'light' ? '' : '-dark';
@@ -37,6 +38,37 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.goto('/admin/performance');
     await settle(page);
     await page.screenshot({ path: `${OUT}/admin-performance${suffix}.png`, fullPage: true });
+
+    // Search suggestions, settings back button, feedback form and inbox.
+    await page.goto('/directions?from=149.13500,-35.27100,Braddon&mode=car');
+    const dest = page.getByRole('combobox', { name: 'Destination' });
+    await dest.click();
+    await dest.fill('Woolworths');
+    await expect(page.getByRole('option', { name: /Woolworths Dickson/ })).toBeVisible();
+    await page.screenshot({ path: `${OUT}/search${suffix}.png` });
+    await page.goto('/settings');
+    await settle(page);
+    await page.screenshot({ path: `${OUT}/settings${suffix}.png` });
+    await page.goto('/admin/settings');
+    const toggle = page.getByRole('switch', { name: /User feedback/ });
+    if (!(await toggle.isChecked())) await toggle.check();
+    await page.screenshot({ path: `${OUT}/admin-settings${suffix}.png`, fullPage: true });
+    await page.goto(TRIP);
+    await expect(page.getByRole('list', { name: 'Fastest route' })).toBeVisible();
+    await settle(page);
+    await page.getByRole('button', { name: /^Account:/ }).click();
+    await page.getByRole('menuitem', { name: 'Send feedback' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Send feedback' });
+    await dialog.getByRole('textbox').fill('The explore route disappeared after I swapped start and end.');
+    await page.screenshot({ path: `${OUT}/feedback-dialog${suffix}.png` });
+    await dialog.getByRole('button', { name: 'Send' }).click();
+    await expect(dialog).toBeHidden();
+    await page.goto('/admin/feedback');
+    await expect(page.locator('.feedback-message-cell a').first()).toBeVisible();
+    await page.screenshot({ path: `${OUT}/admin-feedback${suffix}.png`, fullPage: true });
+    await page.locator('.feedback-message-cell a').first().click();
+    await expect(page.getByRole('img', { name: 'Screenshot sent with the report' })).toBeVisible();
+    await page.screenshot({ path: `${OUT}/admin-feedback-detail${suffix}.png`, fullPage: true });
     await ctx.close();
   });
 }

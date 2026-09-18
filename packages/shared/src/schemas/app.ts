@@ -6,13 +6,15 @@ export type Voice = z.infer<typeof VoiceSchema>;
 export const AppSettingsSchema = z.object({
   appName: z.string().trim().min(1).max(40),
   voice: VoiceSchema,
+  /** Users can send bug reports and ideas. */
+  feedbackEnabled: z.boolean(),
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;
 
-export const DEFAULT_APP_SETTINGS: AppSettings = { appName: 'Wayfinder', voice: 'plain' };
+export const DEFAULT_APP_SETTINGS: AppSettings = { appName: 'Wayfinder', voice: 'plain', feedbackEnabled: false };
 
 export const UpdateAppSettingsSchema = AppSettingsSchema.partial().refine(
-  (v) => v.appName !== undefined || v.voice !== undefined,
+  (v) => v.appName !== undefined || v.voice !== undefined || v.feedbackEnabled !== undefined,
   'Nothing to update',
 );
 

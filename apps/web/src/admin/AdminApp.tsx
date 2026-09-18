@@ -1,12 +1,15 @@
-import { Activity, ArrowLeft, Bug, Cog, Gauge, History, KeyRound, Layers, Trash2, Users, UsersRound } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Activity, ArrowLeft, Bug, Cog, Gauge, History, KeyRound, Layers, MessageSquare, Trash2, Users, UsersRound } from 'lucide-react';
 import { useEffect } from 'react';
 import { NavLink, Route, Routes, useLocation } from 'react-router';
+import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useAppConfig } from '../lib/config';
 import { AppSettingsPage } from './pages/AppSettingsPage';
 import { AuditPage } from './pages/AuditPage';
 import { DeletedPage } from './pages/DeletedPage';
 import { ErrorsPage } from './pages/ErrorsPage';
+import { FeedbackDetailPage, FeedbackPage } from './pages/FeedbackPage';
 import { InvitesPage } from './pages/InvitesPage';
 import { JobsPage } from './pages/JobsPage';
 import { OverviewPage } from './pages/OverviewPage';
@@ -25,6 +28,7 @@ const NAV = [
   ] },
   { group: 'Management', items: [
     { to: '/admin/users', label: 'Users', icon: Users },
+    { to: '/admin/feedback', label: 'Feedback', icon: MessageSquare },
     { to: '/admin/invites', label: 'Invite codes', icon: KeyRound },
     { to: '/admin/audit', label: 'Audit log', icon: History },
     { to: '/admin/deleted', label: 'Recently deleted', icon: Trash2 },
@@ -36,6 +40,12 @@ export default function AdminApp() {
   const { user } = useAuth();
   const { config } = useAppConfig();
   const location = useLocation();
+  const feedback = useQuery({
+    queryKey: ['admin', 'feedback-summary'],
+    queryFn: () => api<{ newCount: number }>('/api/admin/feedback/summary'),
+    refetchInterval: 60_000,
+  });
+  const newFeedback = feedback.data?.newCount ?? 0;
   useEffect(() => {
     document.querySelector('.admin-nav-link.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [location.pathname]);
@@ -53,6 +63,9 @@ export default function AdminApp() {
               {g.items.map(({ to, label, icon: Icon, end }) => (
                 <NavLink key={to} to={to} end={end} className="admin-nav-link">
                   <Icon aria-hidden /> {label}
+                  {to === '/admin/feedback' && newFeedback > 0 && (
+                    <span className="admin-nav-count" aria-label={`${newFeedback} new`}>{newFeedback}</span>
+                  )}
                 </NavLink>
               ))}
             </div>
@@ -75,6 +88,8 @@ export default function AdminApp() {
           <Route path="audit" element={<AuditPage />} />
           <Route path="deleted" element={<DeletedPage />} />
           <Route path="settings" element={<AppSettingsPage />} />
+          <Route path="feedback" element={<FeedbackPage />} />
+          <Route path="feedback/:id" element={<FeedbackDetailPage />} />
         </Routes>
       </main>
     </div>
