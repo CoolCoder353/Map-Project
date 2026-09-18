@@ -28,4 +28,8 @@ export default tseslint.config(
     languageOptions: { globals: globals.node, sourceType: 'commonjs' },
     rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
+  {
+    files: ['**/*.mjs'],
+    languageOptions: { globals: globals.node },
+  },
 );

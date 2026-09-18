@@ -25,8 +25,9 @@ describe.skipIf(!liveUrl)('routing against the real graph', () => {
   beforeAll(async () => {
     t = await createTestDb();
     userId = (await makeUser(t.db, 'live@example.com')).id;
-    // Mark the direct corridor as already travelled.
-    const cells = pathCells([braddon, lanyon]);
+    // Mark the usual drive as already travelled: the fastest route's own roads.
+    const usual = await routing.fastestRoute(deps(), userId, { from: braddon, to: lanyon, mode: 'car', via: [] });
+    const cells = pathCells(usual.geometry);
     await t.db.query(
       `INSERT INTO visited_cells (user_id, cell, r7, r5, first_visited_at, last_visited_at, modes)
        SELECT $1, c, r7, r5, now() - interval '20 days', now(), 1 FROM unnest($2::bigint[], $3::bigint[], $4::bigint[]) AS t(c, r7, r5)
@@ -60,7 +61,7 @@ describe.skipIf(!liveUrl)('routing against the real graph', () => {
 
   it('explore routes add new ground within the time budget', async () => {
     const res = await routing.exploreRoutes(deps(), userId, { from: braddon, to: lanyon, mode: 'car', budgetMin: 20 });
-    expect(res.fastest.novelty.noveltyPct).toBeLessThan(35); // the corridor is already visited
+    expect(res.fastest.novelty.noveltyPct).toBeLessThan(10); // the usual drive is already visited
     expect(res.explore.length).toBeGreaterThan(0);
     for (const e of res.explore) {
       expect(e.durationS).toBeLessThanOrEqual(res.fastest.durationS + 20 * 60 + 1);

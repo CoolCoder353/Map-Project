@@ -38,6 +38,28 @@ export interface RouteParams {
   signal?: AbortSignal;
 }
 
+const pointCount = (init?: RequestInit) => {
+  try {
+    return typeof init?.body === 'string' ? ((JSON.parse(init.body) as { points?: unknown[] }).points?.length ?? 1) : 1;
+  } catch {
+    return 1;
+  }
+};
+
+/** GraphHopper's 400 messages carry lat,lon pairs and engine jargon; people get plain words. */
+export function noRouteMessage(raw: string, points: number): string {
+  const missing = /Cannot find point (\d+)/.exec(raw);
+  if (missing) {
+    const i = Number(missing[1]);
+    const where = i === 0 ? 'your start' : i === points - 1 ? 'your destination' : 'one of your stops';
+    return `There is no road or path near ${where}. Try moving it closer to one.`;
+  }
+  if (/Connection between locations not found/i.test(raw)) {
+    return 'These places are not connected by roads or paths for this mode of travel.';
+  }
+  return 'No route could be found between these places.';
+}
+
 export class GraphHopperClient {
   constructor(
     private readonly baseUrl: string,
@@ -61,7 +83,7 @@ export class GraphHopperClient {
       const message = body.message ?? `GraphHopper error ${res.status}`;
       if (res.status === 400) {
         // Points outside the map, no connection between them, etc.
-        throw new AppError(422, 'no_route', message);
+        throw new AppError(422, 'no_route', noRouteMessage(message, pointCount(init)));
       }
       throw unavailable(message);
     }

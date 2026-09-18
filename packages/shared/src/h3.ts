@@ -6,6 +6,7 @@ import {
   cellsToMultiPolygon,
   getHexagonEdgeLengthAvg,
   getResolution,
+  gridDisk,
   latLngToCell,
   polygonToCells,
   UNITS,
@@ -38,6 +39,11 @@ export function bigIntToCell(value: bigint | string): Cell {
 
 export function parentCell(cell: Cell, res: number): Cell {
   return cellToParent(cell, res);
+}
+
+/** The cell and every cell within `k` steps of it. */
+export function diskCells(cell: Cell, k: number): Cell[] {
+  return gridDisk(cell, k);
 }
 
 export function cellResolution(cell: Cell): number {

@@ -7,9 +7,8 @@
  * Targets (design spec): explore p95 < 2 s, round trip p95 < 3 s.
  */
 import { randomUUID } from 'node:crypto';
-import { gridDisk } from 'h3-js';
 import { GraphHopperClient, MetricsAggregator, createPool, hashPassword, migrate, routingService } from '@wayfinder/core';
-import { type LngLat, cellToBigInt, destination, parentCell, pointToCell } from '@wayfinder/shared';
+import { type LngLat, cellToBigInt, destination, diskCells, parentCell, pointToCell } from '@wayfinder/shared';
 
 const url = process.env.DATABASE_URL;
 const ghUrl = process.env.GRAPHHOPPER_URL ?? 'http://localhost:8989';
@@ -29,9 +28,11 @@ const sydney: LngLat = [151.2093, -33.8688];
 const cells = new Set<string>();
 let seed = 1;
 const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-while (cells.size < targetCells) {
-  const centre = destination(sydney, rand() * 360, rand() * 40_000);
-  for (const c of gridDisk(pointToCell(centre), 3 + Math.floor(rand() * 6))) cells.add(c);
+// Spread over 100 km: a 40 km disc only holds ~48k res-9 cells, so 50k could never be reached.
+for (let tries = 0; cells.size < targetCells; tries++) {
+  if (tries > targetCells) throw new Error(`Could not place ${targetCells} distinct cells (got ${cells.size})`);
+  const centre = destination(sydney, rand() * 360, rand() * 100_000);
+  for (const c of diskCells(pointToCell(centre), 3 + Math.floor(rand() * 6))) cells.add(c);
 }
 const list = [...cells].slice(0, targetCells);
 for (let i = 0; i < list.length; i += 5000) {
@@ -64,17 +65,26 @@ async function measure(name: string, fn: () => Promise<unknown>) {
   return times.length ? pct(times, 0.95) : Infinity;
 }
 
-const trips: Array<[LngLat, LngLat]> = Array.from({ length: runs }, () => {
+// Sydney is coastal: keep only trips whose ends are on the road network.
+const trips: Array<[LngLat, LngLat]> = [];
+while (trips.length < runs) {
   const a = destination(sydney, rand() * 360, rand() * 25_000);
-  return [a, destination(a, rand() * 360, 8_000 + rand() * 22_000)];
-});
+  const b = destination(a, rand() * 360, 8_000 + rand() * 22_000);
+  const ok = await gh.route({ points: [a, b], profile: 'car' }).then(() => true, () => false);
+  if (ok) trips.push([a, b]);
+}
+const loopStarts: LngLat[] = [];
+while (loopStarts.length < runs) {
+  const s = destination(sydney, rand() * 360, rand() * 20_000);
+  if (await gh.route({ points: [s, destination(s, 90, 500)], profile: 'foot' }).then(() => true, () => false)) loopStarts.push(s);
+}
 let k = 0;
 const exploreP95 = await measure('explore car A→B (+15 min)', () => {
   const [from, to] = trips[k++ % trips.length]!;
   return routingService.exploreRoutes(deps, userId, { from, to, mode: 'car', budgetMin: 15 });
 });
 const loopP95 = await measure('round trip foot 60 min', () =>
-  routingService.roundTrips(deps, userId, { start: destination(sydney, rand() * 360, rand() * 20_000), mode: 'foot', targetMin: 60 }),
+  routingService.roundTrips(deps, userId, { start: loopStarts[k++ % loopStarts.length]!, mode: 'foot', targetMin: 60 }),
 );
 console.log(`\nTargets: explore p95 < 2000 ms → ${exploreP95 < 2000 ? 'PASS' : 'FAIL'}; round trip p95 < 3000 ms → ${loopP95 < 3000 ? 'PASS' : 'FAIL'}`);
 await db.query('DELETE FROM users WHERE id = $1', [userId]);
