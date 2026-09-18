@@ -111,16 +111,16 @@ await check('search (nearest branch of a chain)', async () => {
 
 await check('search (category word)', async () => {
   const r = await api<{ results: Place[] }>(`/api/search?q=petrol&lon=${braddon[0]}&lat=${braddon[1]}`);
-  const fuel = r.results.filter((p) => p.typeLabel === 'Fuel');
+  const fuel = r.results.filter((p) => p.typeLabel === 'Petrol station');
   if (fuel.length === 0 || (fuel[0]!.distanceM ?? Infinity) > 10_000) throw new Error(`no fuel nearby: ${r.results.map((p) => p.name).join(', ')}`);
   return `${fuel.length} fuel stations, nearest ${fuel[0]!.name} at ${km(fuel[0]!.distanceM)}`;
 });
 
-await check('search (same street name, nearest suburb first)', async () => {
-  const q = [149.232, -35.354];
+await check('search (exact name beats a closer partial match)', async () => {
+  const q = [149.232, -35.354]; // Queanbeyan has no Main Street; its Erin/Monaro Streets must not win
   const r = await api<{ results: Place[] }>(`/api/search?q=Main%20Street&lon=${q[0]}&lat=${q[1]}`);
-  if (!r.results[0]?.context?.startsWith('Queanbeyan')) throw new Error(`first context "${r.results[0]?.context ?? ''}"`);
-  return r.results.slice(0, 3).map((p) => p.context).join(' | ');
+  if (r.results[0]?.name !== 'Main Street' || !r.results[0].context) throw new Error(`first is ${r.results[0]?.name} (${r.results[0]?.context ?? ''})`);
+  return r.results.slice(0, 3).map((p) => `${p.context} ${km(p.distanceM)}`).join(' | ');
 });
 
 await check('search (opening hours)', async () => {

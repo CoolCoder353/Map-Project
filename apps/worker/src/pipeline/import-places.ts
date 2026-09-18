@@ -75,7 +75,12 @@ export async function importPlacesFromGeoJsonSeq(
   await db.query('CREATE INDEX places_staging_category_r7_idx ON places_staging (category, r7) WHERE category IS NOT NULL');
   await db.query('CREATE INDEX places_staging_brand_trgm_idx ON places_staging USING gin (brand gin_trgm_ops) WHERE brand IS NOT NULL');
   await db.query('CREATE INDEX places_staging_poi_type_idx ON places_staging (poi_type) WHERE poi_type IS NOT NULL');
-  const indexes = ['name_trgm', 'r7', 'r9', 'category_r7', 'point', 'brand_trgm', 'poi_type'];
+  await db.query('CREATE INDEX places_staging_lower_name_idx ON places_staging (lower(name) text_pattern_ops)');
+  await db.query('CREATE INDEX places_staging_lower_brand_idx ON places_staging (lower(brand) text_pattern_ops) WHERE brand IS NOT NULL');
+  await db.query(
+    "CREATE INDEX places_staging_settlement_trgm_idx ON places_staging USING gin (name gin_trgm_ops) WHERE kind IN ('city', 'town', 'suburb')",
+  );
+  const indexes = ['name_trgm', 'r7', 'r9', 'category_r7', 'point', 'brand_trgm', 'poi_type', 'lower_name', 'lower_brand', 'settlement_trgm'];
   await withTransaction(db, async (tx) => {
     await tx.query('DROP TABLE places');
     await tx.query('ALTER TABLE places_staging RENAME TO places');

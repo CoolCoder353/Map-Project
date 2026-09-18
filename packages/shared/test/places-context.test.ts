@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryTypes, placeContext, placeDetail, poiTypeLabel, pointInPolygon, stateAbbreviation, stateTimeZone } from '../src/index.js';
+import { categoryTypes, expandAbbreviations, placeContext, placeDetail, poiTypeLabel, pointInPolygon, stateAbbreviation, stateTimeZone } from '../src/index.js';
 
 describe('place context line', () => {
   it('gives suburb, state and postcode for things inside a suburb', () => {
@@ -36,7 +36,9 @@ describe('category words', () => {
     expect(categoryTypes('Woolworths')).toBeNull();
   });
   it('labels OSM types', () => {
-    expect(poiTypeLabel('amenity=fast_food')).toBe('Fast food');
+    expect(poiTypeLabel('amenity=fast_food')).toBe('Takeaway');
+    expect(poiTypeLabel('amenity=fuel')).toBe('Petrol station');
+    expect(poiTypeLabel('shop=garden_centre')).toBe('Garden centre');
     expect(poiTypeLabel('shop=yes')).toBe('Place');
     expect(poiTypeLabel(null)).toBe('Place');
   });
@@ -58,5 +60,14 @@ describe('placeDetail', () => {
     expect(placeDetail({ description: 'x', typeLabel: 'Supermarket', context: 'Dickson ACT 2602', distanceM: 1500 }, km)).toBe('Supermarket · Dickson ACT 2602 · 1.5 km');
     expect(placeDetail({ description: 'Braddon 2612' }, km)).toBe('Braddon 2612');
     expect(placeDetail({ description: '', typeLabel: 'Street' }, km)).toBe('Street');
+  });
+});
+
+describe('expandAbbreviations', () => {
+  it('spells out street types but leaves a leading Saint alone', () => {
+    expect(expandAbbreviations('12 Lonsdale St')).toBe('12 Lonsdale street');
+    expect(expandAbbreviations('Mt. Ainslie Dr')).toBe('mount Ainslie drive');
+    expect(expandAbbreviations('St Kilda Rd')).toBe('St Kilda road');
+    expect(expandAbbreviations('Woolworths')).toBe('Woolworths');
   });
 });

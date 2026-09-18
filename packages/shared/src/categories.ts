@@ -50,10 +50,49 @@ export function categoryTypes(q: string): string[] | null {
   return hit ? [...new Set(hit)] : null;
 }
 
-/** "amenity=fast_food" → "Fast food". */
+/** OSM values whose plain spelling reads oddly in Australia. */
+const TYPE_LABELS: Record<string, string> = {
+  fuel: 'Petrol station',
+  doityourself: 'Hardware store',
+  charging_station: 'EV charger',
+  alcohol: 'Bottle shop',
+  convenience: 'Convenience store',
+  car_repair: 'Mechanic',
+  atm: 'ATM',
+  bbq: 'Barbecue',
+  fast_food: 'Takeaway',
+  toilets: 'Toilets',
+  pitch: 'Sports field',
+  camp_site: 'Campsite',
+};
+
+/** "shop=supermarket" → "Supermarket", "amenity=fuel" → "Petrol station". */
 export function poiTypeLabel(type: string | null | undefined): string {
   const value = type?.split('=')[1];
   if (!value || value === 'yes') return 'Place';
+  if (TYPE_LABELS[value]) return TYPE_LABELS[value];
   const words = value.replace(/_/g, ' ');
   return words[0]!.toUpperCase() + words.slice(1);
+}
+
+const STREET_WORDS: Record<string, string> = {
+  st: 'street', rd: 'road', ave: 'avenue', av: 'avenue', dr: 'drive', pde: 'parade', cres: 'crescent', cr: 'crescent',
+  pl: 'place', hwy: 'highway', ct: 'court', tce: 'terrace', cct: 'circuit', cl: 'close', gr: 'grove', ln: 'lane',
+  blvd: 'boulevard', esp: 'esplanade', sq: 'square', pt: 'point', mt: 'mount', nth: 'north', sth: 'south',
+};
+
+/**
+ * Spell out the abbreviations people type in addresses ("12 Lonsdale St" → "12 Lonsdale street").
+ * A leading "St" stays as it is: at the start it usually means Saint ("St Kilda").
+ */
+export function expandAbbreviations(q: string): string {
+  return q
+    .trim()
+    .split(/\s+/)
+    .map((word, i) => {
+      const key = word.toLowerCase().replace(/\.$/, '');
+      if (i === 0 && key === 'st') return word;
+      return STREET_WORDS[key] ?? word;
+    })
+    .join(' ');
 }

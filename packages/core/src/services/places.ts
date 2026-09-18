@@ -5,6 +5,7 @@ import {
   type Route,
   categoryTypes,
   cellToBigInt,
+  expandAbbreviations,
   haversineM,
   placeContext,
   poiTypeLabel,
@@ -60,9 +61,12 @@ function toPlace(r: PlaceRow, origin: LngLat | null = null, now = new Date()): P
   };
 }
 
+const SETTLEMENT = new Set(['city', 'town', 'suburb']);
+
 /**
- * How well a candidate answers the query: text match plus a strong pull toward the origin.
- * Nearby matches dominate, but an exact match on a big place (a city by name) still surfaces.
+ * How well a candidate answers the query: text match plus a pull toward the origin. The pull is
+ * scaled by match quality, so a nearby partial match ("Erin Street" for "Main Street") doesn't
+ * beat an exact one further away, while exact matches (every "Woolworths") are ordered by distance.
  */
 export function searchScore(
   r: { name: string; kind: string; importance: number; sim: number; lon: number; lat: number },
@@ -71,60 +75,103 @@ export function searchScore(
 ): number {
   const name = r.name.toLowerCase();
   const lower = q.trim().toLowerCase();
-  let score = r.sim + (name.startsWith(lower) ? 0.3 : 0) + (name === lower ? 0.5 : 0) + (KIND_BOOST[r.kind] ?? 0) + r.importance * 0.2;
+  const exact = name === lower;
+  const prefix = name.startsWith(lower);
+  let score = r.sim + (prefix ? 0.3 : 0) + (exact ? 0.25 : 0) + (exact && SETTLEMENT.has(r.kind) ? 0.35 : 0) + (KIND_BOOST[r.kind] ?? 0) + r.importance * 0.2;
   if (origin) {
+    const quality = exact ? 1 : prefix ? 0.9 : Math.min(1, Math.max(0, (r.sim - 0.3) / 0.5)) ** 2;
     const d = haversineM(origin, [r.lon, r.lat]);
-    score += 1.2 * Math.exp(-d / 15_000) + 0.4 * Math.exp(-d / 150_000);
+    score += quality * (1.5 * Math.exp(-d / 20_000) + 0.4 * Math.exp(-d / 150_000));
   }
   return score;
 }
 
-const box = (o: LngLat, deg: number) => [o[0] - deg / Math.cos((o[1] * Math.PI) / 180), o[1] - deg, o[0] + deg / Math.cos((o[1] * Math.PI) / 180), o[1] + deg];
+/** The same place mapped twice (a shop as a point and as a building): keep the better-ranked one. */
+function sameThing(a: PlaceRow, b: PlaceRow): boolean {
+  return (
+    a.name.toLowerCase() === b.name.toLowerCase() &&
+    a.kind === b.kind &&
+    a.poi_type === b.poi_type &&
+    (!a.suburb || !b.suburb || a.suburb === b.suburb) &&
+    haversineM([a.lon, a.lat], [b.lon, b.lat]) < 300
+  );
+}
+
 
 /**
- * Place search. Candidates come from three pools: the nearest text matches within ~50 km and
- * ~450 km of the origin, and the best text matches nationwide, so chain stores find their
- * nearest branches and a distant city can still be found by name. A query that names a kind of
- * place ("petrol", "pharmacy") lists the nearest of that kind first.
+ * Place search. Candidates come from these pools:
+ *  - fuzzy text matches (typos, partial words) among the 30,000 places nearest the origin;
+ *  - exact and prefix name or brand matches at any distance, nearest first, so every
+ *    "Main Street" or "Woolworths" is considered and chains find their nearest branches;
+ *  - fuzzy matches on suburb, town and city names nationwide, so "canbera" finds Canberra.
+ * Fuzzy matching over every name nationwide is avoided: common words ("Street") match hundreds of
+ * thousands of names. A query that names a kind of place ("petrol", "pharmacy") lists the nearest
+ * of that kind first.
  */
-export async function searchPlaces(db: DbClient, q: string, near: LngLat | null, limit: number, now = new Date()): Promise<Place[]> {
-  const prefix = `${q.replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
-  const match = `(name % $1 OR name ILIKE $2 OR brand % $1)`;
+export async function searchPlaces(db: DbClient, rawQuery: string, near: LngLat | null, limit: number, now = new Date()): Promise<Place[]> {
+  const q = expandAbbreviations(rawQuery);
+  const lower = q.toLowerCase();
+  const escaped = lower.replace(/[%_\\]/g, (m) => `\\${m}`);
   const sim = `greatest(similarity(name, $1), coalesce(similarity(brand, $1), 0)) AS sim`;
+  // Nearest first when there is an origin; otherwise the most important places first.
+  const order = near ? `point(lon, lat) <-> point(${Number(near[0])}, ${Number(near[1])})` : 'importance DESC';
+  // Find the matches first, then sort them. Left to itself the planner walks the point index
+  // nearest-first and filters every row, which reads the whole table for rare names.
+  const nearestOf = (where: string, n: number, cap = 20_000) =>
+    `WITH m AS MATERIALIZED (SELECT ${COLUMNS}, ${sim} FROM places WHERE ${where} LIMIT ${cap}) SELECT * FROM m ORDER BY ${order} LIMIT ${n}`;
   const pools: Array<Promise<{ rows: PlaceRow[] }>> = [
-    db.query<PlaceRow>(`SELECT ${COLUMNS}, ${sim} FROM places WHERE ${match} ORDER BY sim DESC LIMIT 100`, [q, prefix]),
+    db.query<PlaceRow>(nearestOf('lower(name) = $2 OR lower(brand) = $2', 100), [q, lower]),
+    db.query<PlaceRow>(
+      `SELECT ${COLUMNS}, ${sim} FROM places
+       WHERE kind IN ('city', 'town', 'suburb') AND name % $1 ORDER BY sim DESC, importance DESC LIMIT 30`,
+      [q],
+    ),
   ];
-  if (near) {
-    for (const [deg, n] of [[0.45, 150], [4, 100]] as const) {
-      const [x0, y0, x1, y1] = box(near, deg);
-      pools.push(
-        db.query<PlaceRow>(
-          `SELECT ${COLUMNS}, ${sim} FROM places
-           WHERE point(lon, lat) <@ box(point($3, $4), point($5, $6)) AND ${match}
-           ORDER BY point(lon, lat) <-> point($7, $8) LIMIT ${n}`,
-          [q, prefix, x0, y0, x1, y1, near[0], near[1]],
-        ),
-      );
-    }
+  // Short prefixes ("Ma") match too much to sort nationwide; the local pool covers them.
+  if (lower.length >= 3) {
+    pools.push(
+      db.query<PlaceRow>(nearestOf('lower(name) LIKE $2 OR lower(brand) LIKE $2', 100), [q, `${escaped}%`]),
+    );
+  }
+  if (!near) {
+    // No origin (a phone without location): fall back to fuzzy matching everywhere. Slower for
+    // common words, but it is the only way to catch typos in street and business names.
+    pools.push(db.query<PlaceRow>(`SELECT ${COLUMNS}, ${sim} FROM places WHERE name % $1 ORDER BY sim DESC LIMIT 100`, [q]));
+  } else {
+    // Typos and partial words near the origin: the 30,000 nearest places (a few km in a city, much
+    // further in the country), filtered by similarity. A trigram index scan is no help here:
+    // "12 Lonsdale Street" shares its trigrams with millions of addresses.
+    pools.push(
+      db.query<PlaceRow>(
+        `WITH b AS MATERIALIZED (SELECT ${COLUMNS}, brand FROM places ORDER BY ${order} LIMIT 30000)
+         SELECT ${COLUMNS}, ${sim} FROM b WHERE name % $1 OR brand % $1 OR lower(name) LIKE $2 ORDER BY sim DESC LIMIT 150`,
+        [q, `${escaped}%`],
+      ),
+    );
   }
   const types = categoryTypes(q);
   const category =
     types && near
-      ? await db.query<PlaceRow>(
-          `SELECT ${COLUMNS}, 1 AS sim FROM places WHERE poi_type = ANY($1::text[])
-           ORDER BY point(lon, lat) <-> point($2, $3) LIMIT $4`,
-          [types, near[0], near[1], limit],
+      ? db.query<PlaceRow>(
+          `WITH m AS MATERIALIZED (SELECT ${COLUMNS}, 1 AS sim FROM places WHERE poi_type = ANY($1::text[]))
+           SELECT * FROM m ORDER BY point(lon, lat) <-> point($2, $3) LIMIT $4`,
+          [types, near[0], near[1], limit * 2],
         )
-      : { rows: [] as PlaceRow[] };
-
-  const seen = new Set(category.rows.map((r) => r.id));
+      : Promise.resolve({ rows: [] as PlaceRow[] });
+  const [categoryRows, ...pooled] = await Promise.all([category.then((r) => r.rows), ...pools.map((p) => p.then((r) => r.rows))]);
+  const seen = new Set(categoryRows.map((r) => r.id));
   const named = new Map<string, PlaceRow>();
-  for (const { rows } of await Promise.all(pools)) for (const r of rows) if (!seen.has(r.id)) named.set(r.id, r);
+  for (const r of pooled.flat()) if (!seen.has(r.id)) named.set(r.id, r);
   const ranked = [...named.values()]
     .map((r) => ({ r, score: searchScore(r, q, near) }))
     .sort((a, b) => b.score - a.score)
     .map(({ r }) => r);
-  return [...category.rows, ...ranked].slice(0, limit).map((r) => toPlace(r, near, now));
+  const kept: PlaceRow[] = [];
+  for (const r of [...categoryRows, ...ranked]) {
+    if (kept.length >= limit) break;
+    if (!kept.some((k) => sameThing(k, r))) kept.push(r);
+  }
+  return kept.map((r) => toPlace(r, near, now));
 }
 
 export async function reverseGeocode(db: DbClient, p: LngLat): Promise<Place | null> {

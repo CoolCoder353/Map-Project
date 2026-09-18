@@ -29,6 +29,11 @@ beforeAll(async () => {
     near('s1', 'Sydney Avenue', 180, 2500, { kind: 'street', suburb: 'Barton', state: 'ACT', postcode: '2600' }),
     { id: 'syd', name: 'Sydney', kind: 'city', category: null, description: 'City', lon: 151.208, lat: -33.87, importance: 1, suburb: 'Sydney', state: 'NSW', postcode: '2000' },
     { id: 'ms1', name: 'Main Street', kind: 'street', category: null, description: '', lon: 149.231, lat: -35.352, importance: 0, suburb: 'Queanbeyan', state: 'NSW', postcode: '2620' },
+    { id: 'erin', name: 'Erin Street', kind: 'street', category: null, description: '', lon: 149.233, lat: -35.355, importance: 0, suburb: 'Queanbeyan', state: 'NSW', postcode: '2620' },
+    { id: 'lon12', name: '12 Lonsdale Street', kind: 'address', category: null, description: '', lon: 149.1345, lat: -35.2745, importance: 0, suburb: 'Braddon', state: 'ACT', postcode: '2612' },
+    // The same shop as a point and as its building.
+    near('dup1', 'Braddon Bakery', 45, 700, { poiType: 'shop=bakery', suburb: 'Braddon', state: 'ACT' }),
+    near('dup2', 'Braddon Bakery', 45, 760, { poiType: 'shop=bakery', suburb: 'Braddon', state: 'ACT' }),
     { id: 'ms2', name: 'Main Street', kind: 'street', category: null, description: '', lon: 148.9, lat: -35.0, importance: 0, suburb: 'Yass', state: 'NSW', postcode: '2582' },
   ] as places.PlaceInput[]);
 }, 120_000);
@@ -53,13 +58,25 @@ describe('place search', () => {
 
   it('ranks the Main Street next to the origin first and says which suburb it is in', async () => {
     const r = await places.searchPlaces(t.db, 'Main Street', queanbeyan, 5, friday);
-    expect(r.map((p) => p.context)).toEqual(['Queanbeyan NSW 2620', 'Yass NSW 2582']);
+    expect(r.map((p) => p.context).slice(0, 2)).toEqual(['Queanbeyan NSW 2620', 'Yass NSW 2582']);
+  });
+
+  it('does not let a close partial match beat exact matches further away', async () => {
+    const r = await places.searchPlaces(t.db, 'Main Street', [149.233, -35.355], 5, friday);
+    expect(r.slice(0, 2).map((p) => p.name)).toEqual(['Main Street', 'Main Street']);
+    expect(r.map((p) => p.id)).toContain('erin');
+  });
+
+  it('understands street abbreviations and collapses a place mapped twice', async () => {
+    expect((await places.searchPlaces(t.db, '12 Lonsdale St', braddon, 3, friday))[0]!.id).toBe('lon12');
+    const bakery = await places.searchPlaces(t.db, 'Braddon Bakery', braddon, 5, friday);
+    expect(bakery.filter((p) => p.name === 'Braddon Bakery')).toHaveLength(1);
   });
 
   it('lists the nearest places of a kind for category words, then name matches', async () => {
     const r = await places.searchPlaces(t.db, 'petrol', braddon, 5, friday);
     expect(r.map((p) => p.id).slice(0, 3)).toEqual(['f1', 'f2', 'c1']);
-    expect(r[0]!.typeLabel).toBe('Fuel');
+    expect(r[0]!.typeLabel).toBe('Petrol station');
   });
 
   it('matches brands as well as names', async () => {
