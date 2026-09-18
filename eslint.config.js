@@ -32,4 +32,10 @@ export default tseslint.config(
     files: ['**/*.mjs'],
     languageOptions: { globals: globals.node },
   },
+  {
+    // jest.mock factories must require() lazily; the icon stub is CommonJS.
+    files: ['apps/mobile/test/**/*.screen.test.tsx', 'apps/mobile/test/stubs/*.js'],
+    languageOptions: { globals: { ...globals.node, ...globals.jest } },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
 );

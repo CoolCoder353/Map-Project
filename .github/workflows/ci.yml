@@ -32,6 +32,8 @@ jobs:
       - run: pnpm typecheck
       - name: Unit tests
         run: pnpm test:unit
+      - name: Android screen tests
+        run: pnpm test:mobile
       - name: Integration tests (real Postgres)
         run: pnpm test:integration
         env:

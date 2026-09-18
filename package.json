@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
+    "test:mobile": "pnpm --filter @wayfinder/mobile test",
     "lint": "eslint .",
     "format": "prettier --write .",
     "dev:db": "tsx --conditions=development scripts/dev-pglite.ts",

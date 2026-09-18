@@ -2,7 +2,15 @@
 module.exports = {
   preset: 'jest-expo',
   testMatch: ['<rootDir>/test/**/*.screen.test.tsx'],
+  // Workspace packages export TypeScript sources under the `development` condition (as for
+  // Metro and Vite), and their sources import siblings with .js extensions.
+  testEnvironmentOptions: { customExportConditions: ['development', 'react-native', 'require', 'default'] },
+  moduleNameMapper: {
+    '^lucide-react-native$': '<rootDir>/test/stubs/lucide.js',
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
   transformIgnorePatterns: [
-    'node_modules/(?!(?:\\.pnpm/)?((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@maplibre/.*|lucide-react-native)/)',
+    // pnpm nests packages under node_modules/.pnpm/<id>/node_modules/<name>; let those through.
+    'node_modules/(?!\\.pnpm|(?:jest-)?react-native[^/]*|@react-native[^/]*/|expo[^/]*|@expo[^/]*/|@maplibre/|lucide-react-native|@tanstack/)',
   ],
 };
