@@ -25,3 +25,6 @@ playwright-report/
 dist-check/
 infra/android/*.keystore
 .gradle-docker/
+
+# pnpm store left by older APK builds
+.pnpm-store/

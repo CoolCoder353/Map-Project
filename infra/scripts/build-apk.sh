@@ -15,14 +15,19 @@ if [ -z "${ANDROID_BUILD_IMAGE:-}" ] && ! docker image inspect "$IMAGE" >/dev/nu
   docker build -t "$IMAGE" -f "$ROOT/infra/docker/android.Dockerfile" "$ROOT/infra"
 fi
 
+# The container runs as root on your checkout: keep pnpm's store in a volume (not the repo) and
+# hand every file it touched back to you when it exits, even on failure.
 docker run --rm -t \
   -v "$ROOT":/workspace -w /workspace \
+  -v wayfinder-apk-pnpm-store:/pnpm-store \
+  -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -e EXPO_PUBLIC_API_URL -e CI=1 \
   -e ANDROID_KEYSTORE_PASSWORD -e ANDROID_KEY_ALIAS -e ANDROID_KEY_PASSWORD \
   "$IMAGE" sh -c '
     set -eu
+    trap "chown -hR \"\$HOST_UID:\$HOST_GID\" /workspace/node_modules /workspace/apps /workspace/packages /workspace/dist 2>/dev/null || true" EXIT
     command -v pnpm >/dev/null 2>&1 || npm install -g pnpm@11.26.0
-    pnpm install --frozen-lockfile
+    pnpm install --frozen-lockfile --store-dir /pnpm-store
     cd apps/mobile
     npx expo prebuild --platform android --clean
     cd android
