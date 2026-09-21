@@ -75,3 +75,15 @@ describe('vector tiles from a gzip-compressed archive', () => {
     expect(tj).toMatchObject({ minzoom: 0, maxzoom: 0 });
   });
 });
+
+describe('behind a TLS-terminating proxy', () => {
+  it('hands out URLs on the configured public origin, whatever the request says', async () => {
+    const proxied = await createTestApp({ publicOrigin: 'https://maps.example.com/' });
+    try {
+      const style = await proxied.app.inject({ method: 'GET', url: '/map/style.json', headers: { host: 'internal:8080', 'x-forwarded-proto': 'http' } });
+      expect(style.json().sources.openmaptiles.url).toBe('https://maps.example.com/tiles/tiles.json');
+    } finally {
+      await proxied.close();
+    }
+  });
+});

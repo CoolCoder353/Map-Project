@@ -1,5 +1,10 @@
 {
 	email {$ACME_EMAIL}
+	# Behind another proxy (e.g. one that terminates HTTPS), keep the real client IP and
+	# protocol it forwards. Only private addresses are trusted to set them.
+	servers {
+		trusted_proxies static private_ranges
+	}
 }
 
 {$SITE_ADDRESS} {

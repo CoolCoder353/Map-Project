@@ -14,6 +14,11 @@ const ConfigSchema = z.object({
   OSM_REFRESH_SKIP: z.string().default(''),
   /** Cron for the automatic monthly refresh; empty disables it. */
   OSM_REFRESH_CRON: z.string().default('0 3 2 * *'),
+  /**
+   * false on servers too small to build map data (an Australia import needs ~16 GB RAM): the
+   * data is built elsewhere and copied in, and refresh requests are refused with a message.
+   */
+  OSM_REFRESH_ENABLED: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
   DISK_PATH: z.string().default('/'),
 });
 

@@ -11,7 +11,8 @@ export interface AppDeps {
   config: Pick<
     Config,
     'CORS_ORIGINS' | 'COOKIE_SECURE' | 'TRUST_PROXY' | 'MAP_ASSETS_DIR' | 'RATE_LIMIT_PER_MIN' | 'AUTH_RATE_LIMIT_PER_MIN' | 'NODE_ENV'
-  >;
+  > &
+    Partial<Pick<Config, 'PUBLIC_ORIGIN'>>;
   tiles: (TileArchive & { available(): Promise<boolean> }) | null;
   jobs: JobControl;
 }

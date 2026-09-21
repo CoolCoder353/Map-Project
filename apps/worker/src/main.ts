@@ -47,6 +47,7 @@ const handlers = jobHandlers({
     planetilerHeap: config.PLANETILER_HEAP,
     skip: config.OSM_REFRESH_SKIP.split(',').map((s) => s.trim()).filter(Boolean),
   },
+  refreshEnabled: config.OSM_REFRESH_ENABLED,
 });
 
 for (const name of JOB_NAMES) {
@@ -60,7 +61,7 @@ for (const name of JOB_NAMES) {
 await boss.schedule('system-sample', '* * * * *');
 await boss.schedule('metrics-maintenance', '7 * * * *');
 await boss.schedule('purge-deleted', '17 3 * * *');
-if (config.OSM_REFRESH_CRON) await boss.schedule('osm-refresh', config.OSM_REFRESH_CRON);
+if (config.OSM_REFRESH_CRON && config.OSM_REFRESH_ENABLED) await boss.schedule('osm-refresh', config.OSM_REFRESH_CRON);
 else await boss.unschedule('osm-refresh');
 
 // Heartbeat immediately so the dashboard shows the worker as up.

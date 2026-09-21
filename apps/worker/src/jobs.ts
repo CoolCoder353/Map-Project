@@ -12,6 +12,8 @@ import { runOsmRefresh } from './pipeline/refresh.js';
 export interface WorkerDeps {
   ctx: CoreContext;
   refresh: RefreshConfig;
+  /** false where the server can't build map data itself; refreshes are refused. */
+  refreshEnabled?: boolean;
   queueDepth: () => Promise<number>;
   diskPath: string;
 }
@@ -37,6 +39,14 @@ export function jobHandlers(deps: WorkerDeps): Record<JobName, Handler> {
     'osm-refresh': async (data) => {
       let runId = typeof data.runId === 'string' ? data.runId : null;
       if (!runId) runId = await opsService.createPipelineRun(db, 'osm_refresh', null); // scheduled run
+      if (deps.refreshEnabled === false) {
+        await opsService.updatePipelineRun(db, runId, {
+          status: 'failed',
+          finished: true,
+          logTail: 'Map refreshes are turned off on this server (OSM_REFRESH_ENABLED=false): it is too small to build map data. Build the data on a larger machine and copy it in; see docs/deploy-small-server.md.',
+        });
+        return { runId, skipped: true };
+      }
       await runOsmRefresh(db, runId, deps.refresh);
       return { runId };
     },

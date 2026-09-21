@@ -1,0 +1,38 @@
+# Small-server profile: a VM with ~2 GB RAM and ~10 GB disk behind a proxy that terminates
+# HTTPS. Map data is built on a bigger machine and copied in (see docs/deploy-small-server.md),
+# because an import needs far more memory than this.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.small.yml up -d
+#
+# .env additions: PUBLIC_URL=https://maps.example.com, SITE_ADDRESS=http://:8080, HTTP_PORT=8080
+services:
+  db:
+    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "effective_cache_size=512MB", "-c", "work_mem=8MB", "-c", "maintenance_work_mem=64MB", "-c", "max_connections=40"]
+
+  graphhopper:
+    environment:
+      # Memory-map the graph instead of loading it onto the Java heap: the OS pages it in.
+      GRAPHHOPPER_HEAP: ${GRAPHHOPPER_HEAP:-512m}
+      GRAPHHOPPER_JAVA_OPTS: -Ddw.graphhopper.graph.dataaccess.default_type=MMAP
+
+  api:
+    environment:
+      PUBLIC_WEB_URL: ${PUBLIC_URL:?set PUBLIC_URL in .env}
+      PUBLIC_ORIGIN: ${PUBLIC_URL}
+      CORS_ORIGINS: ${PUBLIC_URL}
+      NODE_OPTIONS: --max-old-space-size=256
+
+  worker:
+    # Without the map-building tools (~0.9 GB smaller).
+    image: wayfinder-worker-slim
+    build:
+      target: slim
+    environment:
+      OSM_REFRESH_ENABLED: "false"
+      OSM_REFRESH_CRON: ""
+      NODE_OPTIONS: --max-old-space-size=256
+
+  web:
+    # Plain HTTP; the proxy in front handles HTTPS and certificates.
+    ports: !override
+      - "${HTTP_PORT:-8080}:8080"

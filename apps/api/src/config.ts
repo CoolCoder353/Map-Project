@@ -16,6 +16,12 @@ const ConfigSchema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
   COOKIE_SECURE: bool.default(false),
   TRUST_PROXY: bool.default(false),
+  /**
+   * Origin used in absolute URLs the API hands out (map style, tile URLs), e.g.
+   * https://maps.example.com. Unset: taken from each request, which only works when the
+   * forwarded protocol and host reach the API intact.
+   */
+  PUBLIC_ORIGIN: z.string().url().optional(),
   PMTILES_PATH: z.string().default('./data/australia.pmtiles'),
   MAP_ASSETS_DIR: z.string().default('../../infra/map-assets'),
   LOG_LEVEL: z.string().default('info'),

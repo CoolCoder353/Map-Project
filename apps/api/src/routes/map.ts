@@ -5,11 +5,11 @@ import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import type { AppDeps } from '../deps.js';
 
 /** Absolute origin of this request as seen by the client (honours X-Forwarded-* behind Caddy). */
-const originOf = (req: FastifyRequest) => `${req.protocol}://${req.host}`;
-
 export const mapRoutes =
   (deps: AppDeps): FastifyPluginAsync =>
   async (app) => {
+    const configured = deps.config.PUBLIC_ORIGIN?.replace(/\/+$/, '');
+    const originOf = (req: FastifyRequest) => configured ?? `${req.protocol}://${req.host}`;
     const assets = resolve(deps.config.MAP_ASSETS_DIR);
     const tileLimit = { config: { rateLimit: { max: 3000, timeWindow: '1 minute' } } };
 

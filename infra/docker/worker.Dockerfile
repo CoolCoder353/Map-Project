@@ -13,6 +13,16 @@ COPY apps/worker apps/worker
 RUN pnpm --filter @wayfinder/shared --filter @wayfinder/core --filter @wayfinder/worker build \
  && pnpm --filter @wayfinder/worker deploy --prod --legacy /out
 
+# Jobs only, no map-data building (no Java, GraphHopper, Planetiler or osmium): for small
+# servers whose map data is built elsewhere. `docker build --target slim`.
+FROM node:24-bookworm-slim AS slim
+ENV NODE_ENV=production
+RUN mkdir -p /data && chown -R node:node /data
+WORKDIR /app
+COPY --from=build /out /app
+USER node
+CMD ["node", "dist/main.js"]
+
 FROM eclipse-temurin:21-jre AS jre
 
 FROM node:24-bookworm-slim

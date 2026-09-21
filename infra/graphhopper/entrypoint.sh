@@ -14,7 +14,8 @@ done
 while true; do
   current=$(version)
   echo "Starting GraphHopper (graph version $current)"
-  java -Xmx"$HEAP" -Xms"$HEAP" -XX:+UseParallelGC -jar /opt/graphhopper/graphhopper-web.jar server /opt/graphhopper/config.yml &
+  # shellcheck disable=SC2086 # GRAPHHOPPER_JAVA_OPTS is a space-separated option list
+  java -Xmx"$HEAP" -Xms"$HEAP" -XX:+UseParallelGC ${GRAPHHOPPER_JAVA_OPTS:-} -jar /opt/graphhopper/graphhopper-web.jar server /opt/graphhopper/config.yml &
   pid=$!
   while kill -0 "$pid" 2>/dev/null; do
     sleep 30
