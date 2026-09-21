@@ -122,4 +122,35 @@ describe('routing service (fake GraphHopper)', () => {
     expect(rev?.name).toBe('12 Test Street');
     expect(await places.reverseGeocode(t.db, [120, -25])).toBeNull();
   });
+
+  it('keeps via points on land: never routes through cells without roads (the sea)', async () => {
+    // A coastline: streets only north of the trip; south of it is open water.
+    const west: LngLat = [150.5, -33.0];
+    const east = destination(west, 90, 20_000);
+    const streets: places.PlaceInput[] = [];
+    for (let i = 0; i <= 12; i++) {
+      for (let j = 1; j <= 8; j++) {
+        const [lon, lat] = destination(destination(west, 90, i * 2000), 0, j * 1500);
+        streets.push({ id: `coast-${i}-${j}`, name: `Coast Road ${i}-${j}`, kind: 'street', category: null, description: '', lon, lat, importance: 0 });
+      }
+    }
+    await places.upsertPlaces(t.db, streets);
+    const onStreet = (p: LngLat) => streets.some((s) => Math.abs(s.lon - p[0]) < 1e-6 && Math.abs(s.lat - p[1]) < 1e-6);
+    const u = await makeUser(t.db, 'coast@example.com');
+
+    calls.length = 0;
+    await routing.exploreRoutes(deps(), u.id, { from: west, to: east, mode: 'car', budgetMin: 30 });
+    const exploreVias = calls.filter((c) => c.points.length > 2).flatMap((c) => c.points.slice(1, -1));
+    expect(exploreVias.length).toBeGreaterThan(0);
+    for (const v of exploreVias) {
+      expect(onStreet(v), `via ${v} is not on a mapped street`).toBe(true);
+      expect(v[1]).toBeGreaterThan(west[1]); // north of the coast
+    }
+
+    calls.length = 0;
+    await routing.roundTrips(deps(), u.id, { start: west, mode: 'foot', targetMin: 60 });
+    const loopVias = calls.flatMap((c) => c.points.slice(1, -1));
+    expect(loopVias.length).toBeGreaterThan(0);
+    for (const v of loopVias) expect(onStreet(v), `loop via ${v} is not on a mapped street`).toBe(true);
+  });
 });

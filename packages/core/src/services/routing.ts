@@ -164,14 +164,15 @@ export async function exploreRoutes(
 
   const polygon = visitedAreaPolygon(visitedCells, 3000);
   const areaCells = bboxToCells(bboxOf(corridor, padM), AREA_RES);
-  const unexplored = await areaUnexplored(deps.db, userId, areaCells);
-  const vias = pickExploreViaPoints(
-    [...unexplored].map(([cell, unvisitedFraction]) => ({ cell, unvisitedFraction })),
+  const [unexplored, hasRoads] = await Promise.all([areaUnexplored(deps.db, userId, areaCells), cellsWithRoads(deps.db, areaCells)]);
+  const picked = pickExploreViaPoints(
+    [...unexplored].filter(([cell]) => hasRoads(cell)).map(([cell, unvisitedFraction]) => ({ cell, unvisitedFraction })),
     req.from,
     req.to,
     maxSumM,
     3,
   );
+  const vias = (await snapToRoads(deps.db, picked)).filter((v): v is LngLat => v !== null);
 
   const requests: Parameters<typeof tryRoutes>[1] = [
     { points: [req.from, req.to], mode: req.mode, alternatives: 3, vias: [] },
@@ -231,25 +232,35 @@ export async function roundTrips(
   const polygon = visitedAreaPolygon(visitedCells, 3000);
   const model = polygon ? visitedModel(polygon, 0.5) : undefined;
   const areaCells = bboxToCells(bboxOf([req.start], radius * 2.5), AREA_RES);
-  const unexplored = await areaUnexplored(deps.db, userId, areaCells);
-  const unexploredAt = (p: LngLat) => unexplored.get(pointToCell(p, AREA_RES)) ?? 1;
+  const [unexplored, hasRoads] = await Promise.all([areaUnexplored(deps.db, userId, areaCells), cellsWithRoads(deps.db, areaCells)]);
+  // Directions with no roads (out to sea) rank last, however "unexplored" they are.
+  const unexploredAt = (p: LngLat) => {
+    const cell = pointToCell(p, AREA_RES);
+    return hasRoads(cell) ? (unexplored.get(cell) ?? 1) : 0;
+  };
 
-  const loopRequests = (bearings: number[], r: number) =>
-    bearings.map((b) => {
-      const vias = roundTripViaPoints(req.start, b, r);
-      return { points: [req.start, ...vias, req.start], mode: req.mode, ...(model ? { customModel: model } : {}), vias };
+  const loopRequests = async (bearings: number[], r: number) => {
+    const loops = bearings.map((b) => roundTripViaPoints(req.start, b, r));
+    const snapped = await snapToRoads(deps.db, loops.flat());
+    return loops.flatMap((loop, i) => {
+      const vias = snapped.slice(i * loop.length, (i + 1) * loop.length);
+      // A loop whose turning points can't reach a road is dropped rather than failing in the router.
+      if (vias.some((v) => v === null)) return [];
+      const onRoads = vias as LngLat[];
+      return [{ points: [req.start, ...onRoads, req.start], mode: req.mode, ...(model ? { customModel: model } : {}), vias: onRoads }];
     });
+  };
 
   // Pass 1: calibrate the radius against real road durations.
   const probeBearings = roundTripBearings(req.start, radius, unexploredAt, 2);
-  const probe = await tryRoutes(deps, loopRequests(probeBearings, radius), 'roundtrip.probe');
+  const probe = await tryRoutes(deps, await loopRequests(probeBearings, radius), 'roundtrip.probe');
   if (probe.length > 0) {
     const ratios = probe.map((c) => c.path.time / 1000 / targetS).sort((a, b) => a - b);
     const median = ratios[Math.floor(ratios.length / 2)]!;
     if (median > 0.05) radius = radius / median;
   }
   const bearings = roundTripBearings(req.start, radius, unexploredAt, 6);
-  const candidates = [...probe, ...(await tryRoutes(deps, loopRequests(bearings, radius), 'roundtrip.candidate'))];
+  const candidates = [...probe, ...(await tryRoutes(deps, await loopRequests(bearings, radius), 'roundtrip.candidate'))];
 
   const ranked = rankRoundTripCandidates(
     candidates.map((c) => ({
@@ -269,6 +280,49 @@ export async function roundTrips(
       viaPoints: r.candidate.vias,
     }),
   );
+}
+
+/**
+ * Area cells with mapped streets or addresses. Via points must be somewhere a road reaches: the
+ * least-explored cells near a coastal city are mostly sea, which the router can't route to.
+ * With no place data at all (not imported yet) every cell is kept, as before.
+ */
+async function cellsWithRoads(db: DbClient, cells: readonly string[]): Promise<(cell: string) => boolean> {
+  if (cells.length === 0) return () => true;
+  const r = await db.query<{ c: string }>(
+    `SELECT c::text FROM unnest($1::bigint[]) AS c
+     WHERE EXISTS (SELECT 1 FROM places WHERE r7 = c AND kind IN ('street', 'address'))`,
+    [cells.map((c) => cellToBigInt(c).toString())],
+  );
+  if (r.rows.length === 0) {
+    const any = await db.query('SELECT 1 FROM places LIMIT 1');
+    if (any.rows.length === 0) return () => true;
+  }
+  const roads = new Set(r.rows.map((x) => bigIntToCell(x.c)));
+  return (cell) => roads.has(cell);
+}
+
+/**
+ * Move each via point onto the nearest mapped street within maxM, or null if there is none (open
+ * sea, empty bush). With no place data at all, points are returned unchanged.
+ */
+async function snapToRoads(db: DbClient, points: readonly LngLat[], maxM = 3000): Promise<(LngLat | null)[]> {
+  if (points.length === 0) return [];
+  const r = await db.query<{ i: string; lon: number; lat: number }>(
+    `SELECT p.i::text, s.lon, s.lat
+     FROM unnest($1::float8[], $2::float8[]) WITH ORDINALITY AS p(lon, lat, i)
+     CROSS JOIN LATERAL (
+       SELECT lon, lat FROM places WHERE kind = 'street'
+       ORDER BY point(lon, lat) <-> point(p.lon, p.lat) LIMIT 1
+     ) s`,
+    [points.map((p) => p[0]), points.map((p) => p[1])],
+  );
+  if (r.rows.length === 0) return points.map((p) => p);
+  const snapped = new Map(r.rows.map((x) => [Number(x.i) - 1, [x.lon, x.lat] as LngLat]));
+  return points.map((p, i) => {
+    const s = snapped.get(i);
+    return s && haversineM(p, s) <= maxM ? s : null;
+  });
 }
 
 const CATEGORY_WEIGHT: Record<PoiCategory, number> = {

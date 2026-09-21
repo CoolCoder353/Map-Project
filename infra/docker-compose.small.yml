@@ -11,9 +11,11 @@ services:
 
   graphhopper:
     environment:
-      # Memory-map the graph instead of loading it onto the Java heap: the OS pages it in.
-      GRAPHHOPPER_HEAP: ${GRAPHHOPPER_HEAP:-512m}
-      GRAPHHOPPER_JAVA_OPTS: -Ddw.graphhopper.graph.dataaccess.default_type=MMAP
+      # Memory-map the graph instead of loading it onto the Java heap: the OS pages it in. The
+      # heap is then only for requests; isochrones and explore routes need about 1 GB (512 MB
+      # thrashes in garbage collection). Capping visited nodes bounds any single request.
+      GRAPHHOPPER_HEAP: ${GRAPHHOPPER_HEAP:-1g}
+      GRAPHHOPPER_JAVA_OPTS: -Ddw.graphhopper.graph.dataaccess.default_type=MMAP -Ddw.graphhopper.routing.max_visited_nodes=1500000
 
   api:
     environment:
