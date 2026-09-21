@@ -1,0 +1,95 @@
+# Deploying to a small server
+
+For a server too small to build images or map data itself: about 2 GB RAM and 10 GB disk, behind a proxy that terminates HTTPS. The live example is `maps.paulsjones.com` (host `maps`), serving **Queensland only**.
+
+Everything heavy happens on a bigger machine: Docker images, the OSM import (graph, tiles, places). `infra/scripts/deploy-small.sh` streams the results over SSH.
+
+## What runs on the server
+
+`docker compose -f docker-compose.yml -f docker-compose.small.yml`:
+
+| Service | Memory (measured) | Notes |
+|---|---|---|
+| graphhopper | ~1.05 GB | Graph memory-mapped (`MMAP`), 1 GB heap; 512 MB thrashes in garbage collection on isochrones |
+| db | ~220 MB | `shared_buffers=128MB` |
+| api | ~90 MB | |
+| worker | ~70 MB | Slim image: no Java, Planetiler or osmium; map refreshes refused (`OSM_REFRESH_ENABLED=false`) |
+| web (Caddy) | ~20 MB | Plain HTTP on `HTTP_PORT` (8080); the proxy does HTTPS |
+
+Disk: about 2.2 GB of images, 0.6 GB of map data (Queensland graph 355 MB, tiles 264 MB), about 0.4 GB of database, plus the OS.
+
+`infra/.env` on the server (created with generated secrets; readable by root only):
+
+```
+PUBLIC_URL=https://maps.paulsjones.com
+SITE_ADDRESS=http://:8080
+HTTP_PORT=8080
+ACME_EMAIL=admin@localhost          # unused behind the proxy
+POSTGRES_PASSWORD=…                 # change inside Postgres first; see operations.md
+JWT_SECRET=…
+```
+
+`PUBLIC_URL` makes the API hand out `https://` tile and style URLs whatever the proxy forwards. Caddy trusts `X-Forwarded-For` and `X-Forwarded-Proto` from private-range addresses, so rate limits apply per visitor. If the proxy connects from a public address, add that address to `trusted_proxies` in `infra/caddy/Caddyfile`.
+
+## Building a region's map data (on the big machine)
+
+Queensland is cut from the Australia extract using its own boundary, then run through the normal pipeline into a separate volume and a throwaway database:
+
+```bash
+# 1. cut Queensland (needs the Australia extract in wayfinder_osmdata)
+docker volume create wayfinder_qlddata
+docker run --rm -v wayfinder_osmdata:/src:ro -v wayfinder_qlddata:/data --entrypoint sh wayfinder-worker -c '
+  set -e; mkdir -p /data/osm /data/sources
+  osmium tags-filter --overwrite /src/osm/australia-latest.osm.pbf r/ISO3166-2=AU-QLD -o /tmp/b.pbf
+  osmium export --overwrite --geometry-types=polygon /tmp/b.pbf -o /tmp/b.geojson
+  node -e "const fs=require(\"fs\"),fc=JSON.parse(fs.readFileSync(\"/tmp/b.geojson\"));fs.writeFileSync(\"/data/osm/qld.geojson\",JSON.stringify({type:\"FeatureCollection\",features:fc.features.filter(f=>f.properties[\"ISO3166-2\"]===\"AU-QLD\").slice(0,1)}))"
+  TS=$(osmium fileinfo -g header.option.osmosis_replication_timestamp /src/osm/australia-latest.osm.pbf)
+  osmium extract --overwrite -s smart --set-bounds -p /data/osm/qld.geojson /src/osm/australia-latest.osm.pbf \
+    --output-header=osmosis_replication_timestamp="$TS" -o /data/osm/australia-latest.osm.pbf
+  cp -r /src/sources/. /data/sources/'
+
+# 2. a throwaway database for the places import
+docker run -d --name wf-qld-db --network wayfinder_default -e POSTGRES_USER=wayfinder \
+  -e POSTGRES_PASSWORD=qld-build-only -e POSTGRES_DB=wayfinder postgres:17-bookworm
+docker run --rm --network wayfinder_default -e DATABASE_URL=postgres://wayfinder:qld-build-only@wf-qld-db:5432/wayfinder \
+  -e JWT_SECRET=build-only-build-only-build-only-0000 wayfinder-api node dist/cli.js migrate
+
+# 3. graph, tiles and places (~12 min)
+docker run --rm --network wayfinder_default -v wayfinder_qlddata:/data \
+  -e DATABASE_URL=postgres://wayfinder:qld-build-only@wf-qld-db:5432/wayfinder -e DATA_DIR=/data \
+  -e GRAPHHOPPER_IMPORT_HEAP=8g -e PLANETILER_HEAP=6g wayfinder-worker node dist/refresh-cli.js graph tiles places
+```
+
+The extract keeps the pipeline's file name (`australia-latest.osm.pbf`) and tiles name (`australia.pmtiles`), so nothing else needs to change. For another state, swap `AU-QLD` for its ISO code (`AU-NSW`, `AU-VIC`, …).
+
+## Shipping
+
+```bash
+infra/scripts/deploy-small.sh images   # builds and loads api, worker (slim), web, graphhopper
+infra/scripts/deploy-small.sh data     # graph + tiles; swapped in beside the live data, then GraphHopper restarts
+infra/scripts/deploy-small.sh places   # search data + data date (needs the server stack running)
+```
+
+Each step checks free disk space on the server first. Configuration comes from the server's git checkout (`/opt/wayfinder`): `git pull`, then:
+
+```bash
+cd /opt/wayfinder/infra && docker compose -f docker-compose.yml -f docker-compose.small.yml up -d
+```
+
+First admin (then invite people from the dashboard):
+
+```bash
+cd /opt/wayfinder/infra && docker compose -f docker-compose.yml -f docker-compose.small.yml exec api node dist/cli.js bootstrap-admin you@example.com
+```
+
+## Refreshing the map data
+
+Monthly, or whenever you like: refresh Australia on the big machine (Admin → Jobs & data, or `refresh-cli.js`), re-run steps 1 and 3 above, then `deploy-small.sh data` and `deploy-small.sh places`. The server keeps serving throughout. Routing restarts for about a minute when the new graph goes in, and search is briefly empty while places load (about 20 s).
+
+## Checking it
+
+```bash
+VERIFY_REGION=qld API_URL=https://maps.paulsjones.com ADMIN_EMAIL=… ADMIN_PASSWORD=… pnpm verify:stack
+```
+
+Rehearsed locally with the exact server configuration: all checks pass. Search takes about 100 ms, fastest routes about 100 ms, and Discover about 7 s (its isochrone is the slow part with a memory-mapped graph). Explore finds nothing for Brisbane to the Gold Coast within 45 minutes extra: every road that differs from the M1 costs more than that.
