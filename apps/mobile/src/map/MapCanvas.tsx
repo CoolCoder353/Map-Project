@@ -2,8 +2,10 @@ import { Camera, type CameraRef, GeoJSONSource, Layer, Map, UserLocation } from 
 import type { LngLat } from '@wayfinder/shared/geo';
 import type { Route } from '@wayfinder/shared/schemas';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import type { StyleProp, ViewStyle } from 'react-native';
+import { type StyleProp, Text, View, type ViewStyle } from 'react-native';
+import * as Location from 'expo-location';
 import { getServerUrl } from '../lib/server';
+import { MapErrorBoundary } from './MapErrorBoundary';
 import { useTheme } from '../lib/theme';
 import { rememberMapView } from '../lib/mapView';
 
@@ -41,11 +43,28 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
 ) {
   const t = useTheme();
   const camera = useRef<CameraRef>(null);
+  // null while loading, '' when no server is set yet (nothing to load a map from).
   const [styleUrl, setStyleUrl] = useState<string | null>(null);
+  const [canShowUser, setCanShowUser] = useState(false);
 
   useEffect(() => {
-    void getServerUrl().then((u) => setStyleUrl(`${u}/map/style.json?theme=${t.dark ? 'dark' : 'light'}`));
+    void getServerUrl().then((u) => {
+      // A relative style URL (no server set yet) crashes the native map.
+      setStyleUrl(/^https?:\/\//i.test(u) ? `${u}/map/style.json?theme=${t.dark ? 'dark' : 'light'}` : '');
+    });
   }, [t.dark]);
+
+  // The user-location layer asks Android for updates; rendering it without permission can take
+  // the native map down, so it only appears once permission is granted.
+  useEffect(() => {
+    let live = true;
+    void Location.getForegroundPermissionsAsync()
+      .then((p) => live && setCanShowUser(p.granted))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useImperativeHandle(ref, () => ({
     fitTo(coords, padding = { top: 80, bottom: 80, left: 48, right: 48 }) {
@@ -76,8 +95,16 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: track } }] }
     : EMPTY;
 
-  if (!styleUrl) return null;
+  if (styleUrl === null) return null;
+  if (styleUrl === '') {
+    return (
+      <View style={[style, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
+        <Text style={{ textAlign: 'center', opacity: 0.7 }}>No server set, so the map can’t load. Sign out and enter your server address.</Text>
+      </View>
+    );
+  }
   return (
+    <MapErrorBoundary>
     <Map
       style={style}
       mapStyle={styleUrl}
@@ -121,7 +148,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         <Layer id="markers-circle" type="circle" paint={{ 'circle-radius': 8, 'circle-color': ['match', ['get', 'kind'], 'end', t.danger, 'poi', t.exploreLine, 'position', t.accent, t.surface], 'circle-stroke-color': ['match', ['get', 'kind'], 'start', t.text, t.surface], 'circle-stroke-width': 3 }} />
         <Layer id="markers-label" type="symbol" filter={['!=', ['get', 'label'], '']} layout={{ 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Bold'], 'text-size': 13, 'text-offset': [0, 1.3], 'text-anchor': 'top', 'text-optional': true }} paint={{ 'text-color': t.text, 'text-halo-color': t.surface, 'text-halo-width': 1.5 }} />
       </GeoJSONSource>
-      {showUser ? <UserLocation /> : null}
+      {showUser && canShowUser ? <UserLocation /> : null}
     </Map>
+    </MapErrorBoundary>
   );
 });
