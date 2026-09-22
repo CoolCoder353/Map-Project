@@ -64,6 +64,8 @@ The extract keeps the pipeline's file name (`australia-latest.osm.pbf`) and tile
 
 ## Shipping
 
+The build database (`wf-qld-db`) must be running for the `places` step: `docker start wf-qld-db`.
+
 ```bash
 infra/scripts/deploy-small.sh images   # builds and loads api, worker (slim), web, graphhopper
 infra/scripts/deploy-small.sh data     # graph + tiles; swapped in beside the live data, then GraphHopper restarts
@@ -86,10 +88,14 @@ cd /opt/wayfinder/infra && docker compose -f docker-compose.yml -f docker-compos
 
 Monthly, or whenever you like: refresh Australia on the big machine (Admin → Jobs & data, or `refresh-cli.js`), re-run steps 1 and 3 above, then `deploy-small.sh data` and `deploy-small.sh places`. The server keeps serving throughout. Routing restarts for about a minute when the new graph goes in, and search is briefly empty while places load (about 20 s).
 
+## What is deployed now
+
+Queensland (OSM 2026-09-16), 871,322 places, on a 2 GB / 14 GB VM: 1.26 GB RAM and 5.2 GB disk in use. Caddy sees the proxy at 192.168.50.34 and takes the forwarded client IP and `https` from it.
+
 ## Checking it
 
 ```bash
 VERIFY_REGION=qld API_URL=https://maps.paulsjones.com ADMIN_EMAIL=… ADMIN_PASSWORD=… pnpm verify:stack
 ```
 
-Rehearsed locally with the exact server configuration: all checks pass. Search takes about 100 ms, fastest routes about 100 ms, and Discover about 7 s (its isochrone is the slow part with a memory-mapped graph). Explore finds nothing for Brisbane to the Gold Coast within 45 minutes extra: every road that differs from the M1 costs more than that.
+Live on 2026-09-23 against `https://maps.paulsjones.com`: all 19 checks pass. Search takes about 100 ms, fastest routes about 100 ms, and Discover about 7 s (its isochrone is the slow part with a memory-mapped graph). Explore finds nothing for Brisbane to the Gold Coast within 45 minutes extra: every road that differs from the M1 costs more than that.
