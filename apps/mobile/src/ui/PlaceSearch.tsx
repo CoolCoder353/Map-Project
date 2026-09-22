@@ -2,10 +2,11 @@ import { placeDetail } from '@wayfinder/shared/australia';
 import type { LngLat } from '@wayfinder/shared/geo';
 import type { Place } from '@wayfinder/shared/schemas';
 import * as Location from 'expo-location';
-import { LocateFixed, MapPin, Search, X } from 'lucide-react-native';
+import { LocateFixed, MapPin, Search, UserRound, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { api, errorMessage } from '../lib/api';
+import { type ContactMatch, findContacts } from '../lib/contacts';
 import { formatDistanceShort } from '../lib/format';
 import { radius, space, useTheme } from '../lib/theme';
 
@@ -31,6 +32,7 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
   const [text, setText] = useState(value?.name ?? '');
   const [focused, setFocused] = useState(false);
   const [results, setResults] = useState<Place[]>([]);
+  const [contacts, setContacts] = useState<ContactMatch[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => setText(value?.name ?? ''), [value]);
@@ -39,10 +41,13 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
     const q = text.trim();
     if (!focused || q.length < 2 || q === value?.name) {
       setResults([]);
+      setContacts([]);
       return;
     }
     const ctrl = new AbortController();
     const timer = setTimeout(() => {
+      // Contacts are read on the phone; nothing is sent anywhere until one is picked.
+      void findContacts(q).then(setContacts);
       api
         .request<{ results: Place[] }>('api/search', { query: { q, lon: near?.[0], lat: near?.[1], limit: 6 }, signal: ctrl.signal })
         .then((r) => {
@@ -91,7 +96,7 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
           </Pressable>
         ) : null}
       </View>
-      {focused && (results.length > 0 || allowCurrentLocation || error) ? (
+      {focused && (contacts.length > 0 || results.length > 0 || allowCurrentLocation || error) ? (
         <View style={{ marginTop: 4, borderRadius: radius.control, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border }}>
           {allowCurrentLocation ? (
             <Pressable
@@ -108,6 +113,31 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
               <Text style={{ color: t.text, fontWeight: '600' }}>Your location</Text>
             </Pressable>
           ) : null}
+          {contacts.map((c) => (
+            <Pressable
+              key={c.id}
+              accessibilityRole="button"
+              style={{ flexDirection: 'row', gap: space[3], padding: space[3] }}
+              onPress={async () => {
+                setError(null);
+                try {
+                  // Only the address text goes to the server, to be turned into a location.
+                  const r = await api.request<{ results: Place[] }>('api/search', { query: { q: c.address, limit: 1 } });
+                  const place = r.results[0];
+                  if (!place) return setError(`Couldn’t find ${c.name}’s address on the map.`);
+                  choose({ name: c.name, description: c.address, location: place.location });
+                } catch (e) {
+                  setError(errorMessage(e));
+                }
+              }}
+            >
+              <UserRound size={18} color={t.accent} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: t.text, fontWeight: '600' }}>{c.name}</Text>
+                <Text style={{ color: t.text2, fontSize: 13 }}>{c.label ? `${c.label} · ${c.address}` : c.address}</Text>
+              </View>
+            </Pressable>
+          ))}
           {results.map((p) => (
             <Pressable key={p.id} accessibilityRole="button" style={{ flexDirection: 'row', gap: space[3], padding: space[3] }} onPress={() => choose(chosen(p))}>
               <MapPin size={18} color={t.text3} />

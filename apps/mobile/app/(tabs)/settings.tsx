@@ -13,6 +13,7 @@ import { setRouteToNavigate } from '../../src/lib/plannedStore';
 import { getServerUrl } from '../../src/lib/server';
 import { useSession } from '../../src/lib/session';
 import { space, useTheme } from '../../src/lib/theme';
+import { contactsSearchEnabled, setContactsSearchEnabled } from '../../src/lib/contacts';
 import { requestTrackingPermission, trackingPermission } from '../../src/tracking/background';
 import { sqliteQueueStore } from '../../src/tracking/sqliteStore';
 import { syncQueue } from '../../src/tracking/sync';
@@ -24,12 +25,14 @@ export default function SettingsScreen() {
   const { config } = useAppConfig();
   const qc = useQueryClient();
   const [permission, setPermission] = useState<string>('');
+  const [contactsOn, setContactsOn] = useState(false);
   const [queued, setQueued] = useState(0);
   const [server, setServer] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const planned = useQuery({ queryKey: ['planned-routes'], queryFn: () => api.request<{ items: PlannedRoute[] }>('api/planned-routes') });
 
   const refreshStatus = async () => {
+    setContactsOn(await contactsSearchEnabled());
     setPermission(await trackingPermission());
     setQueued(await sqliteQueueStore.count());
   };
@@ -95,6 +98,24 @@ export default function SettingsScreen() {
               await refreshStatus();
               void qc.invalidateQueries({ queryKey: ['trips'] });
             }}
+          />
+        </View>
+
+        <Heading>Search</Heading>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: t.text, fontSize: 16, fontWeight: '600' }}>Search my contacts</Text>
+            <Small>Type a contact’s name to use their saved address. Contacts stay on your phone; only the address you pick is looked up.</Small>
+          </View>
+          <Switch
+            accessibilityLabel="Search my contacts"
+            value={contactsOn}
+            onValueChange={async (on) => {
+              const now = await setContactsSearchEnabled(on);
+              setContactsOn(now);
+              if (on && !now) setMessage('Contacts permission was refused, so contact search stays off.');
+            }}
+            trackColor={{ true: t.accent, false: t.borderStrong }}
           />
         </View>
 

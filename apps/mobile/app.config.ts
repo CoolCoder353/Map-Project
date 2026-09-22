@@ -28,6 +28,7 @@ const config: ExpoConfig = {
     'expo-sqlite',
     '@maplibre/maplibre-react-native',
     // Feedback screenshots come from the system photo picker; no camera or microphone.
+    ['expo-contacts', { contactsPermission: 'Wayfinder can look up an address saved with one of your contacts when you search for their name. Contacts stay on your phone.' }],
     ['expo-image-picker', { photosPermission: 'Wayfinder lets you attach a screenshot to feedback.', cameraPermission: false, microphonePermission: false }],
     [
       'expo-location',

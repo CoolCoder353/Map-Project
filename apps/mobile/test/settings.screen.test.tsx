@@ -21,6 +21,11 @@ jest.mock('../src/tracking/background', () => ({
 }));
 jest.mock('../src/tracking/sqliteStore', () => ({ sqliteQueueStore: { count: async () => 0 } }));
 jest.mock('../src/tracking/sync', () => ({ syncQueue: jest.fn() }));
+const mockSetContacts = jest.fn();
+jest.mock('../src/lib/contacts', () => ({
+  contactsSearchEnabled: async () => false,
+  setContactsSearchEnabled: (on: boolean) => mockSetContacts(on),
+}));
 let mockFeedbackEnabled = false;
 jest.mock('../src/lib/appConfig', () => ({
   useAppConfig: () => ({ config: { appName: 'Wayfinder', voice: 'plain', feedbackEnabled: mockFeedbackEnabled, osmDataDate: null } }),
@@ -87,12 +92,25 @@ it('lists planned routes sent from the website, or says there are none', async (
   expect(await screen.findByText('Nothing planned yet.')).toBeOnTheScreen();
 });
 
-it('offers Send feedback only when an admin has switched it on', async () => {
+it('hides Send feedback while feedback is switched off', async () => {
   await renderSettings();
   await screen.findByText('Everything is uploaded');
   expect(screen.queryByRole('button', { name: 'Send feedback' })).toBeNull();
-  screen.unmount();
+});
+
+it('offers Send feedback once an admin has switched it on', async () => {
   mockFeedbackEnabled = true;
   await renderSettings();
   expect(await screen.findByRole('button', { name: 'Send feedback' })).toBeOnTheScreen();
 });
+
+it('leaves contacts search off when the phone refuses permission', async () => {
+  mockSetContacts.mockResolvedValue(false); // permission refused
+  await renderSettings();
+  const toggle = await screen.findByLabelText('Search my contacts');
+  expect(toggle).toHaveProp('value', false);
+  await fireEvent(toggle, 'valueChange', true);
+  expect(mockSetContacts).toHaveBeenCalledWith(true);
+  expect(await screen.findByText(/Contacts permission was refused/)).toBeOnTheScreen();
+  expect(screen.getByLabelText('Search my contacts')).toHaveProp('value', false);
+}, 20_000); // the whole file's queries are still settling by the time this one runs
