@@ -107,7 +107,7 @@ describe('OSM refresh orchestration', () => {
       { id: 'n11', kind: 'address', suburb: 'Queanbeyan', state: 'NSW', postcode: '2620', poi_type: null, opening_hours: null },
       { id: 'n12', kind: 'poi', suburb: 'Queanbeyan', state: 'NSW', postcode: '2620', poi_type: 'shop=supermarket', opening_hours: 'Mo-Su 07:00-22:00' },
       { id: 'n9', kind: 'town', suburb: 'Queanbeyan', state: 'NSW', postcode: '2620', poi_type: null, opening_hours: null },
-      { id: 'w13', kind: 'street', suburb: 'Queanbeyan', state: 'NSW', postcode: '2620', poi_type: null, opening_hours: null },
+      { id: 'w13', kind: 'street', suburb: 'Queanbeyan', state: 'NSW', postcode: '2620', poi_type: 'highway=residential', opening_hours: null },
     ]);
   });
 

@@ -70,3 +70,15 @@ test('discover and round trip panels return results', async ({ page }) => {
   await page.getByRole('button', { name: 'Find places' }).click();
   await expect(page.locator('.place-list li').first()).toBeVisible();
 });
+
+test('the start field fills itself in when the browser already allows location', async ({ browser }) => {
+  const ctx = await browser.newContext({ permissions: ['geolocation'], geolocation: { longitude: 149.135, latitude: -35.271 }, locale: 'en-AU' });
+  const page = await ctx.newPage();
+  await signIn(page);
+  await expect(page.getByRole('combobox', { name: 'Starting point' })).toHaveValue('Your location');
+  // Still empty for a browser that hasn't granted location.
+  const plain = await (await browser.newContext()).newPage();
+  await signIn(plain);
+  await expect(plain.getByRole('combobox', { name: 'Starting point' })).toHaveValue('');
+  await ctx.close();
+});

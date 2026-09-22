@@ -87,6 +87,8 @@ export interface ExploreRankOptions {
   dedupeOverlap?: number;
   /** Score penalty in km per extra minute over the fastest route. */
   kmPenaltyPerExtraMin?: number;
+  /** Score penalty in km for each U-turn the route asks the driver to make. */
+  kmPenaltyPerUTurn?: number;
 }
 
 /**
@@ -94,18 +96,24 @@ export interface ExploreRankOptions {
  * the fastest route), and rank by new kilometres with a small time penalty.
  */
 export function rankExploreCandidates<T>(
-  candidates: ReadonlyArray<{ candidate: T; durationS: number; novelty: RouteNovelty }>,
+  candidates: ReadonlyArray<{ candidate: T; durationS: number; novelty: RouteNovelty; uTurns?: number }>,
   opts: ExploreRankOptions,
 ): ScoredCandidate<T>[] {
   const limit = opts.limit ?? 3;
   const dedupe = opts.dedupeOverlap ?? 0.8;
   const penalty = opts.kmPenaltyPerExtraMin ?? 0.05;
+  const uTurnPenalty = opts.kmPenaltyPerUTurn ?? 8;
   const maxS = opts.fastestDurationS + opts.budgetS;
   const scored = candidates
     .filter((c) => c.durationS <= maxS && c.novelty.newKm > 0)
     .map((c) => ({
       ...c,
-      score: c.novelty.newKm - (penalty * Math.max(0, c.durationS - opts.fastestDurationS)) / 60,
+      // A detour that doubles back on itself, or turns the driver around, is worth less than its
+      // raw new kilometres suggest: people asked for loops, not U-turns at a waypoint.
+      score:
+        c.novelty.newKm * (1 - 0.5 * c.novelty.retraceRatio) -
+        (penalty * Math.max(0, c.durationS - opts.fastestDurationS)) / 60 -
+        uTurnPenalty * (c.uTurns ?? 0),
     }))
     .sort((x, y) => y.score - x.score);
   const kept: ScoredCandidate<T>[] = [];

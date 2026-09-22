@@ -154,37 +154,47 @@ export function featureToPlaces(f: GeoJsonFeature): PlaceRecord[] {
   }
 
   const poi = { ...base, poiType, brand, openingHours: str('opening_hours') };
+  // An address on a named place (a school, a shop) is recorded separately, so the place keeps its
+  // name and the address is still searchable. Without this the place is lost: 22% of named places
+  // in Queensland carry addr:housenumber.
+  const houseNumber = str('addr:housenumber');
+  const addrStreet = str('addr:street');
+  const address = (suffix = ''): PlaceRecord[] =>
+    houseNumber && addrStreet
+      ? [
+          {
+            ...base,
+            id: `${id}${suffix}`,
+            name: `${houseNumber} ${addrStreet}`,
+            kind: 'address',
+            category: null,
+            description: [suburb ?? base.cityTag, postcode].filter(Boolean).join(' '),
+            lon,
+            lat,
+            importance: 0,
+          },
+        ]
+      : [];
+
   const category = poiCategory(tags);
   if (category && name) {
     out.push({ ...poi, id, name, kind: 'poi', category, description: [CATEGORY_LABEL[category], suburb ?? base.cityTag].filter(Boolean).join(', '), lon, lat, importance: 0.1 });
-    return out;
+    return [...out, ...address(':addr')];
   }
 
   if (typeof tags.highway === 'string' && STREET_HIGHWAYS.has(tags.highway) && name && f.geometry?.type !== 'Point') {
-    out.push({ ...base, id, name, kind: 'street', category: null, description: suburb ?? base.cityTag ?? '', lon, lat, importance: 0 });
-    return out;
-  }
-
-  if (typeof tags['addr:housenumber'] === 'string' && typeof tags['addr:street'] === 'string') {
-    out.push({
-      ...base,
-      id,
-      name: `${tags['addr:housenumber']} ${tags['addr:street']}`,
-      kind: 'address',
-      category: null,
-      description: [suburb ?? base.cityTag, postcode].filter(Boolean).join(' '),
-      lon,
-      lat,
-      importance: 0,
-    });
+    // The road class decides whether a street can serve as a route via point (dead ends can't).
+    out.push({ ...base, id, name, kind: 'street', category: null, poiType: `highway=${tags.highway}`, description: suburb ?? base.cityTag ?? '', lon, lat, importance: 0 });
     return out;
   }
 
   // Other named businesses and amenities: searchable, not suggested by Discover.
   if (name && (tags.amenity || tags.tourism || tags.shop || tags.leisure || tags.healthcare || tags.office || tags.craft)) {
     out.push({ ...poi, id, name, kind: 'poi', category: null, description: String(tags.amenity ?? tags.tourism ?? tags.shop ?? tags.leisure ?? tags.healthcare ?? tags.office ?? tags.craft).replace(/_/g, ' '), lon, lat, importance: 0.05 });
+    return [...out, ...address(':addr')];
   }
-  return out;
+
+  return [...out, ...address()];
 }
 
 /**

@@ -124,3 +124,30 @@ describe('via point generation', () => {
     expect(bearings[0]).toBeLessThan(180);
   });
 });
+
+describe('explore ranking prefers routes people want to drive', () => {
+  const novelty = (newKm: number, retraceRatio = 0) => ({ newKm, totalKm: newKm + 10, noveltyPct: 50, retraceRatio, cells: [] as string[] });
+  const opts = { fastestDurationS: 1800, fastestCells: [] as string[], budgetS: 1200 };
+
+  it('puts a route with U-turns below a slightly less new one without them', () => {
+    const ranked = rankExploreCandidates(
+      [
+        { candidate: 'uturns', durationS: 1900, novelty: novelty(20), uTurns: 2 },
+        { candidate: 'clean', durationS: 2000, novelty: novelty(16), uTurns: 0 },
+      ],
+      opts,
+    );
+    expect(ranked.map((r) => r.candidate)).toEqual(['clean', 'uturns']);
+  });
+
+  it('prefers a loop over an out-and-back with the same new ground', () => {
+    const ranked = rankExploreCandidates(
+      [
+        { candidate: 'out-and-back', durationS: 1900, novelty: novelty(20, 0.8), uTurns: 0 },
+        { candidate: 'loop', durationS: 1900, novelty: novelty(18, 0), uTurns: 0 },
+      ],
+      opts,
+    );
+    expect(ranked[0]!.candidate).toBe('loop');
+  });
+});

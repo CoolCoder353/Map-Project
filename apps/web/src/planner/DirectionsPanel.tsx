@@ -6,6 +6,7 @@ import type { ChosenPlace } from '../components/SearchField';
 import { ModeToggle } from '../components/ModeToggle';
 import { SearchField } from '../components/SearchField';
 import { api, errorMessage } from '../lib/api';
+import { currentPosition } from '../lib/geolocation';
 import { useAppConfig } from '../lib/config';
 import { useToast } from '../lib/toast';
 import { type MapMarker, useMapApi } from '../map/MapProvider';
@@ -39,6 +40,27 @@ export function DirectionsPanel() {
     if (m === 'car' || m === 'foot') planner.setMode(m);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Start where you are, when the browser already has permission. Never prompts on load: asking
+  // for location before the user has done anything is how you get it denied for good.
+  useEffect(() => {
+    if (from || params.get('from')) return;
+    let live = true;
+    void (async () => {
+      try {
+        const status = await navigator.permissions?.query({ name: 'geolocation' as PermissionName });
+        if (status && status.state !== 'granted') return;
+        const location = await currentPosition();
+        if (live && !planner.from) planner.setFrom({ name: 'Your location', description: '', location });
+      } catch {
+        // No permission API, or the position is unavailable: leave the field empty.
+      }
+    })();
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const enc = (p: ChosenPlace | null) => (p ? `${p.location[0].toFixed(5)},${p.location[1].toFixed(5)},${p.name}` : null);
     const next = new URLSearchParams();

@@ -27,6 +27,10 @@ export default function Plan() {
   const [tab, setTab] = useState<Tab>('directions');
   const [mode, setMode] = useState<Mode>(user?.settings.defaultMode ?? 'car');
   const [from, setFrom] = useState<ChosenPlace | null>(null);
+  // Start where you are, once a position is known and the field is still empty.
+  useEffect(() => {
+    if (here && !from) setFrom({ name: 'Your location', description: '', location: here });
+  }, [here, from]);
   const [to, setTo] = useState<ChosenPlace | null>(null);
   const [budget, setBudget] = useState(user?.settings.exploreBudgetMin ?? 15);
   const [loopMinutes, setLoopMinutes] = useState(60);

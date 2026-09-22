@@ -151,6 +151,48 @@ describe('routing service (fake GraphHopper)', () => {
     await routing.roundTrips(deps(), u.id, { start: west, mode: 'foot', targetMin: 60 });
     const loopVias = calls.flatMap((c) => c.points.slice(1, -1));
     expect(loopVias.length).toBeGreaterThan(0);
-    for (const v of loopVias) expect(onStreet(v), `loop via ${v} is not on a mapped street`).toBe(true);
+    // Loops stay on the land side; a turning point out at sea is dropped, not routed to.
+    for (const v of loopVias) expect(v[1], `loop via ${v} is out at sea`).toBeGreaterThan(west[1]);
+  });
+
+  it('sends detours down through-roads, not service roads or dead ends', async () => {
+    const base: LngLat = [151.5, -32.0];
+    const east = destination(base, 90, 20_000);
+    const rows: places.PlaceInput[] = [];
+    for (let i = 0; i <= 12; i++) {
+      for (let j = 1; j <= 8; j++) {
+        const [lon, lat] = destination(destination(base, 90, i * 2000), 0, j * 1500);
+        // A service road sits closest to each area centre, with a through road just beyond it.
+        rows.push({ id: `svc-${i}-${j}`, name: `Back Lane ${i}-${j}`, kind: 'street', category: null, description: '', lon, lat, importance: 0, poiType: 'highway=service' });
+        const [tlon, tlat] = destination([lon, lat], 0, 250);
+        rows.push({ id: `thru-${i}-${j}`, name: `Main Way ${i}-${j}`, kind: 'street', category: null, description: '', lon: tlon, lat: tlat, importance: 0, poiType: 'highway=residential' });
+      }
+    }
+    await places.upsertPlaces(t.db, rows);
+    const u = await makeUser(t.db, 'throughroads@example.com');
+
+    calls.length = 0;
+    await routing.exploreRoutes(deps(), u.id, { from: base, to: east, mode: 'car', budgetMin: 30 });
+    const vias = calls.filter((c) => c.points.length > 2).flatMap((c) => c.points.slice(1, -1));
+    expect(vias.length).toBeGreaterThan(0);
+    const through = new Set(rows.filter((r) => r.poiType === 'highway=residential').map((r) => `${r.lon},${r.lat}`));
+    for (const v of vias) expect(through.has(`${v[0]},${v[1]}`), `via ${v} is not on a through road`).toBe(true);
+
+    // Cars avoid tracks and service roads; walking keeps them.
+    const carModel = calls.find((c) => c.customModel)?.customModel;
+    expect(carModel?.priority?.some((p) => p.if === 'road_class == TRACK')).toBe(true);
+    calls.length = 0;
+    await routing.exploreRoutes(deps(), u.id, { from: base, to: east, mode: 'foot', budgetMin: 30 });
+    for (const c of calls) expect(c.customModel?.priority?.some((p) => p.if === 'road_class == TRACK') ?? false).toBe(false);
+  });
+
+  it('still offers loops where almost no roads are mapped', async () => {
+    const outback: LngLat = [141.5, -25.0];
+    await places.upsertPlaces(t.db, [
+      { id: 'outback-street', name: 'Lonely Road', kind: 'street', category: null, description: '', lon: 141.6, lat: -25.2, importance: 0 },
+    ]);
+    const u = await makeUser(t.db, 'outback@example.com');
+    const loops = await routing.roundTrips(deps(), u.id, { start: outback, mode: 'foot', targetMin: 60 });
+    expect(loops.length).toBeGreaterThan(0);
   });
 });

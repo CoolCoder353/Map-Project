@@ -77,4 +77,33 @@ describe('OSM place mapping', () => {
     expect(streetKey(street('Queanbeyan', 149.2))).toBe('main street|queanbeyan|');
     expect(streetKey(street(undefined, 149.2))).toBe('main street|14920|-3530');
   });
+
+  it('keeps a named place that also has a street address, and the address too', () => {
+    const school = featureToPlaces(
+      point('w71376378', { amenity: 'school', name: 'Gumdale State School', 'addr:housenumber': '677', 'addr:street': 'New Cleveland Road', 'addr:suburb': 'Gumdale', 'addr:postcode': '4154' }),
+    );
+    expect(school).toHaveLength(2);
+    expect(school[0]).toMatchObject({ id: 'w71376378', name: 'Gumdale State School', kind: 'poi', poiType: 'amenity=school', suburb: 'Gumdale' });
+    expect(school[1]).toMatchObject({ id: 'w71376378:addr', name: '677 New Cleveland Road', kind: 'address' });
+
+    // A category POI keeps both as well.
+    const cafe = featureToPlaces(point('n5', { amenity: 'cafe', name: 'Two Before Ten', 'addr:housenumber': '1', 'addr:street': 'Marcus Clarke Street' }));
+    expect(cafe.map((p) => p.kind)).toEqual(['poi', 'address']);
+
+    // A plain address is still one record, with the plain id.
+    const addr = featureToPlaces(point('n6', { 'addr:housenumber': '12', 'addr:street': 'Test Street' }));
+    expect(addr).toHaveLength(1);
+    expect(addr[0]).toMatchObject({ id: 'n6', kind: 'address', name: '12 Test Street' });
+  });
+
+  it('records the road class of a street, for choosing route via points', () => {
+    const way = (highway: string) => ({
+      type: 'Feature' as const,
+      id: `w-${highway}`,
+      properties: { highway, name: 'Some Way' },
+      geometry: { type: 'LineString', coordinates: [[149.1, -35.3], [149.11, -35.3]] },
+    });
+    expect(featureToPlaces(way('residential'))[0]).toMatchObject({ kind: 'street', poiType: 'highway=residential' });
+    expect(featureToPlaces(way('service'))[0]).toMatchObject({ kind: 'street', poiType: 'highway=service' });
+  });
 });
