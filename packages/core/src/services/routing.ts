@@ -25,6 +25,7 @@ import {
   roundTripRadiusM,
   roundTripViaPoints,
   routeNovelty,
+  routeNoveltyByWays,
   visitedAreaPolygon,
 } from '@wayfinder/shared';
 import { gridDisk } from 'h3-js';
@@ -33,6 +34,7 @@ import { AppError } from '../lib/errors.js';
 import type { CustomModel, GhPath, GraphHopperClient } from '../lib/graphhopper.js';
 import type { MetricsAggregator } from '../lib/metrics.js';
 import { areaUnexplored, loadVisitedCells } from './coverage.js';
+import { visitedWayIds } from './roads.js';
 
 export interface RoutingDeps {
   db: DbClient;
@@ -101,8 +103,22 @@ async function recordRequest(db: DbClient, userId: string, kind: string, mode: M
 }
 
 async function visitedSetFor(db: DbClient, userId: string, coords: LngLat[], padM: number) {
-  const cells = await loadVisitedCells(db, userId, bboxOf(coords, padM));
-  return { cells, set: new Set(cells) };
+  const bbox = bboxOf(coords, padM);
+  const [cells, ways] = await Promise.all([loadVisitedCells(db, userId, bbox), visitedWayIds(db, userId, bbox)]);
+  return { cells, set: new Set(cells), ways };
+}
+
+/**
+ * How new a route is, measured by the roads it uses. Cells are the fallback where the routing
+ * engine reported no way ids (an older graph), and still drive candidate de-duplication.
+ */
+function noveltyOf(path: GhPath, isVisited: (c: string) => boolean, visitedWays: ReadonlySet<number>) {
+  return routeNoveltyByWays(
+    path.points.coordinates,
+    path.details?.osm_way_id ?? [],
+    (wayId) => visitedWays.has(wayId),
+    routeNovelty(path.points.coordinates, isVisited),
+  );
 }
 
 interface Candidate {
@@ -125,6 +141,8 @@ async function tryRoutes(
           profile: profileFor(r.mode),
           ...(r.customModel ? { customModel: r.customModel } : {}),
           ...(r.alternatives ? { alternatives: r.alternatives } : {}),
+          // Detours should carry on through their waypoints, not turn around at them.
+          ...(r.vias.length > 0 ? { passThrough: true } : {}),
         }),
       ),
     ),
@@ -146,12 +164,12 @@ export async function fastestRoute(
     deps.graphhopper.route({ points, profile: profileFor(req.mode) }),
   );
   if (!path) throw new AppError(422, 'no_route', 'No route found');
-  const { set } = await visitedSetFor(deps.db, userId, path.points.coordinates, 500);
+  const { set, ways } = await visitedSetFor(deps.db, userId, path.points.coordinates, 500);
   await recordRequest(deps.db, userId, 'fastest', req.mode);
   return toRoute(path, {
     kind: 'fastest',
     mode: req.mode,
-    novelty: routeNovelty(path.points.coordinates, (c) => set.has(c)),
+    novelty: noveltyOf(path, (c) => set.has(c), ways),
     extraDurationS: 0,
     viaPoints: req.via,
   });
@@ -173,9 +191,9 @@ export async function exploreRoutes(
   const maxSumM = Math.max(direct * 1.05, fastestPath.distance * ((t0 + budgetS) / Math.max(t0, 1)));
   const padM = Math.max(500, (maxSumM - direct) / 2);
   const corridor = [req.from, req.to, ...fastestPath.points.coordinates];
-  const { cells: visitedCells, set } = await visitedSetFor(deps.db, userId, corridor, padM);
+  const { cells: visitedCells, set, ways: visitedWays } = await visitedSetFor(deps.db, userId, corridor, padM);
   const isVisited = (c: string) => set.has(c);
-  const fastestNovelty = routeNovelty(fastestPath.points.coordinates, isVisited);
+  const fastestNovelty = noveltyOf(fastestPath, isVisited, visitedWays);
 
   const polygon = visitedAreaPolygon(visitedCells, 3000);
   const areaCells = bboxToCells(bboxOf(corridor, padM), AREA_RES);
@@ -216,7 +234,7 @@ export async function exploreRoutes(
         candidate: c,
         durationS: c.path.time / 1000,
         uTurns: c.uTurns,
-        novelty: routeNovelty(c.path.points.coordinates, isVisited),
+        novelty: noveltyOf(c.path, isVisited, visitedWays),
       }))
       // Only keep candidates that actually add new ground over the fastest route.
       .filter((c) => c.novelty.newKm > fastestNovelty.newKm + 0.05),
@@ -245,7 +263,7 @@ export async function roundTrips(
 ): Promise<Route[]> {
   const targetS = req.targetMin * 60;
   let radius = roundTripRadiusM(targetS * TYPICAL_SPEED_MPS[req.mode]);
-  const { cells: visitedCells, set } = await visitedSetFor(deps.db, userId, [req.start], radius * 2.5);
+  const { cells: visitedCells, set, ways: visitedWays } = await visitedSetFor(deps.db, userId, [req.start], radius * 2.5);
   const isVisited = (c: string) => set.has(c);
   const polygon = visitedAreaPolygon(visitedCells, 3000);
   const model = exploreModel(req.mode, polygon, 0.5);
@@ -292,7 +310,7 @@ export async function roundTrips(
     candidates.map((c) => ({
       candidate: c,
       durationS: c.path.time / 1000,
-      novelty: routeNovelty(c.path.points.coordinates, isVisited),
+      novelty: noveltyOf(c.path, isVisited, visitedWays),
     })),
     { targetS, tolerance: 0.2, limit: 3 },
   );

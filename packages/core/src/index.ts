@@ -16,6 +16,7 @@ export * as trackService from './services/tracks.js';
 export * as coverageService from './services/coverage.js';
 export * as routingService from './services/routing.js';
 export * as placeService from './services/places.js';
+export * as roadService from './services/roads.js';
 export * as adminService from './services/admin.js';
 export * as opsService from './services/ops.js';
 export * as accountService from './services/account.js';

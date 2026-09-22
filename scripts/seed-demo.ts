@@ -6,6 +6,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import {
+  GraphHopperClient,
   MetricsAggregator,
   audit,
   createPool,
@@ -15,6 +16,7 @@ import {
   migrate,
   placeService,
   recordErrorEvent,
+  roadService,
   trackService,
 } from '@wayfinder/core';
 import { destination } from '@wayfinder/shared';
@@ -63,6 +65,9 @@ for (let d = 1; d <= 14; d++) {
 }
 await trackService.processUserTracks(db, adminId);
 await trackService.processUserTracks(db, samId);
+// Snap the demo trips onto roads, as the worker does, so coverage has roads to draw.
+const graphhopper = new GraphHopperClient(process.env.GRAPHHOPPER_URL ?? 'http://127.0.0.1:8990');
+for (const id of [adminId, samId]) await roadService.matchTrips(db, graphhopper, id, 100);
 
 const places = [
   ['c1', 'Canberra', 'city', null, 'Australian Capital Territory', 149.13, -35.28, 1],

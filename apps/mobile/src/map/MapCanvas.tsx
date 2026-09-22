@@ -94,9 +94,12 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       <Camera ref={camera} initialViewState={{ center: [134.5, -27.5], zoom: 3.6 }} trackUserLocation={followUser ? 'course' : undefined} />
       {coverage ? (
         <GeoJSONSource id="coverage" data={coverage}>
-          <Layer id="coverage-fill" type="fill" paint={{ 'fill-color': t.accent, 'fill-opacity': ['interpolate', ['linear'], ['get', 'fraction'], 0, 0.08, 1, 0.3] }} />
-          <Layer id="coverage-line" type="line" paint={{ 'line-color': t.accent, 'line-width': 1 }} />
-          <Layer id="coverage-recent" type="line" filter={['>', ['get', 'recent'], 0]} paint={{ 'line-color': t.exploreLine, 'line-width': 2.5 }} />
+          <Layer
+            id="coverage-roads"
+            type="line"
+            layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+            paint={{ 'line-color': ['case', ['get', 'recent'], t.exploreLine, t.accent], 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.5, 15, 5], 'line-opacity': 0.9 }}
+          />
         </GeoJSONSource>
       ) : null}
       <GeoJSONSource id="track" data={trackData}>

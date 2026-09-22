@@ -3,6 +3,7 @@ import {
   type JobName,
   adminService,
   opsService,
+  roadService,
   recordErrorEvent,
   trackService,
 } from '@wayfinder/core';
@@ -23,8 +24,19 @@ type Handler = (data: Record<string, unknown>) => Promise<unknown>;
 export function jobHandlers(deps: WorkerDeps): Record<JobName, Handler> {
   const { db, graphhopper, queue } = deps.ctx;
   return {
-    'process-tracks': async (data) => trackService.processUserTracks(db, String(data.userId)),
-    'rebuild-coverage': async (data) => trackService.rebuildCoverage(db, String(data.userId)),
+    'process-tracks': async (data) => {
+      const userId = String(data.userId);
+      const processed = await trackService.processUserTracks(db, userId);
+      // Snap the new trips onto roads (coverage is by road travelled).
+      const matched = await roadService.matchTrips(db, graphhopper, userId);
+      return { ...processed, ...matched };
+    },
+    'rebuild-coverage': async (data) => {
+      const userId = String(data.userId);
+      const rebuilt = await trackService.rebuildCoverage(db, userId);
+      const matched = await roadService.matchTrips(db, graphhopper, userId, 500);
+      return { ...rebuilt, ...matched };
+    },
     'purge-deleted': async () => {
       const purged = await adminService.purgeDeleted(db);
       // Points left unassigned (e.g. the tail of a trip when tracking stopped) get a final pass.

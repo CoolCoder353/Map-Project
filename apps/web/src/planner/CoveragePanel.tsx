@@ -31,36 +31,36 @@ export function CoveragePanel() {
       )}
       {stats.isLoading && <div className="skeleton" style={{ height: 180 }} />}
       {stats.isError && <p className="notice notice-error">Couldn’t load your stats. {String((stats.error as Error).message)}</p>}
-      {s && s.cellsVisited === 0 && <p className="empty">{copy.coverageEmpty}</p>}
-      {s && s.cellsVisited > 0 && (
+      {s && s.roadsTravelled === 0 && <p className="empty">{copy.coverageEmpty}</p>}
+      {s && s.roadsTravelled > 0 && (
         <div className="coverage-lead">
           <p className="coverage-lead-value num">
-            {formatNumber(Math.round(s.areaKm2 * 10) / 10)} <small>km² explored</small>
+            {formatNumber(s.roadKm)} <small>km of road travelled</small>
           </p>
-          {s.newCellsWeek > 0 && (
+          {s.newRoadsWeek > 0 && (
             <p className="coverage-lead-delta">
-              <span className="badge badge-new">+{formatNumber(s.newCellsWeek)} hexagons this week</span>
+              <span className="badge badge-new">+{formatNumber(s.newRoadsWeek)} new roads this week</span>
             </p>
           )}
         </div>
       )}
-      {s && s.cellsVisited > 0 && (
+      {s && s.roadsTravelled > 0 && (
         <dl className="stat-list">
           <div>
-            <dt>Hexagons visited</dt>
-            <dd className="num">{formatNumber(s.cellsVisited)}</dd>
+            <dt>Roads travelled</dt>
+            <dd className="num">{formatNumber(s.roadsTravelled)}</dd>
           </div>
           <div>
             <dt>New this month</dt>
-            <dd className="num">{formatNumber(s.newCellsMonth)}</dd>
+            <dd className="num">{formatNumber(s.newRoadsMonth)}</dd>
           </div>
           <div>
-            <dt>Reached driving</dt>
-            <dd className="num">{formatNumber(s.byMode.car)}</dd>
+            <dt>Driven</dt>
+            <dd className="num">{formatNumber(s.byMode.carKm)} km</dd>
           </div>
           <div>
-            <dt>Reached walking</dt>
-            <dd className="num">{formatNumber(s.byMode.foot)}</dd>
+            <dt>Walked</dt>
+            <dd className="num">{formatNumber(s.byMode.footKm)} km</dd>
           </div>
           <div>
             <dt>Trips</dt>
@@ -77,16 +77,13 @@ export function CoveragePanel() {
       {s?.firstVisitAt && <p className="field-hint">Exploring since {formatDate(s.firstVisitAt)}.</p>}
       <div className="legend" aria-label="Map legend">
         <span className="legend-item">
-          <span className="legend-swatch legend-explored" aria-hidden /> Explored
+          <span className="legend-swatch legend-explored" aria-hidden /> Roads you’ve travelled
         </span>
         <span className="legend-item">
-          <span className="legend-swatch legend-recent" aria-hidden /> First reached this week (green outline)
+          <span className="legend-swatch legend-recent" aria-hidden /> First travelled this week
         </span>
         <span className="legend-item">
-          <span className="legend-swatch legend-fog" aria-hidden /> Not yet explored (shaded)
-        </span>
-        <span className="legend-item">
-          <Layers aria-hidden /> Zoom in to see individual hexagons
+          <Layers aria-hidden /> Zoom in to see individual streets
         </span>
       </div>
     </div>

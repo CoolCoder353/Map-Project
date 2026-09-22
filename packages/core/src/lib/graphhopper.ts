@@ -18,6 +18,8 @@ export interface GhPath {
   points: { type: 'LineString'; coordinates: LngLat[] };
   instructions: GhInstruction[];
   snapped_waypoints?: { coordinates: LngLat[] };
+  /** Path details: `osm_way_id` comes back as [firstPoint, lastPoint, wayId] runs. */
+  details?: { osm_way_id?: Array<[number, number, number]> };
 }
 
 export interface CustomModel {
@@ -35,6 +37,8 @@ export interface RouteParams {
   profile: string;
   customModel?: CustomModel;
   alternatives?: number;
+  /** Keep going through via points instead of turning around at them. */
+  passThrough?: boolean;
   signal?: AbortSignal;
 }
 
@@ -90,6 +94,31 @@ export class GraphHopperClient {
     return body;
   }
 
+  /**
+   * Snap a recorded track onto the road network. Returns null when the track can't be matched —
+   * off-road walking, or GPS too sparse — and the raw line is all there is.
+   */
+  async match(points: ReadonlyArray<{ lon: number; lat: number; ts?: number }>, profile: string): Promise<GhPath | null> {
+    if (points.length < 2) return null;
+    const trkpt = points
+      .map((p) => `<trkpt lat="${p.lat}" lon="${p.lon}">${p.ts ? `<time>${new Date(p.ts).toISOString()}</time>` : ''}</trkpt>`)
+      .join('');
+    const gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1"><trk><trkseg>${trkpt}</trkseg></trk></gpx>`;
+    try {
+      const res = await this.fetchImpl(`${this.baseUrl}/match?profile=${encodeURIComponent(profile)}&points_encoded=false&details=osm_way_id`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/gpx+xml' },
+        body: gpx,
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+      if (!res.ok) return null;
+      const body = (await res.json()) as { paths?: GhPath[] };
+      return body.paths?.[0] ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   async route(p: RouteParams): Promise<GhPath[]> {
     const body: Record<string, unknown> = {
       points: p.points,
@@ -98,7 +127,13 @@ export class GraphHopperClient {
       instructions: true,
       calc_points: true,
       locale: 'en',
+      // Which OSM way each stretch belongs to: the unit of road coverage.
+      details: ['osm_way_id'],
     };
+    if (p.passThrough && p.points.length > 2) {
+      body['ch.disable'] = true;
+      body.pass_through = true;
+    }
     if (p.customModel) {
       // Per-request custom models need the flexible (LM / A*) algorithms.
       body['ch.disable'] = true;

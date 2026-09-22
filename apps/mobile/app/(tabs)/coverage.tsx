@@ -36,10 +36,10 @@ export default function Coverage() {
   const s = stats.data;
   const rows: Array<[string, string]> = s
     ? [
-        ['Hexagons visited', formatNumber(s.cellsVisited)],
-        ['New this month', formatNumber(s.newCellsMonth)],
-        ['Reached driving', formatNumber(s.byMode.car)],
-        ['Reached walking', formatNumber(s.byMode.foot)],
+        ['Roads travelled', formatNumber(s.roadsTravelled)],
+        ['New this month', formatNumber(s.newRoadsMonth)],
+        ['Driven', `${formatNumber(s.byMode.carKm)} km`],
+        ['Walked', `${formatNumber(s.byMode.footKm)} km`],
         ['Trips', formatNumber(s.tripCount)],
         ['Distance recorded', `${formatNumber(s.distanceKm)} km`],
       ]
@@ -52,13 +52,13 @@ export default function Coverage() {
         <Body muted>{copy.coverageIntro}</Body>
         {!user?.settings.trackingEnabled ? <Notice>{copy.trackingOffHint}</Notice> : null}
         {stats.isLoading ? <Loading /> : null}
-        {s && s.cellsVisited === 0 ? <Body muted>{copy.coverageEmpty}</Body> : null}
-        {s && s.cellsVisited > 0 ? (
+        {s && s.roadsTravelled === 0 ? <Body muted>{copy.coverageEmpty}</Body> : null}
+        {s && s.roadsTravelled > 0 ? (
           <>
             <Text style={{ color: t.text, fontSize: 32, fontWeight: '700', fontVariant: ['tabular-nums'] }} accessibilityRole="header">
-              {formatNumber(Math.round(s.areaKm2 * 10) / 10)} <Text style={{ fontSize: 16, color: t.text2, fontWeight: '500' }}>km² explored</Text>
+              {formatNumber(s.roadKm)} <Text style={{ fontSize: 16, color: t.text2, fontWeight: '500' }}>km of road travelled</Text>
             </Text>
-            {s.newCellsWeek > 0 ? <NewBadge text={`+${formatNumber(s.newCellsWeek)} hexagons this week`} /> : null}
+            {s.newRoadsWeek > 0 ? <NewBadge text={`+${formatNumber(s.newRoadsWeek)} new roads this week`} /> : null}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
               {rows.map(([k, v]) => (
                 <View key={k} style={{ width: '50%', paddingVertical: space[2], borderTopWidth: 1, borderColor: t.border }}>

@@ -268,6 +268,9 @@ export async function rebuildCoverage(db: Db, userId: string): Promise<{ cells: 
   return withTransaction(db, async (tx) => {
     await lockUser(tx, userId);
     await tx.query('DELETE FROM visited_cells WHERE user_id = $1', [userId]);
+    // Roads are re-matched afterwards (see roadService.matchTrips).
+    await tx.query('DELETE FROM visited_ways WHERE user_id = $1', [userId]);
+    await tx.query('UPDATE trips SET matched_geometry = NULL, matched_m = 0 WHERE user_id = $1', [userId]);
     const trips = (
       await tx.query<{ id: string; mode: Mode }>(
         'SELECT id, mode FROM trips WHERE user_id = $1 AND deleted_at IS NULL ORDER BY started_at',

@@ -13,8 +13,10 @@ trap cleanup EXIT INT TERM
 pnpm -s dev:db & pids="$pids $!"
 for i in $(seq 1 60); do (echo > /dev/tcp/127.0.0.1/55433) 2>/dev/null && break || sleep 0.5; done 2>/dev/null || true
 sleep 2
-DATABASE_URL="$DB_URL" pnpm -s seed:demo
+# The fake routing engine first: seeding snaps the demo trips onto roads through it.
 PORT=8990 pnpm -s dev:fake-gh & pids="$pids $!"
+for i in $(seq 1 40); do (echo > /dev/tcp/127.0.0.1/8990) 2>/dev/null && break || sleep 0.25; done 2>/dev/null || true
+GRAPHHOPPER_URL=http://127.0.0.1:8990 DATABASE_URL="$DB_URL" pnpm -s seed:demo
 (cd apps/api && DATABASE_URL="$DB_URL" JWT_SECRET=e2e-secret-e2e-secret-e2e-secret-0000 PORT=3100 TRUST_PROXY=true \
   GRAPHHOPPER_URL=http://127.0.0.1:8990 CORS_ORIGINS=http://localhost:5174 PUBLIC_WEB_URL=http://localhost:5174 \
   RATE_LIMIT_PER_MIN=100000 AUTH_RATE_LIMIT_PER_MIN=100000 LOG_LEVEL=warn \

@@ -1,6 +1,6 @@
 /**
- * DEV/E2E ONLY: a stand-in for GraphHopper that answers /route, /isochrone, /health and /info
- * with straight-line geometry, so the UI and end-to-end tests run without the routing graph.
+ * DEV/E2E ONLY: a stand-in for GraphHopper that answers /route, /match, /isochrone, /health and
+ * /info with straight-line geometry, so the UI and end-to-end tests run without the routing graph.
  *   pnpm dev:fake-gh   → http://127.0.0.1:8989
  */
 import { createServer } from 'node:http';
@@ -63,6 +63,33 @@ const server = createServer((req, res) => {
       const paths = [path(body.points, body.profile, body.custom_model ? 0.05 : 0)];
       if (body.algorithm === 'alternative_route') paths.push(path(body.points, body.profile, 0.2));
       send(200, { paths });
+    });
+    return;
+  }
+  if (url.pathname === '/match' && req.method === 'POST') {
+    // Map matching: keep the track as it is and pretend it ran along a couple of roads, so
+    // coverage (which counts roads travelled) has something to show.
+    let raw = '';
+    req.on('data', (c) => (raw += c));
+    req.on('end', () => {
+      const coordinates = [...raw.matchAll(/lat="(-?[\d.]+)"\s+lon="(-?[\d.]+)"/g)].map(([, lat, lon]) => [Number(lon), Number(lat)] as LngLat);
+      if (coordinates.length < 2) return send(400, { message: 'Sequence is broken' });
+      let distance = 0;
+      for (let i = 1; i < coordinates.length; i++) distance += haversineM(coordinates[i - 1]!, coordinates[i]!);
+      const mid = Math.floor(coordinates.length / 2);
+      // Two made-up ways per track, keyed off the start so different trips differ.
+      const base = Math.round(Math.abs(coordinates[0]![0] * 1000) + Math.abs(coordinates[0]![1] * 1000)) * 10;
+      send(200, {
+        paths: [
+          {
+            distance,
+            time: (distance / SPEED.car!) * 1000,
+            points: { type: 'LineString', coordinates },
+            instructions: [],
+            details: { osm_way_id: [[0, mid, base + 1], [mid, coordinates.length - 1, base + 2]] },
+          },
+        ],
+      });
     });
     return;
   }

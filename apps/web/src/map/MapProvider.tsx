@@ -1,5 +1,4 @@
 import type { CoverageResponse, LngLat, Route } from '@wayfinder/shared';
-import { cellToBoundary } from 'h3-js';
 import * as maplibregl from 'maplibre-gl';
 import type {
   ExpressionSpecification,
@@ -131,7 +130,6 @@ export function MapProvider({
     routes: EMPTY,
     markers: EMPTY,
     coverage: EMPTY,
-    fog: EMPTY,
     track: EMPTY,
     travelled: EMPTY,
     search: EMPTY,
@@ -165,36 +163,29 @@ export function MapProvider({
     const firstLabel = map.getStyle().layers.find((l) => l.type === 'symbol')?.id;
     const addUnderLabels = (layer: maplibregl.AddLayerObject) => map.addLayer(layer, firstLabel);
 
-    // Coverage: unexplored land is fogged; explored cells are cut out of the fog, tinted and
-    // outlined (so the difference is lightness + outline, not hue alone). Cells first reached in
-    // the last week get a heavier explore-green outline.
+    // Coverage: the roads this person has actually travelled, drawn over the base map. Roads
+    // first travelled in the last week are picked out in the explore colour.
     addUnderLabels({
-      id: 'fog',
-      type: 'fill',
-      source: 'fog',
-      paint: { 'fill-color': cssVar('--fog') || '#26303a', 'fill-opacity': Number(cssVar('--fog-opacity')) || 0.34 },
-    });
-    addUnderLabels({
-      id: 'coverage-fill',
-      type: 'fill',
+      id: 'coverage-roads-casing',
+      type: 'line',
       source: 'coverage',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: {
-        'fill-color': accent,
-        'fill-opacity': ['interpolate', ['linear'], ['get', 'fraction'], 0, dark ? 0.1 : 0.06, 1, dark ? 0.32 : 0.22],
+        'line-color': surface,
+        'line-opacity': 0.5,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 3, 15, 9],
       },
     });
     addUnderLabels({
-      id: 'coverage-line',
+      id: 'coverage-roads',
       type: 'line',
       source: 'coverage',
-      paint: { 'line-color': accent, 'line-opacity': 0.85, 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.5, 15, 1.4] },
-    });
-    addUnderLabels({
-      id: 'coverage-recent',
-      type: 'line',
-      source: 'coverage',
-      filter: ['>', ['get', 'recent'], 0],
-      paint: { 'line-color': explore, 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.5, 15, 3] },
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': ['case', ['get', 'recent'], explore, accent],
+        'line-opacity': 0.9,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.5, 15, 5],
+      },
     });
 
     // Recorded track (trip replay)
@@ -391,37 +382,13 @@ export function MapProvider({
         },
         signal: ctrl.signal,
       });
-      const features = res.cells.map<GeoJSON.Feature>((c) => ({
-        type: 'Feature',
-        properties: { fraction: c.fraction, recent: c.recent },
-        geometry: { type: 'Polygon', coordinates: [cellToBoundary(c.h3, true)] },
-      }));
-      setSource('coverage', { type: 'FeatureCollection', features });
-      // Fog: a world polygon with explored cells cut out as holes.
-      const holes = res.cells
-        .filter((c) => c.fraction >= 0.5)
-        .map((c) => cellToBoundary(c.h3, true).slice().reverse());
-      setSource('fog', {
+      setSource('coverage', {
         type: 'FeatureCollection',
-        features: [
-          {
-            type: 'Feature',
-            properties: {},
-            geometry: {
-              type: 'Polygon',
-              coordinates: [
-                [
-                  [-180, -85],
-                  [180, -85],
-                  [180, 85],
-                  [-180, 85],
-                  [-180, -85],
-                ],
-                ...holes,
-              ],
-            },
-          },
-        ],
+        features: res.roads.map<GeoJSON.Feature>((r) => ({
+          type: 'Feature',
+          properties: { wayId: r.wayId, recent: r.recent, modes: r.modes },
+          geometry: { type: 'LineString', coordinates: r.geometry },
+        })),
       });
     } catch (err) {
       if ((err as Error).name !== 'AbortError') console.warn('coverage failed', err);
@@ -621,7 +588,6 @@ export function MapProvider({
         if (enabled) void refreshCoverage();
         else {
           setSource('coverage', EMPTY);
-          setSource('fog', EMPTY);
         }
       },
       setTrack(line, travelled) {

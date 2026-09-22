@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type LngLat, destination } from '@wayfinder/shared';
 import * as tracks from '../../src/services/tracks.js';
 import * as coverage from '../../src/services/coverage.js';
+import * as roads from '../../src/services/roads.js';
 import * as admin from '../../src/services/admin.js';
 import { type TestDb, createTestDb } from '../helpers/db.js';
 import { FakeQueue } from '../helpers/fakes.js';
@@ -29,10 +30,32 @@ function drive(startTs: number, start: LngLat, bearing: number, km: number, spee
   });
 }
 
-async function runJobs(userId: string) {
-  for (const job of queue.take('process-tracks')) await tracks.processUserTracks(t.db, job.data.userId as string);
-  for (const job of queue.take('rebuild-coverage')) await coverage.loadVisitedCells(t.db, userId).then(() => tracks.rebuildCoverage(t.db, job.data.userId as string));
+/**
+ * Stands in for the routing engine's map matching: every point is "on" the given ways, one run
+ * per way, so a trip's roads are predictable.
+ */
+const fakeMatcher = (wayIds: number[]) => ({
+  async match(points: ReadonlyArray<{ lon: number; lat: number }>) {
+    const coordinates = points.map((p) => [p.lon, p.lat] as LngLat);
+    const per = Math.max(1, Math.floor((coordinates.length - 1) / wayIds.length));
+    const runs = wayIds.map((id, i) => [i * per, Math.min(coordinates.length - 1, (i + 1) * per), id] as [number, number, number]);
+    return { distance: 0, time: 0, points: { type: 'LineString' as const, coordinates }, instructions: [], details: { osm_way_id: runs } };
+  },
+});
+
+async function runJobs(userId: string, matcher = fakeMatcher([101, 102])) {
+  for (const job of queue.take('process-tracks')) {
+    await tracks.processUserTracks(t.db, job.data.userId as string);
+    await roads.matchTrips(t.db, matcher as never, job.data.userId as string);
+  }
+  for (const job of queue.take('rebuild-coverage')) {
+    await coverage.loadVisitedCells(t.db, userId).then(() => tracks.rebuildCoverage(t.db, job.data.userId as string));
+    await roads.matchTrips(t.db, matcher as never, job.data.userId as string, 500);
+  }
 }
+
+const cellCount = async (userId: string) =>
+  Number((await t.db.query<{ n: string }>('SELECT count(*) AS n FROM visited_cells WHERE user_id = $1', [userId])).rows[0]!.n);
 
 describe('track ingestion and coverage', () => {
   it('turns uploaded batches into trips and visited cells, idempotently', async () => {
@@ -55,10 +78,14 @@ describe('track ingestion and coverage', () => {
     expect(trip.newCells).toBeGreaterThanOrEqual(5); // ~350 m wide cells along 2 km
 
     const stats = await coverage.getCoverageStats(t.db, u.id);
-    expect(stats.cellsVisited).toBe(trip.newCells);
-    expect(stats.byMode.foot).toBe(stats.cellsVisited);
-    expect(stats.byMode.car).toBe(0);
+    // Coverage counts roads travelled; the walk was matched onto two of them.
+    expect(stats.roadsTravelled).toBe(2);
+    expect(stats.roadKm).toBeGreaterThan(1.5);
+    expect(stats.byMode.footKm).toBe(stats.roadKm);
+    expect(stats.byMode.carKm).toBe(0);
     expect(stats.tripCount).toBe(1);
+    // Hexagons stay as the internal index that steers explore.
+    expect(await cellCount(u.id)).toBe(trip.newCells);
 
     const detail = await tracks.getTrip(t.db, u.id, trip.id);
     expect(detail.points).toHaveLength(walk.length);
@@ -105,19 +132,19 @@ describe('track ingestion and coverage', () => {
     await runJobs(u.id);
     const { items } = await tracks.listTrips(t.db, u.id, 10);
     expect(items).toHaveLength(2);
-    const before = (await coverage.getCoverageStats(t.db, u.id)).cellsVisited;
+    const before = await cellCount(u.id);
     const victim = items[0]!;
 
     await tracks.softDeleteTrip(t.db, queue, u.id, victim.id);
     await runJobs(u.id);
-    const afterDelete = (await coverage.getCoverageStats(t.db, u.id)).cellsVisited;
+    const afterDelete = await cellCount(u.id);
     expect(afterDelete).toBe(before - victim.newCells);
     expect((await tracks.listTrips(t.db, u.id, 10)).items).toHaveLength(1);
     await expect(tracks.getTrip(t.db, u.id, victim.id)).rejects.toMatchObject({ statusCode: 404 });
 
     await tracks.restoreTrip(t.db, queue, victim.id);
     await runJobs(u.id);
-    expect((await coverage.getCoverageStats(t.db, u.id)).cellsVisited).toBe(before);
+    expect(await cellCount(u.id)).toBe(before);
 
     await tracks.softDeleteTrip(t.db, queue, u.id, victim.id);
     await runJobs(u.id);
@@ -129,18 +156,21 @@ describe('track ingestion and coverage', () => {
     await expect(tracks.restoreTrip(t.db, queue, victim.id)).rejects.toMatchObject({ statusCode: 404 });
   });
 
-  it('serves coverage at zoom-dependent resolutions within a bbox', async () => {
+  it('serves the roads travelled inside the map view', async () => {
     const u = (await t.db.query("SELECT id FROM users WHERE email = 'walker@example.com'")).rows[0];
     const bbox: [number, number, number, number] = [149.12, -35.29, 149.16, -35.27];
-    const fine = await coverage.getCoverage(t.db, u.id, bbox, 15);
-    expect(fine.res).toBe(9);
-    expect(fine.cells.length).toBeGreaterThanOrEqual(5);
-    expect(fine.cells.every((c) => c.fraction === 1)).toBe(true);
-    const coarse = await coverage.getCoverage(t.db, u.id, bbox, 9);
-    expect(coarse.res).toBe(6);
-    expect(coarse.cells.length).toBeGreaterThanOrEqual(1);
-    expect(coarse.cells[0]!.fraction).toBeLessThan(1);
+    const view = await coverage.getCoverage(t.db, u.id, bbox, 15);
+    expect(view.roads.length).toBe(2);
+    expect(view.roads.map((r) => r.wayId).sort()).toEqual([101, 102]);
+    expect(view.roads[0]!.geometry.length).toBeGreaterThan(1);
+    expect(view.roads.every((r) => r.recent)).toBe(true);
+    expect(view.truncated).toBe(false);
+
+    const geojson = coverage.coverageToGeoJson(view);
+    expect(geojson.features[0]!.geometry.type).toBe('LineString');
+
     const elsewhere = await coverage.getCoverage(t.db, u.id, [140, -30, 140.1, -29.9], 15);
-    expect(elsewhere.cells).toHaveLength(0);
+    expect(elsewhere.roads).toHaveLength(0);
   });
+
 });

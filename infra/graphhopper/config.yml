@@ -22,7 +22,9 @@ graphhopper:
     - profile: car
     - profile: foot
 
-  graph.encoded_values: car_access, car_average_speed, road_access, max_speed, road_class, road_environment, foot_access, foot_priority, foot_average_speed, foot_road_access, hike_rating, mtb_rating, country
+  # osm_way_id: which OSM way each metre of a route belongs to — the unit of road coverage.
+  # Unlike internal edge ids it survives a graph rebuild.
+  graph.encoded_values: osm_way_id, car_access, car_average_speed, road_access, max_speed, road_class, road_environment, foot_access, foot_priority, foot_average_speed, foot_road_access, hike_rating, mtb_rating, country
   import.osm.ignored_highways: construction,proposed,abandoned,razed
   prepare.min_network_size: 200
   prepare.lm.landmarks: 16

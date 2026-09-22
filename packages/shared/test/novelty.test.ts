@@ -6,6 +6,7 @@ import {
   cellOverlap,
   pickExploreViaPoints,
   rankExploreCandidates,
+  routeNoveltyByWays,
   rankRoundTripCandidates,
   roundTripBearings,
   roundTripRadiusM,
@@ -125,6 +126,28 @@ describe('via point generation', () => {
   });
 });
 
+describe('novelty by road', () => {
+  it('counts kilometres on roads never travelled, and roads repeated within the route', () => {
+    const a: LngLat = [153.0, -27.5];
+    const b = destination(a, 90, 1000);
+    const c = destination(b, 90, 1000);
+    const coords = [a, b, c, b];
+    const runs = [[0, 1, 111] as const, [1, 2, 222] as const, [2, 3, 222] as const];
+    const fallback = { newKm: 0, totalKm: 0, noveltyPct: 0, retraceRatio: 0, cells: ['x'] };
+    const n = routeNoveltyByWays(coords, runs, (id) => id === 111, fallback);
+    expect(n.totalKm).toBeCloseTo(3, 1);
+    expect(n.newKm).toBeCloseTo(2, 1); // way 222 is new, and it is used twice
+    expect(n.retraceRatio).toBeCloseTo(1 / 3, 1);
+    expect(n.wayIds).toEqual([111, 222]);
+    expect(n.cells).toEqual(['x']); // cells still come from the sampled scorer
+  });
+
+  it('falls back to the hexagon score when the engine reported no ways', () => {
+    const fallback = { newKm: 5, totalKm: 10, noveltyPct: 50, retraceRatio: 0, cells: [] };
+    expect(routeNoveltyByWays([[0, 0]], [], () => false, fallback)).toBe(fallback);
+  });
+});
+
 describe('explore ranking prefers routes people want to drive', () => {
   const novelty = (newKm: number, retraceRatio = 0) => ({ newKm, totalKm: newKm + 10, noveltyPct: 50, retraceRatio, cells: [] as string[] });
   const opts = { fastestDurationS: 1800, fastestCells: [] as string[], budgetS: 1200 };
@@ -132,12 +155,23 @@ describe('explore ranking prefers routes people want to drive', () => {
   it('puts a route with U-turns below a slightly less new one without them', () => {
     const ranked = rankExploreCandidates(
       [
-        { candidate: 'uturns', durationS: 1900, novelty: novelty(20), uTurns: 2 },
+        { candidate: 'uturns', durationS: 1900, novelty: novelty(20), uTurns: 1 },
         { candidate: 'clean', durationS: 2000, novelty: novelty(16), uTurns: 0 },
       ],
       opts,
     );
     expect(ranked.map((r) => r.candidate)).toEqual(['clean', 'uturns']);
+  });
+
+  it('does not offer a route that asks for several U-turns', () => {
+    const ranked = rankExploreCandidates(
+      [
+        { candidate: 'two-uturns', durationS: 1900, novelty: novelty(40), uTurns: 2 },
+        { candidate: 'one-uturn', durationS: 1900, novelty: novelty(12), uTurns: 1 },
+      ],
+      opts,
+    );
+    expect(ranked.map((r) => r.candidate)).toEqual(['one-uturn']);
   });
 
   it('prefers a loop over an out-and-back with the same new ground', () => {

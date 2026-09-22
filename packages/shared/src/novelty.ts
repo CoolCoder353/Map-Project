@@ -3,6 +3,7 @@ import {
   destination,
   haversineM,
   inEllipse,
+  lineLengthM,
   sampleLine,
 } from './geo.js';
 import { type Cell, VISIT_RES, cellCenter, pointToCell } from './h3.js';
@@ -19,6 +20,51 @@ export interface RouteNovelty extends Novelty {
   cells: Cell[];
   /** Share (0–1) of sampled length that re-enters a cell already passed earlier on this route. */
   retraceRatio: number;
+  /** OSM ways the route uses, when the routing engine reported them. */
+  wayIds?: number[];
+}
+
+/** A stretch of one OSM way: [first point, last point, way id], as GraphHopper reports them. */
+export type WayRun = readonly [number, number, number];
+
+/**
+ * How much of a route runs along roads the user has never travelled, measured by road rather
+ * than by hexagon. Falls back to nothing when the engine reported no way ids.
+ */
+export function routeNoveltyByWays(
+  coords: readonly LngLat[],
+  runs: readonly WayRun[],
+  isVisitedWay: (wayId: number) => boolean,
+  cellNovelty: RouteNovelty,
+): RouteNovelty {
+  if (runs.length === 0) return cellNovelty;
+  let total = 0;
+  let fresh = 0;
+  let retraced = 0;
+  const seen = new Set<number>();
+  const order: number[] = [];
+  for (const [from, to, wayId] of runs) {
+    const piece = coords.slice(from, to + 1);
+    if (piece.length < 2) continue;
+    const length = lineLengthM(piece);
+    total += length;
+    if (!isVisitedWay(wayId)) fresh += length;
+    if (seen.has(wayId)) retraced += length;
+    else {
+      seen.add(wayId);
+      order.push(wayId);
+    }
+  }
+  if (total === 0) return cellNovelty;
+  return {
+    newKm: fresh / 1000,
+    totalKm: total / 1000,
+    noveltyPct: Math.round((fresh / total) * 1000) / 10,
+    retraceRatio: retraced / total,
+    // Cells still drive candidate de-duplication and the routing bias.
+    cells: cellNovelty.cells,
+    wayIds: order,
+  };
 }
 
 /**
@@ -89,6 +135,8 @@ export interface ExploreRankOptions {
   kmPenaltyPerExtraMin?: number;
   /** Score penalty in km for each U-turn the route asks the driver to make. */
   kmPenaltyPerUTurn?: number;
+  /** Candidates asking for more U-turns than this are not offered at all. */
+  maxUTurns?: number;
 }
 
 /**
@@ -104,8 +152,9 @@ export function rankExploreCandidates<T>(
   const penalty = opts.kmPenaltyPerExtraMin ?? 0.05;
   const uTurnPenalty = opts.kmPenaltyPerUTurn ?? 8;
   const maxS = opts.fastestDurationS + opts.budgetS;
+  const maxUTurns = opts.maxUTurns ?? 1;
   const scored = candidates
-    .filter((c) => c.durationS <= maxS && c.novelty.newKm > 0)
+    .filter((c) => c.durationS <= maxS && c.novelty.newKm > 0 && (c.uTurns ?? 0) <= maxUTurns)
     .map((c) => ({
       ...c,
       // A detour that doubles back on itself, or turns the driver around, is worth less than its

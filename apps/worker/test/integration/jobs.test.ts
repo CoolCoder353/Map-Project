@@ -10,6 +10,10 @@ import { makeUser } from '../../../../packages/core/test/helpers/users.js';
 let t: TestDb;
 const queue = new FakeQueue();
 const graphhopper = {
+  // Map matching: the worker snaps trips onto roads after processing them.
+  async match() {
+    return null;
+  },
   health: async () => ({ up: true, latencyMs: 3, detail: null }),
   dataDate: async () => '2026-09-01T00:00:00Z',
 } as never;
@@ -51,7 +55,8 @@ describe('worker job handlers', () => {
     expect(await handlers['process-tracks']({ userId: u.id })).toMatchObject({ tripsTouched: 1 });
     const before = (await t.db.query('SELECT count(*)::int AS n FROM visited_cells WHERE user_id = $1', [u.id])).rows[0].n;
     expect(before).toBeGreaterThan(2);
-    expect(await handlers['rebuild-coverage']({ userId: u.id })).toEqual({ cells: before });
+    // Rebuilding also re-snaps trips onto roads; this fake engine matches nothing.
+    expect(await handlers['rebuild-coverage']({ userId: u.id })).toMatchObject({ cells: before, matched: 0, unmatched: 1 });
   });
 
   it('purge-deleted removes expired data and re-queues users with stale unassigned points', async () => {
