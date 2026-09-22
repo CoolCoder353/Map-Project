@@ -8,11 +8,11 @@ What has been checked, how to repeat it, and what is still open. Update this whe
 |---|---|---|
 | Lint | `pnpm lint` | clean |
 | Types (7 packages) | `pnpm typecheck` | clean |
-| Unit tests | `pnpm test:unit` | passing, 78 tests (geo/H3/novelty/segmentation, schemas, nav engine with simulated drives, OSM tag mapping, state/suburb boundaries, category words, opening hours across time zones, GraphHopper error wording, mobile queue and API client) |
-| Android screen tests | `pnpm test:mobile` | passing, 15 tests (sign-in, settings tracking toggle and permission paths, feedback entry and form, route card) |
+| Unit tests | `pnpm test:unit` | passing, 84 tests (geo/H3/novelty/segmentation, schemas, nav engine with simulated drives, OSM tag mapping, state/suburb boundaries, category words, opening hours across time zones, GraphHopper error wording, mobile queue and API client) |
+| Android screen tests | `pnpm test:mobile` | passing, 22 tests (sign-in, settings toggles and permission paths, feedback form, contacts search, map error boundary, route card) |
 | Integration tests, PGlite | `pnpm test:integration` | passing, 96 (+4 against the live Australia graph): search ranking over 400 same-name stores, category words, feedback API and roles, pipeline location fill |
 | Integration tests, real Postgres 17 | `TEST_DATABASE_URL=… pnpm test:integration` | passing (68 tests; run against `postgres:17-bookworm`) |
-| Web end-to-end | `pnpm --filter @wayfinder/web e2e` | passing (8 specs) |
+| Web end-to-end | `pnpm --filter @wayfinder/web e2e` | passing (9 specs) |
 | Android JS bundle | `pnpm --filter @wayfinder/mobile exec expo export --platform android` | builds (Hermes bytecode) |
 | Web production build | `pnpm --filter @wayfinder/web build` | builds; smoke-tested under `vite preview` |
 | Design detector | `impeccable detect --json src` (in `apps/web`) | no findings |
@@ -31,6 +31,8 @@ What has been checked, how to repeat it, and what is still open. Update this whe
 - Settings → Back returns to the same planned trip.
 - Admin switches feedback on → a user sends a bug report with the auto-captured screenshot and map view → admin sees it, sets Planned, adds a note → views and changes are in the audit log → switched off, the menu item is gone for new sessions.
 - Search suggestions show type, suburb, state, postcode, distance and opening hours.
+- Coverage shows roads travelled, with kilometres of road in the stats.
+- The start field fills itself with "Your location" when the browser already allows it, and stays empty when it doesn't.
 
 ### Notable bugs these checks caught
 
@@ -44,6 +46,9 @@ What has been checked, how to repeat it, and what is still open. Update this whe
 - Vector tiles were labelled gzip after pmtiles had already decompressed them, so browsers could not decode any real tile (found by `verify:stack`).
 - Routes and the coverage fog were drawn over place labels; in dark mode the fog made unexplored place names unreadable (found in live screenshots).
 - On the real data, search listed shops twice (point + building), let "Erin Street" beat "Main Street", missed "St" for Street, and took 3–6 s (the planner scanned all 6.1M rows nearest-first). All fixed; 80–140 ms now.
+- Named places carrying a street address were imported as plain addresses, losing their names: 22% of named places in Queensland. Found by a user report, measured against the extract.
+- Explore aimed detours at cul-de-sacs, so routes asked for U-turns; and it sent cars down tracks and service roads.
+- A loop whose turning point had no mapped street within 3 km was dropped, so round trips vanished in sparsely mapped areas (caught by the E2E suite).
 - The explore benchmark could never finish (a 40 km disc cannot hold 50k res-9 cells), and 21 integration tests were also running in the unit project.
 
 ## Live stack (Docker, real data)

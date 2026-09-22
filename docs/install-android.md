@@ -42,6 +42,9 @@ Nothing is collected unless you agree to it.
 | **Location (all the time)** | Only if you turn on background tracking | Recording where you've been while the app is closed |
 | **Notifications** | First launch | The "recording your travels" notice while tracking runs |
 | **Photos** | Only when you attach a screenshot to feedback | Picking that image |
+| **Contacts** | Only if you turn on contacts search | Finding a contact's saved address when you type their name |
+
+**Searching your contacts is off until you turn it on.** With it on (**Settings → Search my contacts**), typing a contact's name offers their saved address. Contacts are read on the phone; only the address of the one you pick is sent to the server, to be located.
 
 **Background tracking is off until you turn it on.** To use it: **Settings** tab → **Background tracking**. Android asks for "Allow all the time" as a separate step, and the app won't record without it.
 
@@ -51,7 +54,7 @@ For reliable recording, also allow the app to run in the background: **Settings 
 
 - **Plan** searches and compares the fastest route with ways you haven't been.
 - **Discover** suggests places near you in areas you haven't reached.
-- **Coverage** shows the hexagons you've travelled through.
+- **Coverage** shows the roads you've travelled.
 - Routes you send from the website appear under **Settings → Planned routes**.
 
 Routes, search and the map cover **Queensland only**. Ask for another state if you need one.

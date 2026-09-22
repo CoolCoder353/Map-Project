@@ -28,6 +28,7 @@ docker run --rm -t \
   -v wayfinder-apk-pnpm-store:/pnpm-store \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   -e EXPO_PUBLIC_API_URL -e CI=1 \
+  -e GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g" \
   -e ANDROID_KEYSTORE_PASSWORD -e ANDROID_KEY_ALIAS -e ANDROID_KEY_PASSWORD \
   "$IMAGE" sh -c '
     set -eu

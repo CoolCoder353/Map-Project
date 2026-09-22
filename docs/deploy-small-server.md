@@ -88,6 +88,13 @@ cd /opt/wayfinder/infra && docker compose -f docker-compose.yml -f docker-compos
 
 Monthly, or whenever you like: refresh Australia on the big machine (Admin → Jobs & data, or `refresh-cli.js`), re-run steps 1 and 3 above, then `deploy-small.sh data` and `deploy-small.sh places`. The server keeps serving throughout. Routing restarts for about a minute when the new graph goes in, and search is briefly empty while places load (about 20 s).
 
+## Keeping the phone app in step
+
+The Android app and the server move together: the app is built from the same checkout
+(`infra/scripts/build-apk.sh`). After a release that changes the API's shape — the coverage
+switch from hexagons to roads did — install the new APK, because an older build reads fields
+that no longer exist.
+
 ## What is deployed now
 
 Queensland (OSM 2026-09-16), 871,322 places, on a 2 GB / 14 GB VM: 1.26 GB RAM and 5.2 GB disk in use. Caddy sees the proxy at 192.168.50.34 and takes the forwarded client IP and `https` from it.

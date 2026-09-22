@@ -20,7 +20,8 @@ const config: ExpoConfig = {
       'FOREGROUND_SERVICE_LOCATION',
       'POST_NOTIFICATIONS',
     ],
-    blockedPermissions: ['android.permission.RECORD_AUDIO'],
+    // The contacts plugin asks for write access as well; the app only ever reads.
+    blockedPermissions: ['android.permission.RECORD_AUDIO', 'android.permission.WRITE_CONTACTS'],
   },
   plugins: [
     'expo-router',

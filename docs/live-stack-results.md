@@ -66,6 +66,24 @@ Sample queries from Braddon (Canberra), straight against the live database:
 | Sydney | Sydney · City · NSW · 246 km, then Sydney Avenue, Barton | 79 ms |
 | 12 Lonsdale St | Lonsdale Street · Braddon ACT 2612 (St read as Street) | 98 ms |
 
+## After the first user reports (2026-09-23)
+
+Places re-imported with the name-versus-address fix: **892,695 places**, of which POIs rose from
+77,154 to **96,413** (+19,259 names recovered). Both `Gumdale State School` and `Belmont State
+School` are searchable by name again, with their suburb and postcode.
+
+Explore U-turns, from Brisbane with a 25-minute budget:
+
+| Trip | Before | After |
+|---|---|---|
+| Redcliffe | 1 U-turn among 3 candidates | 0 across all 3 |
+| Ipswich | 0 | 0 |
+| Carindale | 1 and 2 | one candidate with 2 no longer offered |
+
+Road coverage, end to end on the live server: a 40-point trip uploaded through the API was
+segmented, map-matched and recorded as **37 roads / 2.6 km** within a minute. Asking for the same
+route again then reported **0.86 km new (24.7%)** instead of 3.49 km — novelty measured by road.
+
 ## Map over real tiles
 
 Screenshots are in `apps/web/.impeccable/review/live-*.png` (light and dark). Route chips read
