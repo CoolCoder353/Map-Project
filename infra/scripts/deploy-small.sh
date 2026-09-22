@@ -35,7 +35,9 @@ need_space() { # need_space <MB> <what>
 
 images() {
   echo "== building images"
-  (cd "$ROOT/infra" && $DC --env-file /dev/null build api worker web graphhopper) >/dev/null
+  # Building needs no real settings, but the compose files insist the variables exist.
+  (cd "$ROOT/infra" && POSTGRES_PASSWORD=build JWT_SECRET=build-only-build-only-build-only-0000 \
+    SITE_ADDRESS=build ACME_EMAIL=build PUBLIC_URL=http://build $DC build api worker web graphhopper) >/dev/null
   size=$(docker image inspect $IMAGES --format '{{.Size}}' | awk '{s += $1} END {printf "%d", s / 1048576}')
   need_space $((size + 500)) "images (${size} MB)"
   echo "== sending images (${size} MB unpacked)"
