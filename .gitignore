@@ -28,3 +28,4 @@ infra/android/*.keystore
 
 # pnpm store left by older APK builds
 .pnpm-store/
+infra/android/keystore.env
