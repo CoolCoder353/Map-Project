@@ -44,8 +44,10 @@ const config: ExpoConfig = {
   ],
   experiments: { typedRoutes: false },
   extra: {
-    // Default server; users can change it on the sign-in screen.
-    apiUrl: process.env.EXPO_PUBLIC_API_URL ?? 'https://maps.example.com',
+    // The server this build talks to, pre-filled on the sign-in screen and changeable there.
+    // Empty when unset: an empty box asks the user for an address, where a placeholder would
+    // quietly send every request to a domain that isn't theirs.
+    apiUrl: process.env.EXPO_PUBLIC_API_URL ?? '',
   },
 };
 

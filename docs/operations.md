@@ -61,6 +61,18 @@ API_URL=https://maps.example.com ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=... 
 
 Checks health, map style, tiles, glyphs, search, reverse geocoding, fastest/explore/round-trip routing and discover against the real graph.
 
+The phone app ships separately from the server, so it can fall out of step with it. This calls
+every endpoint the app uses, with the app's own request shapes, and checks each reply against the
+schemas the app parses with — including that the map style hands out absolute URLs, which Android
+needs and a browser does not:
+
+```bash
+API_URL=https://maps.your-group.org EMAIL=you@example.com PASSWORD=... pnpm verify:mobile
+```
+
+Run it after any release that changes the API, and before handing out a new APK. It signs in as an
+ordinary user, records five points and files one piece of feedback, so use a throwaway account.
+
 Performance for a heavy user (50,000 visited hexagons):
 
 ```bash

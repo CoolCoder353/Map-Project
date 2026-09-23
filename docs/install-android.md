@@ -69,7 +69,13 @@ If you see **"App not installed"** while updating, the new file was signed with 
 
 **"App not installed" on a first install** — usually not enough free space, or a part-downloaded file. Free some space and copy the file again.
 
-**"Can't reach the server" / "No connection to the server"** — check the phone has internet, and that the **Server** box reads exactly `https://maps.paulsjones.com`.
+**"Can't reach …"** — the message names the address the app tried. If it isn't
+`maps.paulsjones.com`, the app is pointed at the wrong server: sign out, correct the **Server**
+box on the sign-in screen, and sign in again. (Signed in, the address is shown at the top of
+**Settings**.) If the address is right, check the phone has internet.
+
+**"No server address set"** — the file you installed was built without a server address. Ask for
+a corrected APK rather than typing an address you aren't sure of.
 
 **"There is no road or path near your start"** — you (or the destination) are outside Queensland, or too far from a mapped road.
 

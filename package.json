@@ -22,7 +22,8 @@
     "seed:demo": "tsx --conditions=development scripts/seed-demo.ts",
     "dev:fake-gh": "tsx --conditions=development scripts/fake-graphhopper.ts",
     "bench:explore": "tsx --conditions=development scripts/bench-explore.ts",
-    "verify:stack": "tsx --conditions=development scripts/verify-stack.ts"
+    "verify:stack": "tsx --conditions=development scripts/verify-stack.ts",
+    "verify:mobile": "tsx --conditions=development scripts/verify-mobile-contract.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
@@ -38,6 +39,7 @@
     "@wayfinder/core": "workspace:*",
     "@wayfinder/shared": "workspace:*",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^16.0.0"
+    "globals": "^16.0.0",
+    "zod": "^4.6.5"
   }
 }

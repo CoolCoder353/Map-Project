@@ -90,10 +90,18 @@ Monthly, or whenever you like: refresh Australia on the big machine (Admin → J
 
 ## Keeping the phone app in step
 
-The Android app and the server move together: the app is built from the same checkout
-(`infra/scripts/build-apk.sh`). After a release that changes the API's shape — the coverage
-switch from hexagons to roads did — install the new APK, because an older build reads fields
-that no longer exist.
+The Android app and the server move together: the app is built from the same checkout. After a
+release that changes the API's shape — the coverage switch from hexagons to roads did — install
+the new APK, because an older build reads fields that no longer exist.
+
+```bash
+EXPO_PUBLIC_API_URL=https://maps.paulsjones.com infra/scripts/build-apk.sh
+API_URL=https://maps.paulsjones.com EMAIL=… PASSWORD=… pnpm verify:mobile
+```
+
+The address is baked into the APK at build time and is what the app talks to, so pass the real
+one. The script refuses a documentation address and checks the finished file points where you
+meant; `verify:mobile` then proves the server still answers everything the app asks for.
 
 ## What is deployed now
 

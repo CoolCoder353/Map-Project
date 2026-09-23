@@ -60,4 +60,35 @@ describe('mobile API client', () => {
     expect(stored).toBeNull();
     expect(sessions).toEqual([null]);
   });
+
+  it('names the server it could not reach, so a wrong address is obvious', async () => {
+    const api = createApiClient({
+      baseUrl: async () => 'https://maps.example.com',
+      fetch: (async () => {
+        throw new TypeError('Network request failed');
+      }) as unknown as typeof fetch,
+      tokens: { getRefreshToken: async () => null, setRefreshToken: async () => undefined },
+    });
+    await expect(api.request('/api/config')).rejects.toThrow(/maps\.example\.com/);
+  });
+
+  it('passes a cancelled request through instead of blaming the server', async () => {
+    const api = createApiClient({
+      baseUrl: async () => 'https://maps.test',
+      fetch: (async () => {
+        throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+      }) as unknown as typeof fetch,
+      tokens: { getRefreshToken: async () => null, setRefreshToken: async () => undefined },
+    });
+    await expect(api.request('/api/search')).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('asks for a server address when the build has none, rather than failing on an invalid URL', async () => {
+    const api = createApiClient({
+      baseUrl: async () => '',
+      fetch: (async () => new Response('{}')) as unknown as typeof fetch,
+      tokens: { getRefreshToken: async () => null, setRefreshToken: async () => undefined },
+    });
+    await expect(api.request('/api/config')).rejects.toThrow(/No server address set/);
+  });
 });

@@ -153,8 +153,13 @@ Run inside the `api` container: `node dist/cli.js migrate | bootstrap-admin <ema
 Build a sideloadable APK inside Docker (no local Android SDK):
 
 ```bash
-EXPO_PUBLIC_API_URL=https://maps.example.com infra/scripts/build-apk.sh
+EXPO_PUBLIC_API_URL=https://maps.your-group.org infra/scripts/build-apk.sh
 ```
+
+**Use your own address.** It is baked into the app as the server it talks to, so an APK built with
+an example address cannot reach anything — every screen fails with "Can't reach …". The script
+refuses documentation addresses and reads the address back out of the finished APK to prove the
+file you hand out points where you meant.
 
 The APK lands in `dist/wayfinder.apk`. For a signed build, place a keystore at `infra/android/release.keystore` and set `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. Friends can change the server address on the sign-in screen.
 

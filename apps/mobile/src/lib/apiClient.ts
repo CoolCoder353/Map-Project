@@ -38,7 +38,11 @@ export function createApiClient(opts: ApiClientOptions) {
   let refreshing: Promise<AuthResponse | null> | null = null;
 
   const url = async (path: string, query?: RequestOptions['query']) => {
-    const u = new URL(path, `${await opts.baseUrl()}/`);
+    const base = await opts.baseUrl();
+    // Without a server there is nothing to resolve a path against, which would otherwise throw
+    // an unreadable "Invalid URL" from deep inside a screen.
+    if (!/^https?:\/\//i.test(base)) throw new ApiError(0, 'no_server', 'No server address set. Sign out and enter the address of your group’s server.');
+    const u = new URL(path, `${base}/`);
     for (const [k, v] of Object.entries(query ?? {})) if (v !== undefined && v !== null && v !== '') u.searchParams.set(k, String(v));
     return u.toString();
   };
@@ -60,17 +64,26 @@ export function createApiClient(opts: ApiClientOptions) {
     opts.onSession?.(auth);
   };
 
-  const raw = async (path: string, init: RequestOptions, withAuth: boolean) =>
-    doFetch(await url(path, init.query), {
-      method: init.method ?? 'GET',
-      headers: {
-        'x-client': 'mobile',
-        ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}),
-        ...(withAuth && accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
-      },
-      body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
-      signal: init.signal,
-    });
+  const raw = async (path: string, init: RequestOptions, withAuth: boolean) => {
+    const target = await url(path, init.query);
+    try {
+      return await doFetch(target, {
+        method: init.method ?? 'GET',
+        headers: {
+          'x-client': 'mobile',
+          ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}),
+          ...(withAuth && accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+        signal: init.signal,
+      });
+    } catch (err) {
+      // A cancelled request is not a failure to reach the server.
+      if ((err as Error).name === 'AbortError') throw err;
+      // Name the server: the usual cause is that the app is pointed at the wrong one.
+      throw new ApiError(0, 'offline', `Can’t reach ${new URL(target).host}. Check the server address and your connection.`);
+    }
+  };
 
   async function refresh(): Promise<AuthResponse | null> {
     refreshing ??= (async () => {
