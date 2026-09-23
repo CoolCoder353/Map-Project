@@ -105,7 +105,7 @@ meant; `verify:mobile` then proves the server still answers everything the app a
 
 ## What is deployed now
 
-Queensland (OSM 2026-09-16), 871,322 places, on a 2 GB / 14 GB VM: 1.26 GB RAM and 5.2 GB disk in use. Caddy sees the proxy at 192.168.50.34 and takes the forwarded client IP and `https` from it.
+Queensland (OSM 2026-09-16), 892,695 places, on a 2 GB / 14 GB VM: about 1.5 GB RAM and 5.6 GB disk in use. Caddy sees the proxy at 192.168.50.34 and takes the forwarded client IP and `https` from it.
 
 ## Checking it
 

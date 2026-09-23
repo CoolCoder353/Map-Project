@@ -87,7 +87,18 @@ route again then reported **0.86 km new (24.7%)** instead of 3.49 km — novelty
 ## Map over real tiles
 
 Screenshots are in `apps/web/.impeccable/review/live-*.png` (light and dark). Route chips read
-clearly over the base map. Routes and the fog now sit beneath place labels.
+clearly over the base map. Routes and travelled roads sit beneath place labels.
+
+## 2026-09-23 — the app against the server
+
+`pnpm verify:mobile`, added after an APK went out built against the documentation's example
+address, calls every endpoint the Android app uses with the app's own request shapes and checks
+each reply against the schemas the app parses with. **15/15 against `maps.paulsjones.com`**,
+including the map style handing out absolute URLs, which the native map needs and a browser does
+not. `pnpm verify:stack` passes 19/19 on the same deployment.
+
+Recorded points uploaded through the API were segmented, matched to 3 roads and drawn on the
+website's coverage map within a minute, and the trip reported the roads it was first on.
 
 ## Not yet checked
 
