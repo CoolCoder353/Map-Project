@@ -147,7 +147,9 @@ export async function matchTrips(
     }
     const travelled = waysOfPath(path);
     const fresh = await recordTravelledWays(db, userId, travelled, trip.mode, trip.started_at);
-    await db.query('UPDATE trips SET matched_geometry = $2::jsonb, matched_m = $3, new_roads = $4 WHERE id = $1', [
+    // Added, not set: a trip still being recorded is matched again each time it grows, and the
+    // roads it was first on earlier are no longer new by then.
+    await db.query('UPDATE trips SET matched_geometry = $2::jsonb, matched_m = $3, new_roads = new_roads + $4 WHERE id = $1', [
       trip.id,
       JSON.stringify(path.points.coordinates),
       path.distance,

@@ -126,6 +126,8 @@ describe('track ingestion and coverage', () => {
     const { items } = await tracks.listTrips(t.db, u.id, 10);
     expect(items).toHaveLength(1);
     expect([...(await roads.visitedWayIds(t.db, u.id))].sort()).toEqual([201, 202]);
+    // Both roads count as new for this trip: the one it started on and the one it reached later.
+    expect(items[0]!.newRoads).toBe(2);
     const row = (
       await t.db.query<{ n: number; point_count: number }>(
         'SELECT jsonb_array_length(matched_geometry) AS n, point_count FROM trips WHERE user_id = $1',
