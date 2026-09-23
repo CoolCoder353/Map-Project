@@ -11,7 +11,7 @@ export const AdminUserSchema = z.object({
   disabledAt: z.string().nullable(),
   deletedAt: z.string().nullable(),
   tripCount: z.number().int(),
-  cellCount: z.number().int(),
+  roadCount: z.number().int(),
   settings: UserSettingsSchema,
 });
 export type AdminUser = z.infer<typeof AdminUserSchema>;

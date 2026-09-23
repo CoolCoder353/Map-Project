@@ -1,4 +1,4 @@
-import { Hexagon, LocateFixed, Minus, Plus } from 'lucide-react';
+import { LocateFixed, Minus, Plus, Route } from 'lucide-react';
 import { useState } from 'react';
 import { errorMessage } from '../lib/api';
 import { currentPosition } from '../lib/geolocation';
@@ -20,7 +20,7 @@ export function MapControls({ showCoverageToggle }: { showCoverageToggle: boolea
           title="Explored areas"
           onClick={() => map.setCoverageEnabled(!map.coverageEnabled)}
         >
-          <Hexagon />
+          <Route />
         </button>
       )}
       <button

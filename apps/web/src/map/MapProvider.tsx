@@ -159,7 +159,7 @@ export function MapProvider({
     }
 
     // Lines and fills go beneath the basemap's labels, as in other map apps, so place names stay
-    // readable over routes and through the fog. Callouts, pins and markers are added on top.
+    // readable over routes and travelled roads. Callouts, pins and markers are added on top.
     const firstLabel = map.getStyle().layers.find((l) => l.type === 'symbol')?.id;
     const addUnderLabels = (layer: maplibregl.AddLayerObject) => map.addLayer(layer, firstLabel);
 

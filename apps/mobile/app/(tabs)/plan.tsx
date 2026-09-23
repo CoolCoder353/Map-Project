@@ -27,9 +27,13 @@ export default function Plan() {
   const [tab, setTab] = useState<Tab>('directions');
   const [mode, setMode] = useState<Mode>(user?.settings.defaultMode ?? 'car');
   const [from, setFrom] = useState<ChosenPlace | null>(null);
-  // Start where you are, once a position is known and the field is still empty.
+  // Start where you are, once a position is known — but only the first time, so clearing the
+  // field doesn't immediately fill it in again.
+  const filledStart = useRef(false);
   useEffect(() => {
-    if (here && !from) setFrom({ name: 'Your location', description: '', location: here });
+    if (!here || filledStart.current || from) return;
+    filledStart.current = true;
+    setFrom({ name: 'Your location', description: '', location: here });
   }, [here, from]);
   const [to, setTo] = useState<ChosenPlace | null>(null);
   const [budget, setBudget] = useState(user?.settings.exploreBudgetMin ?? 15);

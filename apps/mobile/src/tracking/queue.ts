@@ -43,7 +43,9 @@ export function toBatchRequest(batch: ClaimedBatch): TrackBatchRequest {
       ts: Math.round(p.ts),
       lon: p.lon,
       lat: p.lat,
-      accuracyM: p.accuracyM,
+      // A fix from cell towers alone can claim tens of kilometres of accuracy, which the server
+      // refuses; keep the point and cap the figure rather than losing the batch.
+      accuracyM: p.accuracyM === null || p.accuracyM < 0 ? null : Math.min(10_000, p.accuracyM),
       speedMps: p.speedMps === null || p.speedMps < 0 ? null : Math.min(200, p.speedMps),
       headingDeg: p.headingDeg === null || p.headingDeg < 0 ? null : p.headingDeg % 360,
     })),
@@ -54,6 +56,8 @@ export interface FlushResult {
   uploaded: number;
   batches: number;
   remaining: number;
+  /** Points the server refused as invalid, which were thrown away rather than retried. */
+  dropped: number;
   error: unknown;
 }
 
@@ -68,6 +72,7 @@ export async function flushQueue(
   const maxBatches = opts.maxBatches ?? 50;
   let uploaded = 0;
   let batches = 0;
+  let dropped = 0;
   let error: unknown = null;
   while (batches < maxBatches) {
     const batch = await store.claim(batchSize, newBatchId);
@@ -75,6 +80,14 @@ export async function flushQueue(
     try {
       await upload(toBatchRequest(batch));
     } catch (err) {
+      // The same batch is claimed again next time, so a batch the server will never accept
+      // would block every later point for good. Throw it away and keep the queue moving.
+      if ((err as { status?: number }).status === 400) {
+        await store.complete(batch.batchId);
+        dropped += batch.points.length;
+        batches++;
+        continue;
+      }
       error = err;
       break;
     }
@@ -82,7 +95,7 @@ export async function flushQueue(
     uploaded += batch.points.length;
     batches++;
   }
-  return { uploaded, batches, remaining: await store.count(), error };
+  return { uploaded, batches, remaining: await store.count(), dropped, error };
 }
 
 /** In-memory store (tests and fallback). */

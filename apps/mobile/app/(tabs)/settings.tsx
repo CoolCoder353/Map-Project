@@ -93,8 +93,14 @@ export default function SettingsScreen() {
             compact
             icon={RefreshCw}
             onPress={async () => {
-              const r = (await syncQueue()) as { error?: unknown } | null;
-              setMessage(r?.error ? errorMessage(r.error) : null);
+              const r = (await syncQueue()) as { error?: unknown; dropped?: number } | null;
+              setMessage(
+                r?.error
+                  ? errorMessage(r.error)
+                  : r?.dropped
+                    ? `${r.dropped} point${r.dropped === 1 ? '' : 's'} the server couldn’t accept were discarded.`
+                    : null,
+              );
               await refreshStatus();
               void qc.invalidateQueries({ queryKey: ['trips'] });
             }}

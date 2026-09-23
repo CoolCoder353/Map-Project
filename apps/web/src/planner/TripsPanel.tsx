@@ -53,7 +53,7 @@ export function TripsPanel() {
                           <Navigation aria-hidden /> Navigated
                         </span>
                       )}
-                      {t.newCells > 0 && <span className="badge badge-new">{t.newCells} new hexagons</span>}
+                      {t.newRoads > 0 && <span className="badge badge-new">{t.newRoads} new road{t.newRoads === 1 ? '' : 's'}</span>}
                     </span>
                   </span>
                   <ChevronRight aria-hidden className="trip-chevron" />

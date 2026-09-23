@@ -14,6 +14,11 @@ What people see is roads. Trips are snapped to the road network with GraphHopper
 - **Way ids, not edge ids.** GraphHopper's internal edge ids change on every rebuild; `osm_way_id` (a new encoded value in `graph.encoded_values`) does not.
 - **Novelty by road.** Routes are scored by asking the routing engine which ways each stretch uses, instead of sampling every 50 m and looking up hexagons.
 - **Stats in kilometres** of road travelled, and roads first travelled this week or month.
+- **Per trip**, `new_roads` counts the roads that trip was the first to travel, which is what a
+  trip shows in the list and on its own page. Trips are matched oldest first, so the credit goes
+  to the trip that actually got there first.
+- **A trip that grows is matched again.** Background uploads arrive in batches and extend a trip
+  that is still being recorded, so its old match is dropped and the whole trip is re-snapped.
 
 **Hexagons stay as an internal index.** The routing engine can only be told to avoid *areas* (a polygon in a custom model), not a list of roads, so explore still builds its "already visited" polygon and picks via areas from res-7 cells. Nobody sees them.
 

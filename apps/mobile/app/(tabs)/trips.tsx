@@ -39,7 +39,7 @@ export default function Trips() {
               <Text style={{ color: t.text, fontWeight: '600' }}>{formatDateTime(item.startedAt)} · {formatDistanceShort(item.distanceM)}</Text>
               <View style={{ flexDirection: 'row', gap: space[2], alignItems: 'center' }}>
                 <Small>{item.mode === 'car' ? 'Drive' : 'Walk'}{item.source === 'navigation' ? ', navigated' : ''}</Small>
-                {item.newCells > 0 ? <NewBadge text={`${item.newCells} new hexagons`} /> : null}
+                {item.newRoads > 0 ? <NewBadge text={`${item.newRoads} new road${item.newRoads === 1 ? '' : 's'}`} /> : null}
               </View>
             </View>
           </Pressable>

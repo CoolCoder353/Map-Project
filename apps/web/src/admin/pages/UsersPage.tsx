@@ -40,7 +40,7 @@ export function UsersPage() {
                 <th scope="col" className="hide-sm">Joined</th>
                 <th scope="col" className="hide-sm">Last seen</th>
                 <th scope="col" className="num-col">Trips</th>
-                <th scope="col" className="num-col hide-sm">Hexagons</th>
+                <th scope="col" className="num-col hide-sm">Roads</th>
                 <th scope="col" className="hide-sm">Tracking</th>
               </tr>
             </thead>
@@ -55,7 +55,7 @@ export function UsersPage() {
                   <td className="num hide-sm">{formatDate(u.createdAt)}</td>
                   <td className="num hide-sm">{formatRelative(u.lastSeenAt)}</td>
                   <td className="num-col num">{formatNumber(u.tripCount)}</td>
-                  <td className="num-col num hide-sm">{formatNumber(u.cellCount)}</td>
+                  <td className="num-col num hide-sm">{formatNumber(u.roadCount)}</td>
                   <td className="hide-sm">{u.settings.trackingEnabled ? 'On' : 'Off'}</td>
                 </tr>
               ))}

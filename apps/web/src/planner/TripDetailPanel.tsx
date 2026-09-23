@@ -82,7 +82,7 @@ export function TripDetailPanel() {
   const remove = useMutation({
     mutationFn: () => api(`/api/trips/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      toast('Trip deleted. Its hexagons are being removed from your coverage.');
+      toast('Trip deleted. The roads only it travelled are being removed from your coverage.');
       void qc.invalidateQueries({ queryKey: ['trips'] });
       void qc.invalidateQueries({ queryKey: ['coverage-stats'] });
       navigate('/trips');
@@ -105,7 +105,7 @@ export function TripDetailPanel() {
               {formatDateTime(t.startedAt)} – {formatTime(t.endedAt)} ({formatDuration((new Date(t.endedAt).getTime() - new Date(t.startedAt).getTime()) / 1000)})
             </p>
           </div>
-          {t.newCells > 0 && <p><span className="badge badge-new">{t.newCells} hexagons you’d never been to before</span></p>}
+          {t.newRoads > 0 && <p><span className="badge badge-new">{t.newRoads} road{t.newRoads === 1 ? '' : 's'} you’d never travelled before</span></p>}
 
           <div className="replay">
             <button type="button" className="icon-btn replay-play" aria-label={playing ? 'Pause replay' : 'Play replay'} onClick={() => {
@@ -155,7 +155,7 @@ export function TripDetailPanel() {
           <ConfirmDialog
             open={confirmDelete}
             title="Delete this trip?"
-            body={<p>The trip and its GPS points will be removed, and hexagons only this trip reached leave your coverage. It can be recovered for 7 days by an admin, then it’s gone for good.</p>}
+            body={<p>The trip and its GPS points will be removed, and roads only this trip travelled leave your coverage. It can be recovered for 7 days by an admin, then it’s gone for good.</p>}
             confirmLabel="Delete trip"
             danger
             busy={remove.isPending}

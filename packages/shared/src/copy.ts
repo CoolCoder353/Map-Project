@@ -62,7 +62,7 @@ const playful: CopyCatalog = {
   coverageIntro: 'Your explored world, one road at a time.',
   coverageEmpty: 'No roads travelled yet. Switch on tracking in the Android app and start filling the map in.',
   tripsEmpty: 'No expeditions logged yet. The Android app records them as you go.',
-  trackingOffHint: 'Tracking’s off, so your fog stays put. Switch it on in the Android app.',
+  trackingOffHint: 'Tracking’s off, so no new roads are being logged. Switch it on in the Android app.',
   sentToPhone: 'Packed and ready. Find it under Planned routes on your phone.',
 };
 
@@ -79,7 +79,7 @@ const minimal: CopyCatalog = {
   noRoundTrips: 'No loop found.',
   discoverIntro: 'Unvisited places in range.',
   discoverEmpty: 'No results.',
-  coverageIntro: 'Visited cells (H3 res 9).',
+  coverageIntro: 'Roads travelled.',
   coverageEmpty: 'No coverage recorded.',
   tripsEmpty: 'No trips.',
   trackingOffHint: 'Tracking off.',

@@ -1,6 +1,6 @@
 import type { LngLat, Role, TripDetail, TripSummary } from '@wayfinder/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Ban, Copy, Hexagon, KeyRound, LogOut, RotateCcw, Trash2, UserCheck } from 'lucide-react';
+import { ArrowLeft, Ban, Copy, KeyRound, LogOut, RotateCcw, Route, Trash2, UserCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -103,7 +103,7 @@ export function UserDetailPage() {
               <dl className="kv-grid">
                 <div><dt>Role</dt><dd>{u.role === 'user' ? 'User' : u.role === 'dev' ? 'Dev (read-only dashboard)' : 'Admin'}</dd></div>
                 <div><dt>Trips</dt><dd className="num">{formatNumber(u.tripCount)}</dd></div>
-                <div><dt>Hexagons explored</dt><dd className="num">{formatNumber(u.cellCount)}</dd></div>
+                <div><dt>Roads travelled</dt><dd className="num">{formatNumber(u.roadCount)}</dd></div>
                 <div><dt>Background tracking</dt><dd>{u.settings.trackingEnabled ? 'On' : 'Off'}</dd></div>
                 <div><dt>Default mode</dt><dd>{u.settings.defaultMode === 'car' ? 'Drive' : 'Walk'}</dd></div>
                 <div><dt>Explore budget</dt><dd className="num">{u.settings.exploreBudgetMin} min</dd></div>
@@ -125,7 +125,7 @@ export function UserDetailPage() {
                   )}
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => simple.mutate('revoke')}><LogOut aria-hidden /> Sign out everywhere</button>
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => simple.mutate('reset')}><KeyRound aria-hidden /> Password reset link</button>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => simple.mutate('rebuild')}><Hexagon aria-hidden /> Rebuild coverage</button>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => simple.mutate('rebuild')}><Route aria-hidden /> Rebuild coverage</button>
                   <button type="button" className="btn btn-danger-outline btn-sm" disabled={self} onClick={() => setPending({ kind: 'delete' })}><Trash2 aria-hidden /> Delete account</button>
                 </div>
               )}
@@ -162,7 +162,7 @@ export function UserDetailPage() {
                               <span className="place-body">
                                 <span className="place-name num">{formatDateTime(t.startedAt)}</span>
                                 <span className="place-meta num">
-                                  {t.mode === 'car' ? 'Drive' : 'Walk'} · {formatDistanceShort(t.distanceM)} · {t.newCells} new
+                                  {t.mode === 'car' ? 'Drive' : 'Walk'} · {formatDistanceShort(t.distanceM)} · {t.newRoads} new
                                 </span>
                               </span>
                             </button>

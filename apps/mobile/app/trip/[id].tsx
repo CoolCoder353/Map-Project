@@ -32,7 +32,7 @@ export default function Trip() {
     },
   });
   const confirm = () =>
-    Alert.alert('Delete this trip?', 'Its GPS points are removed and hexagons only this trip reached leave your coverage. An admin can restore it for 7 days.', [
+    Alert.alert('Delete this trip?', 'Its GPS points are removed and roads only this trip travelled leave your coverage. An admin can restore it for 7 days.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => del.mutate() },
     ]);
@@ -50,7 +50,7 @@ export default function Trip() {
           <>
             <Title>{trip.data.mode === 'car' ? 'Drive' : 'Walk'} · {formatDistanceShort(trip.data.distanceM)}</Title>
             <Body muted>{formatDateTime(trip.data.startedAt)}</Body>
-            {trip.data.newCells > 0 ? <NewBadge text={`${trip.data.newCells} hexagons you’d never been to before`} /> : null}
+            {trip.data.newRoads > 0 ? <NewBadge text={`${trip.data.newRoads} road${trip.data.newRoads === 1 ? '' : 's'} you’d never travelled before`} /> : null}
             <Button label="Delete trip" kind="danger" icon={Trash2} onPress={confirm} busy={del.isPending} style={{ alignSelf: 'flex-start' }} />
           </>
         ) : null}

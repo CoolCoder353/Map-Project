@@ -19,7 +19,7 @@ const clampTo = (v: number | null, max: number) => (v === null ? null : max > 0 
 
 interface AdminUserRow extends UserRow {
   trip_count: string;
-  cell_count: string;
+  road_count: string;
 }
 
 const toAdminUser = (r: AdminUserRow): AdminUser => ({
@@ -31,13 +31,13 @@ const toAdminUser = (r: AdminUserRow): AdminUser => ({
   disabledAt: iso(r.disabled_at),
   deletedAt: iso(r.deleted_at),
   tripCount: Number(r.trip_count),
-  cellCount: Number(r.cell_count),
+  roadCount: Number(r.road_count),
   settings: { ...DEFAULT_SETTINGS, ...r.settings },
 });
 
 const USER_SELECT = `SELECT u.*,
   (SELECT count(*) FROM trips t WHERE t.user_id = u.id AND t.deleted_at IS NULL) AS trip_count,
-  (SELECT count(*) FROM visited_cells v WHERE v.user_id = u.id) AS cell_count
+  (SELECT count(*) FROM visited_ways v WHERE v.user_id = u.id) AS road_count
   FROM users u`;
 
 export async function listUsers(

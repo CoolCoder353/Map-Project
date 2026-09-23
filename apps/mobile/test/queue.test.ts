@@ -61,8 +61,26 @@ describe('tracking queue', () => {
   });
 
   it('produces requests the server schema accepts, sanitising sensor values', () => {
-    const req = toBatchRequest({ batchId: ids(), points: [pt(1, { speedMps: -1, headingDeg: 400 })] });
+    const req = toBatchRequest({ batchId: ids(), points: [pt(1, { speedMps: -1, headingDeg: 400, accuracyM: 45_000 })] });
     expect(TrackBatchRequestSchema.safeParse(req).success).toBe(true);
-    expect(req.points[0]).toMatchObject({ speedMps: null, headingDeg: 40 });
+    expect(req.points[0]).toMatchObject({ speedMps: null, headingDeg: 40, accuracyM: 10_000 });
+  });
+
+  it('throws away a batch the server will never accept, so later points still upload', async () => {
+    const store = new MemoryQueueStore();
+    await store.append([pt(1), pt(2)]);
+    const sent: number[] = [];
+    let reject = true;
+    const upload = async (req: { points: unknown[] }) => {
+      sent.push(req.points.length);
+      if (reject) throw Object.assign(new Error('Invalid request'), { status: 400 });
+    };
+    const first = await flushQueue(store, upload, ids);
+    expect(first).toMatchObject({ uploaded: 0, dropped: 2, remaining: 0, error: null });
+
+    reject = false;
+    await store.append([pt(3)]);
+    const second = await flushQueue(store, upload, ids);
+    expect(second).toMatchObject({ uploaded: 1, dropped: 0, remaining: 0 });
   });
 });

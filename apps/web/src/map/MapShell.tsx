@@ -3,10 +3,10 @@ import {
   ChevronDown,
   ChevronUp,
   Compass,
-  Hexagon,
   History,
   Navigation,
   Repeat,
+  Route,
   TriangleAlert,
   X,
 } from 'lucide-react';
@@ -24,7 +24,7 @@ const TABS = [
   { to: '/directions', label: 'Directions', icon: Navigation },
   { to: '/loop', label: 'Round trip', icon: Repeat },
   { to: '/discover', label: 'Discover', icon: Compass },
-  { to: '/coverage', label: 'Coverage', icon: Hexagon },
+  { to: '/coverage', label: 'Coverage', icon: Route },
   { to: '/trips', label: 'Trips', icon: History },
 ];
 
