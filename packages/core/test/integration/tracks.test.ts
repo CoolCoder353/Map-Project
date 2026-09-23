@@ -75,7 +75,7 @@ describe('track ingestion and coverage', () => {
     expect(trip.mode).toBe('foot');
     expect(trip.distanceM).toBeGreaterThan(1900);
     expect(trip.distanceM).toBeLessThan(2100);
-    expect(trip.newCells).toBeGreaterThanOrEqual(5); // ~350 m wide cells along 2 km
+    expect(trip.newRoads).toBe(2); // both roads the walk was matched onto were new
 
     const stats = await coverage.getCoverageStats(t.db, u.id);
     // Coverage counts roads travelled; the walk was matched onto two of them.
@@ -84,8 +84,8 @@ describe('track ingestion and coverage', () => {
     expect(stats.byMode.footKm).toBe(stats.roadKm);
     expect(stats.byMode.carKm).toBe(0);
     expect(stats.tripCount).toBe(1);
-    // Hexagons stay as the internal index that steers explore.
-    expect(await cellCount(u.id)).toBe(trip.newCells);
+    // Hexagons stay as the internal index that steers explore, and are no longer reported.
+    expect(await cellCount(u.id)).toBeGreaterThanOrEqual(5); // ~350 m wide cells along 2 km
 
     const detail = await tracks.getTrip(t.db, u.id, trip.id);
     expect(detail.points).toHaveLength(walk.length);
@@ -113,6 +113,28 @@ describe('track ingestion and coverage', () => {
     expect(detail.points).toHaveLength(leg.length);
   });
 
+  it('re-matches a trip that grew, so roads driven after the first upload still count', async () => {
+    const u = await makeUser(t.db, 'grower@example.com');
+    const leg = drive(base, [148.5, -35.0], 0, 10, 20);
+    const half = Math.floor(leg.length / 2);
+    await tracks.ingestBatch(t.db, queue, u.id, { batchId: randomUUID(), source: 'background', points: leg.slice(0, half) });
+    await runJobs(u.id, fakeMatcher([201]));
+    // The rest of the same drive arrives later and extends the trip rather than starting a new one.
+    await tracks.ingestBatch(t.db, queue, u.id, { batchId: randomUUID(), source: 'background', points: leg.slice(half) });
+    await runJobs(u.id, fakeMatcher([201, 202]));
+
+    const { items } = await tracks.listTrips(t.db, u.id, 10);
+    expect(items).toHaveLength(1);
+    expect([...(await roads.visitedWayIds(t.db, u.id))].sort()).toEqual([201, 202]);
+    const row = (
+      await t.db.query<{ n: number; point_count: number }>(
+        'SELECT jsonb_array_length(matched_geometry) AS n, point_count FROM trips WHERE user_id = $1',
+        [u.id],
+      )
+    ).rows[0]!;
+    expect(row.n).toBe(row.point_count);
+  });
+
   it('navigation sessions become their own trips with the given mode', async () => {
     const u = await makeUser(t.db, 'nav@example.com');
     const session = randomUUID();
@@ -133,12 +155,15 @@ describe('track ingestion and coverage', () => {
     const { items } = await tracks.listTrips(t.db, u.id, 10);
     expect(items).toHaveLength(2);
     const before = await cellCount(u.id);
+    const victimCells = Number(
+      (await t.db.query<{ n: string }>('SELECT new_cells AS n FROM trips WHERE id = $1', [items[0]!.id])).rows[0]!.n,
+    );
     const victim = items[0]!;
 
     await tracks.softDeleteTrip(t.db, queue, u.id, victim.id);
     await runJobs(u.id);
     const afterDelete = await cellCount(u.id);
-    expect(afterDelete).toBe(before - victim.newCells);
+    expect(afterDelete).toBe(before - victimCells);
     expect((await tracks.listTrips(t.db, u.id, 10)).items).toHaveLength(1);
     await expect(tracks.getTrip(t.db, u.id, victim.id)).rejects.toMatchObject({ statusCode: 404 });
 

@@ -36,7 +36,8 @@ export const TripSummarySchema = z.object({
   startedAt: z.string(),
   endedAt: z.string(),
   distanceM: z.number(),
-  newCells: z.number().int(),
+  /** Roads this trip was the first to travel. */
+  newRoads: z.number().int(),
 });
 export type TripSummary = z.infer<typeof TripSummarySchema>;
 

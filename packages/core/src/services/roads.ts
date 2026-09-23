@@ -32,17 +32,20 @@ export function waysOfPath(path: GhPath): TravelledWay[] {
 
 const MODE_BIT = { car: 1, foot: 2 } as const;
 
-/** Record the ways a trip covered. Longer stretches of a way replace shorter ones. */
+/**
+ * Record the ways a trip covered. Longer stretches of a way replace shorter ones. Returns how
+ * many of them the person had never been on, which is what a trip reports as new.
+ */
 export async function recordTravelledWays(
   db: DbClient,
   userId: string,
   ways: readonly TravelledWay[],
   mode: 'car' | 'foot',
   when: Date,
-): Promise<void> {
-  if (ways.length === 0) return;
+): Promise<number> {
+  if (ways.length === 0) return 0;
   const boxes = ways.map((w) => bboxOf(w.geometry));
-  await db.query(
+  const r = await db.query<{ inserted: boolean }>(
     `INSERT INTO visited_ways (user_id, way_id, geometry, length_m, first_visited_at, last_visited_at, modes,
                                min_lon, min_lat, max_lon, max_lat)
      SELECT $1, w, g::jsonb, l, $5, $5, $6, b1, b2, b3, b4
@@ -57,7 +60,9 @@ export async function recordTravelledWays(
        min_lon = LEAST(visited_ways.min_lon, EXCLUDED.min_lon),
        min_lat = LEAST(visited_ways.min_lat, EXCLUDED.min_lat),
        max_lon = GREATEST(visited_ways.max_lon, EXCLUDED.max_lon),
-       max_lat = GREATEST(visited_ways.max_lat, EXCLUDED.max_lat)`,
+       max_lat = GREATEST(visited_ways.max_lat, EXCLUDED.max_lat)
+     -- xmax is zero on a row this statement inserted, so this says which roads are new.
+     RETURNING (xmax = 0) AS inserted`,
     [
       userId,
       ways.map((w) => String(w.wayId)),
@@ -71,6 +76,7 @@ export async function recordTravelledWays(
       boxes.map((b) => b[3]),
     ],
   );
+  return r.rows.filter((x) => x.inserted).length;
 }
 
 export interface CoveredRoad {
@@ -118,9 +124,10 @@ export async function matchTrips(
 ): Promise<{ matched: number; unmatched: number; ways: number }> {
   const trips = (
     await db.query<{ id: string; mode: 'car' | 'foot'; started_at: Date }>(
+      // Oldest first, so a road counts as new for the trip that first travelled it.
       `SELECT id, mode, started_at FROM trips
        WHERE user_id = $1 AND deleted_at IS NULL AND matched_geometry IS NULL
-       ORDER BY started_at DESC LIMIT $2`,
+       ORDER BY started_at LIMIT $2`,
       [userId, limit],
     )
   ).rows;
@@ -139,11 +146,12 @@ export async function matchTrips(
       continue;
     }
     const travelled = waysOfPath(path);
-    await recordTravelledWays(db, userId, travelled, trip.mode, trip.started_at);
-    await db.query('UPDATE trips SET matched_geometry = $2::jsonb, matched_m = $3 WHERE id = $1', [
+    const fresh = await recordTravelledWays(db, userId, travelled, trip.mode, trip.started_at);
+    await db.query('UPDATE trips SET matched_geometry = $2::jsonb, matched_m = $3, new_roads = $4 WHERE id = $1', [
       trip.id,
       JSON.stringify(path.points.coordinates),
       path.distance,
+      fresh,
     ]);
     matched++;
     ways += travelled.length;

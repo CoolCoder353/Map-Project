@@ -213,8 +213,11 @@ export async function processUserTracks(db: Db, userId: string): Promise<{ trips
         if (continues) {
           tripId = existing!.id;
           const geometry = displayGeometry([...existing!.geometry, ...toGeometry(newPts)]);
+          // The trip is longer than when it was last snapped to roads, so drop the old match:
+          // otherwise everything travelled after the first upload never counts as road covered.
           await tx.query(
-            `UPDATE trips SET ended_at = $2, distance_m = distance_m + $3, point_count = point_count + $4, geometry = $5
+            `UPDATE trips SET ended_at = $2, distance_m = distance_m + $3, point_count = point_count + $4, geometry = $5,
+                              matched_geometry = NULL, matched_m = 0
              WHERE id = $1`,
             [tripId, new Date(seg[seg.length - 1]!.ts), lengthM, newPts.length, JSON.stringify(geometry)],
           );
@@ -270,7 +273,7 @@ export async function rebuildCoverage(db: Db, userId: string): Promise<{ cells: 
     await tx.query('DELETE FROM visited_cells WHERE user_id = $1', [userId]);
     // Roads are re-matched afterwards (see roadService.matchTrips).
     await tx.query('DELETE FROM visited_ways WHERE user_id = $1', [userId]);
-    await tx.query('UPDATE trips SET matched_geometry = NULL, matched_m = 0 WHERE user_id = $1', [userId]);
+    await tx.query('UPDATE trips SET matched_geometry = NULL, matched_m = 0, new_roads = 0 WHERE user_id = $1', [userId]);
     const trips = (
       await tx.query<{ id: string; mode: Mode }>(
         'SELECT id, mode FROM trips WHERE user_id = $1 AND deleted_at IS NULL ORDER BY started_at',
@@ -300,7 +303,7 @@ interface TripListRow {
   started_at: Date;
   ended_at: Date;
   distance_m: number;
-  new_cells: number;
+  new_roads: number;
 }
 
 const toSummary = (r: TripListRow): TripSummary => ({
@@ -310,7 +313,7 @@ const toSummary = (r: TripListRow): TripSummary => ({
   startedAt: r.started_at.toISOString(),
   endedAt: r.ended_at.toISOString(),
   distanceM: r.distance_m,
-  newCells: r.new_cells,
+  newRoads: r.new_roads,
 });
 
 export async function listTrips(
@@ -322,7 +325,7 @@ export async function listTrips(
   const before = cursor ? new Date(cursor) : null;
   const rows = (
     await db.query<TripListRow>(
-      `SELECT id, mode, source, started_at, ended_at, distance_m, new_cells FROM trips
+      `SELECT id, mode, source, started_at, ended_at, distance_m, new_roads FROM trips
        WHERE user_id = $1 AND deleted_at IS NULL AND ($2::timestamptz IS NULL OR started_at < $2)
        ORDER BY started_at DESC LIMIT $3`,
       [userId, before, limit + 1],
@@ -336,7 +339,7 @@ export async function getTrip(db: DbClient, userId: string, tripId: string, incl
   if (!/^[0-9a-f-]{36}$/i.test(tripId)) throw notFound('Trip not found');
   const trip = (
     await db.query<TripListRow & { geometry: LngLat[] }>(
-      `SELECT id, mode, source, started_at, ended_at, distance_m, new_cells, geometry FROM trips
+      `SELECT id, mode, source, started_at, ended_at, distance_m, new_roads, geometry FROM trips
        WHERE id = $1 AND user_id = $2 AND ($3 OR deleted_at IS NULL)`,
       [tripId, userId, includeDeleted],
     )
