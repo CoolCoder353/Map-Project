@@ -77,7 +77,9 @@ routes; nothing user-facing shows them.
 - **Speed limits:** every route carries GraphHopper's `max_speed` as `speedLimits`, and Android
   turn-by-turn shows the limit of the road you're on. A short unknown stretch between two known
   roads (a junction) keeps the limit before it; longer unknown ones show none.
-- **Round trip:** loops through unexplored areas around the start.
+- **Round trip:** loops through unexplored areas around the start. Driving loops that need a
+  U-turn aren't offered, so when the first six directions leave fewer than three loops, the other
+  six are tried, then the 15° directions between them.
 - **Discover:** an isochrone for the time budget, then places in areas the person hasn't reached.
 
 ### Place search

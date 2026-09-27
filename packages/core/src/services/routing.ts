@@ -14,6 +14,7 @@ import {
   bboxToCells,
   bigIntToCell,
   cellToBigInt,
+  destination,
   haversineM,
   pickExploreViaPoints,
   pointInRing,
@@ -352,15 +353,33 @@ export async function roundTrips(
   const bearings = roundTripBearings(req.start, radius, unexploredAt, 6);
   const candidates = [...probe, ...(await tryRoutes(deps, await loopRequests(bearings, radius), 'roundtrip.candidate'))];
 
-  const ranked = rankRoundTripCandidates(
-    candidates.map((c) => ({
-      candidate: c,
-      durationS: c.path.time / 1000,
-      uTurns: c.uTurns,
-      novelty: noveltyOf(c.path, isVisited, visitedWays),
-    })),
-    { targetS, tolerance: 0.2, limit: 3, maxUTurns: MAX_UTURNS[req.mode] },
-  );
+  const LOOPS = 3;
+  const rank = () =>
+    rankRoundTripCandidates(
+      candidates.map((c) => ({
+        candidate: c,
+        durationS: c.path.time / 1000,
+        uTurns: c.uTurns,
+        novelty: noveltyOf(c.path, isVisited, visitedWays),
+      })),
+      { targetS, tolerance: 0.2, limit: LOOPS, maxUTurns: MAX_UTURNS[req.mode] },
+    );
+  let ranked = rank();
+  if (req.mode === 'car') {
+    // Driving loops that need a U-turn aren't offered, which can leave too few from the
+    // directions tried first. Try the rest, then the directions between them, only as needed.
+    const tried = new Set([...probeBearings, ...bearings]);
+    const byUnexplored = (bs: number[]) => bs.sort((a, b) => unexploredAt(destination(req.start, b, radius)) - unexploredAt(destination(req.start, a, radius)));
+    const more = [
+      roundTripBearings(req.start, radius, unexploredAt, 12).filter((b) => !tried.has(b)),
+      byUnexplored(Array.from({ length: 12 }, (_, i) => i * 30 + 15)),
+    ];
+    for (const next of more) {
+      if (ranked.length >= LOOPS || next.length === 0) break;
+      candidates.push(...(await tryRoutes(deps, await loopRequests(next, radius), 'roundtrip.candidate')));
+      ranked = rank();
+    }
+  }
   await recordRequest(deps.db, userId, 'roundtrip', req.mode);
   return ranked.map((r) =>
     toRoute(r.candidate.path, {

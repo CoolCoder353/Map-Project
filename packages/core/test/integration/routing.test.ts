@@ -227,11 +227,11 @@ describe('routing service (fake GraphHopper)', () => {
     const turnOffs: LngLat[] = [];
 
     /** A route with a dip into each dead-end via, and a U-turn instruction at the end of each. */
-    function withDeadEnds(points: LngLat[], turnAroundAt: (via: LngLat) => boolean): GhPath {
+    function withDeadEnds(points: LngLat[], turnAroundAt: (via: LngLat, points: LngLat[]) => boolean): GhPath {
       const legs: LngLat[] = [points[0]!];
       const deadEnds: Array<{ via: LngLat; junction: LngLat }> = [];
       for (const p of points.slice(1, -1)) {
-        if (turnAroundAt(p)) {
+        if (turnAroundAt(p, points)) {
           // The dead end runs off at right angles to the way the route was heading.
           const junction = destination(p, bearingDeg(legs.at(-1)!, p) + 90, 300);
           legs.push(junction, p, junction);
@@ -254,7 +254,7 @@ describe('routing service (fake GraphHopper)', () => {
       );
       return path;
     }
-    const ghWith = (turnAroundAt: (via: LngLat) => boolean) =>
+    const ghWith = (turnAroundAt: (via: LngLat, points: LngLat[]) => boolean) =>
       ({
         ...fakeGh,
         async route(p: RouteParams) {
@@ -301,6 +301,25 @@ describe('routing service (fake GraphHopper)', () => {
       // On foot, turning round is fine: a walk with one is still offered.
       const walks = await routing.exploreRoutes(always, u.id, { from: base, to: east, mode: 'foot', budgetMin: 60 });
       expect(walks.explore.some((r) => r.instructions.filter((i) => isUTurn(i.sign)).length === 1)).toBe(true);
+    });
+
+    it('tries the other directions for a driving loop when the first ones all need a U-turn', async () => {
+      // Somewhere with no mapped streets, so the turning points stay where the loop puts them.
+      const start: LngLat = [135.0, -20.0];
+      // A loop heading out on bearing b has its two turning points either side of b, so the
+      // bearing to their midpoint is b. Loops out at 0°, 60°, 120°… (the six tried first for a
+      // new area) all need a U-turn; the ones in between are clean.
+      const direction = (points: LngLat[]) => {
+        const [a, b] = [points[1]!, points[2]!];
+        return (Math.round(bearingDeg(start, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]) / 30) * 30 + 360) % 360;
+      };
+      const firstSix = (_via: LngLat, points: LngLat[]) => points.length === 4 && direction(points) % 60 === 0;
+      const u = await makeUser(t.db, 'loopdirections@example.com');
+      ghCalls.length = 0;
+      const loops = await routing.roundTrips({ ...deps(), graphhopper: ghWith(firstSix) }, u.id, { start, mode: 'car', targetMin: 30 });
+      expect(loops.length).toBeGreaterThan(0);
+      for (const l of loops) expect(l.instructions.some((i) => isUTurn(i.sign))).toBe(false);
+      expect(new Set(ghCalls.filter((c) => c.points.length === 4).map((c) => direction(c.points))).size).toBe(12);
     });
   });
 });
