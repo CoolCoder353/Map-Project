@@ -68,7 +68,7 @@ export function Button({ label, onPress, kind = 'primary', icon: Icon, busy, dis
   );
 }
 
-export function Field({ label, error, hint, ...props }: TextInputProps & { label: string; error?: string | null; hint?: string }) {
+export function Field({ label, error, hint, style, ...props }: TextInputProps & { label: string; error?: string | null; hint?: string }) {
   const t = useTheme();
   return (
     <View style={{ gap: 6 }}>
@@ -77,8 +77,10 @@ export function Field({ label, error, hint, ...props }: TextInputProps & { label
         accessibilityLabel={label}
         placeholderTextColor={t.text3}
         selectionColor={t.accent}
-        style={[styles.input, { color: t.text, backgroundColor: t.surface, borderColor: error ? t.danger : t.borderStrong }]}
         {...props}
+        // A caller's style adds to the theme's, never replaces it: without the colour, Android
+        // draws black text on the dark panel.
+        style={[styles.input, { color: t.text, backgroundColor: t.surface, borderColor: error ? t.danger : t.borderStrong }, style]}
       />
       {hint && !error ? <Small color={t.text3}>{hint}</Small> : null}
       {error ? <Small color={t.danger}>{error}</Small> : null}

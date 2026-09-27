@@ -48,6 +48,26 @@ it('offers a matching contact and looks up only their address when picked', asyn
   await waitFor(() => expect(onChange).toHaveBeenCalledWith({ name: 'Mum', description: '12 Queen St, Brisbane', location: [153.02, -27.47] }));
 });
 
+it('lists each of a contact’s addresses as its own choice', async () => {
+  const onChange = jest.fn();
+  mockFind.mockResolvedValue([
+    { id: 'c1:0', name: 'Mum', address: '12 Queen St, Brisbane', label: 'home' },
+    { id: 'c1:1', name: 'Mum', address: '1 William St, Brisbane', label: 'work' },
+  ]);
+  mockRequest.mockImplementation(async (_path: string, opts: { query: { q: string } }) =>
+    opts.query.q === '1 William St, Brisbane'
+      ? { results: [{ id: 'p2', name: '1 William Street', kind: 'address', description: '', location: [153.03, -27.47] }] }
+      : { results: [] },
+  );
+  await render(<PlaceSearch label="Destination" placeholder="Where to?" value={null} onChange={onChange} />);
+  const box = screen.getByLabelText('Destination');
+  await fireEvent(box, 'focus');
+  await fireEvent.changeText(box, 'mum');
+  expect(await screen.findByText('home · 12 Queen St, Brisbane')).toBeOnTheScreen();
+  await fireEvent.press(screen.getByText('work · 1 William St, Brisbane'));
+  await waitFor(() => expect(onChange).toHaveBeenCalledWith({ name: 'Mum', description: '1 William St, Brisbane', location: [153.03, -27.47] }));
+});
+
 it('says so when the contact’s address cannot be found on the map', async () => {
   mockFind.mockResolvedValue([{ id: 'c1', name: 'Dad', address: 'Nowhere Road', label: null }]);
   await render(<PlaceSearch label="Destination" placeholder="Where to?" value={null} onChange={jest.fn()} />);

@@ -1,5 +1,6 @@
 /// <reference types="jest" />
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import FeedbackScreen from '../app/feedback';
 
 const mockRequest = jest.fn();
@@ -11,8 +12,21 @@ jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { 
 jest.mock('expo-image-picker', () => ({ launchImageLibraryAsync: (...a: unknown[]) => mockPick(...a) }));
 jest.mock('../src/lib/api', () => ({ api: { request: (...a: unknown[]) => mockRequest(...a) }, errorMessage: (e: Error) => e.message }));
 jest.mock('../src/lib/mapView', () => ({ lastMapView: () => ({ center: [149.13, -35.28], zoom: 12 }) }));
+let mockScheme: 'light' | 'dark' = 'light';
+jest.mock('react-native/Libraries/Utilities/useColorScheme', () => ({ __esModule: true, default: () => mockScheme }));
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockScheme = 'light';
+});
+
+it('keeps the message readable in dark mode', async () => {
+  mockScheme = 'dark';
+  await render(<FeedbackScreen />);
+  const style = StyleSheet.flatten(screen.getByLabelText('What went wrong?').props.style);
+  // Light text on the dark panel, not the platform's default black.
+  expect(style).toMatchObject({ color: '#e8eaed', backgroundColor: '#202327', minHeight: 120 });
+});
 
 it('needs a message before it can be sent', async () => {
   await render(<FeedbackScreen />);

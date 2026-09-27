@@ -18,8 +18,8 @@ export interface GhPath {
   points: { type: 'LineString'; coordinates: LngLat[] };
   instructions: GhInstruction[];
   snapped_waypoints?: { coordinates: LngLat[] };
-  /** Path details: `osm_way_id` comes back as [firstPoint, lastPoint, wayId] runs. */
-  details?: { osm_way_id?: Array<[number, number, number]> };
+  /** Path details, as [firstPoint, lastPoint, value] runs. `max_speed` is km/h, null where unmapped. */
+  details?: { osm_way_id?: Array<[number, number, number]>; max_speed?: Array<[number, number, number | null]> };
 }
 
 export interface CustomModel {
@@ -127,8 +127,8 @@ export class GraphHopperClient {
       instructions: true,
       calc_points: true,
       locale: 'en',
-      // Which OSM way each stretch belongs to: the unit of road coverage.
-      details: ['osm_way_id'],
+      // Which OSM way each stretch belongs to (the unit of road coverage), and its speed limit.
+      details: ['osm_way_id', 'max_speed'],
     };
     if (p.passThrough && p.points.length > 2) {
       body['ch.disable'] = true;

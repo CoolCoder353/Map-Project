@@ -65,8 +65,9 @@ exactly what each field is.
 | POST | `/api/routes/roundtrip` | `RoundTripRequestSchema` (`start`, `mode`, `targetMin`) → `{ routes }` |
 | GET | `/api/discover` | `DiscoverQuerySchema` (`lon`, `lat`, `mode`, `maxMinutes`, `categories`) → `{ items }`. The slow one: several seconds on a small server |
 
-`mode` is `car` or `foot`. Each `Route` carries its geometry, turn instructions and `novelty`
-(new kilometres of road for this person).
+`mode` is `car` or `foot`. Each `Route` carries its geometry, turn instructions, `novelty`
+(new kilometres of road for this person) and `speedLimits`: `{ from, to, kmh }` runs of geometry
+point indices, missing where no limit is mapped. Older servers leave `speedLimits` out.
 
 ## Travel
 

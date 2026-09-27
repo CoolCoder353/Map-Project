@@ -40,7 +40,7 @@ const addressText = (a: Contacts.Address): string =>
  * Contacts whose name matches and who have an address. Reading happens on the phone; only the
  * address text of a contact the user picks is ever sent to the server, to be located.
  */
-export async function findContacts(query: string, limit = 3): Promise<ContactMatch[]> {
+export async function findContacts(query: string, limit = 4): Promise<ContactMatch[]> {
   const q = query.trim().toLowerCase();
   if (q.length < 2) return [];
   try {
@@ -50,13 +50,16 @@ export async function findContacts(query: string, limit = 3): Promise<ContactMat
     const { data } = await Contacts.getContactsAsync({ name: q, fields: [Contacts.Fields.Addresses, Contacts.Fields.Name] });
     const out: ContactMatch[] = [];
     for (const c of data) {
-      for (const a of c.addresses ?? []) {
+      if (!c.name) continue;
+      // Every address the contact has (home, work…), each once; the label tells them apart.
+      const seen = new Set<string>();
+      for (const [i, a] of (c.addresses ?? []).entries()) {
         const address = addressText(a);
-        if (!address || !c.name) continue;
-        out.push({ id: `${c.id}:${out.length}`, name: c.name, address, label: a.label ?? null });
-        break; // one address per contact keeps the list short
+        if (!address || seen.has(address.toLowerCase())) continue;
+        seen.add(address.toLowerCase());
+        out.push({ id: `${c.id}:${i}`, name: c.name, address, label: a.label ?? null });
+        if (out.length >= limit) return out;
       }
-      if (out.length >= limit) break;
     }
     return out;
   } catch {

@@ -72,6 +72,8 @@ What has been checked, how to repeat it, and what is still open. Update this whe
 - The Invites page's count box snapped back to 1 when cleared, so typing "2" gave "12".
 - Download my data left out the roads travelled, the main coverage data, while including the internal hexagon index.
 - The explore benchmark could never finish (a 40 km disc cannot hold 50k res-9 cells), and 21 integration tests were also running in the unit project.
+- Explore detours still U-turned at their via points after the cul-de-sac fix (a user report, 2026-09-27). Via points sit on road nodes, where GraphHopper's `pass_through` has no effect, so the route dipped into the side street and turned round. Measured on the live GraphHopper around Cleveland: 19 of 25 street-snapped vias gave a U-turn at the via; moving the via to the road the route turned off left 21 of 25 with no U-turn, and driving routes with any U-turn are no longer offered.
+- Android contacts with several addresses offered only the first, and the feedback message box drew black text on the dark panel (a caller's `style` replaced the field's own, colour included). Both user reports, 2026-09-27.
 - The Android app died on launch: `expo-contacts` was from an older Expo SDK (found on the emulator). Its SDK 57 main entry also throws for the functions the app used, so a bare version bump would have left contact search silently empty.
 - Android, found reading every screen after crash reports (each now has a test):
   - A round trip that finished after switching to Directions crashed Plan (`routes[0].id` of an empty list); clearing a place left its routes up, with Start still going there.

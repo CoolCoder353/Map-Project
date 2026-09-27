@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type LngLat, destination, haversineM, pathCells, cellToBigInt, parentCell } from '@wayfinder/shared';
+import { type LngLat, bearingDeg, destination, haversineM, pathCells, cellToBigInt, parentCell } from '@wayfinder/shared';
 import * as routing from '../../src/services/routing.js';
 import * as places from '../../src/services/places.js';
 import { MetricsAggregator } from '../../src/lib/metrics.js';
-import type { GraphHopperClient, RouteParams } from '../../src/lib/graphhopper.js';
+import type { GhPath, GraphHopperClient, RouteParams } from '../../src/lib/graphhopper.js';
 import { type TestDb, createTestDb } from '../helpers/db.js';
 import { straightPath } from '../helpers/fakes.js';
 import { makeUser } from '../helpers/users.js';
@@ -50,6 +50,17 @@ async function visit(userId: string, line: LngLat[]) {
 describe('routing service (fake GraphHopper)', () => {
   const from: LngLat = [149.0, -35.3];
   const to = destination(from, 90, 8000);
+
+  it('passes on the speed limits along a route', async () => {
+    const path = straightPath([from, to], SPEED);
+    const last = path.points.coordinates.length - 1;
+    path.details = { max_speed: [[0, 10, 60], [10, 11, null], [11, last, 80]] };
+    const route = routing.toRoute(path, { kind: 'fastest', mode: 'car', novelty: { totalKm: 8, newKm: 8, noveltyPct: 100 } as never, extraDurationS: 0, viaPoints: [] });
+    // The 100 m between points 10 and 11 has no limit mapped, so none is shown there.
+    expect(route.speedLimits).toEqual([{ from: 0, to: 10, kmh: 60 }, { from: 11, to: last, kmh: 80 }]);
+    // An engine that reported none: no limits rather than a guess.
+    expect(routing.toRoute(straightPath([from, to], SPEED), { kind: 'fastest', mode: 'car', novelty: { totalKm: 8, newKm: 8, noveltyPct: 100 } as never, extraDurationS: 0, viaPoints: [] }).speedLimits).toEqual([]);
+  });
 
   it('fastest route reports novelty against the user history', async () => {
     const u = await makeUser(t.db, 'fast@example.com');
@@ -194,5 +205,102 @@ describe('routing service (fake GraphHopper)', () => {
     const u = await makeUser(t.db, 'outback@example.com');
     const loops = await routing.roundTrips(deps(), u.id, { start: outback, mode: 'foot', targetMin: 60 });
     expect(loops.length).toBeGreaterThan(0);
+  });
+
+  describe('U-turns on detours', () => {
+    // Every mapped street is a dead end 300 m off the road from the south, as courts and closes
+    // are: a route through one dips in, turns around at the via and comes back out.
+    const base: LngLat = [152.5, -31.0];
+    const east = destination(base, 90, 20_000);
+    const streets: places.PlaceInput[] = [];
+    for (let i = 0; i <= 12; i++) {
+      for (let j = -3; j <= 6; j++) {
+        const [lon, lat] = destination(destination(base, 90, i * 2000), 0, j * 1500);
+        streets.push({ id: `court-${i}-${j}`, name: `Quiet Court ${i}-${j}`, kind: 'street', category: null, description: '', lon, lat, importance: 0 });
+      }
+    }
+    const isCourt = (p: LngLat) => streets.some((s) => Math.abs(s.lon - p[0]) < 1e-9 && Math.abs(s.lat - p[1]) < 1e-9);
+    const isUTurn = (sign: number) => sign === -98 || Math.abs(sign) === 8;
+    const ghCalls: RouteParams[] = [];
+
+    /** Where the fake routes turned off the road into a dead end: the middle of the stretch before. */
+    const turnOffs: LngLat[] = [];
+
+    /** A route with a dip into each dead-end via, and a U-turn instruction at the end of each. */
+    function withDeadEnds(points: LngLat[], turnAroundAt: (via: LngLat) => boolean): GhPath {
+      const legs: LngLat[] = [points[0]!];
+      const deadEnds: Array<{ via: LngLat; junction: LngLat }> = [];
+      for (const p of points.slice(1, -1)) {
+        if (turnAroundAt(p)) {
+          // The dead end runs off at right angles to the way the route was heading.
+          const junction = destination(p, bearingDeg(legs.at(-1)!, p) + 90, 300);
+          legs.push(junction, p, junction);
+          deadEnds.push({ via: p, junction });
+        } else legs.push(p);
+      }
+      legs.push(points.at(-1)!);
+      const path = straightPath(legs, SPEED);
+      const coords = path.points.coordinates;
+      const uTurns = deadEnds.map(({ via, junction }) => {
+        const at = coords.findIndex((c) => haversineM(c, via) < 1);
+        const j = coords.findLastIndex((c, k) => k < at && haversineM(c, junction) < 1);
+        turnOffs.push([(coords[j - 1]![0] + coords[j]![0]) / 2, (coords[j - 1]![1] + coords[j]![1]) / 2]);
+        return at;
+      });
+      path.instructions.splice(
+        1,
+        0,
+        ...uTurns.map((i) => ({ distance: 300, sign: -98, interval: [i, i] as [number, number], text: 'Make a U-turn', time: 20_000 })),
+      );
+      return path;
+    }
+    const ghWith = (turnAroundAt: (via: LngLat) => boolean) =>
+      ({
+        ...fakeGh,
+        async route(p: RouteParams) {
+          ghCalls.push(p);
+          return [withDeadEnds(p.points, turnAroundAt)];
+        },
+      }) as unknown as GraphHopperClient;
+
+    beforeAll(async () => {
+      await places.upsertPlaces(t.db, streets);
+    });
+
+    it('asks again with the via moved onto the road it turned off, and offers the route without the U-turn', async () => {
+      const u = await makeUser(t.db, 'deadends@example.com');
+      ghCalls.length = 0;
+      const res = await routing.exploreRoutes({ ...deps(), graphhopper: ghWith(isCourt) }, u.id, { from: base, to: east, mode: 'car', budgetMin: 30 });
+      expect(res.explore.length).toBeGreaterThan(0);
+      for (const r of res.explore) {
+        expect(r.instructions.some((i) => isUTurn(i.sign))).toBe(false);
+        for (const v of r.viaPoints) expect(isCourt(v), `via ${v} is still the dead end`).toBe(false);
+      }
+      // The moved via sits on the road the route came along, just before it turned off into the dip.
+      const retried = ghCalls.filter((c) => c.points.slice(1, -1).some((v) => !isCourt(v)));
+      expect(retried.length).toBeGreaterThan(0);
+      for (const c of retried) {
+        for (const v of c.points.slice(1, -1).filter((p) => !isCourt(p))) {
+          expect(Math.min(...turnOffs.map((o) => haversineM(o, v))), `via ${v} is not where the route turned off`).toBeLessThan(1);
+        }
+      }
+    });
+
+    it('never offers a driving detour or loop that needs a U-turn, however often it asks again', async () => {
+      const u = await makeUser(t.db, 'alwaysuturn@example.com');
+      ghCalls.length = 0;
+      const always = { ...deps(), graphhopper: ghWith(() => true) };
+      const res = await routing.exploreRoutes(always, u.id, { from: base, to: east, mode: 'car', budgetMin: 30 });
+      for (const r of res.explore) expect(r.instructions.some((i) => isUTurn(i.sign))).toBe(false);
+      const viaRequests = ghCalls.filter((c) => c.points.length > 2);
+      // The first try and at most two more for each detour.
+      expect(viaRequests.length).toBeLessThanOrEqual(3 * viaRequests.filter((c) => c.points.slice(1, -1).every(isCourt)).length);
+
+      const loops = await routing.roundTrips(always, u.id, { start: base, mode: 'car', targetMin: 30 });
+      for (const l of loops) expect(l.instructions.some((i) => isUTurn(i.sign))).toBe(false);
+      // On foot, turning round is fine: a walk with one is still offered.
+      const walks = await routing.exploreRoutes(always, u.id, { from: base, to: east, mode: 'foot', budgetMin: 60 });
+      expect(walks.explore.some((r) => r.instructions.filter((i) => isUTurn(i.sign)).length === 1)).toBe(true);
+    });
   });
 });

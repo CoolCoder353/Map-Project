@@ -169,3 +169,38 @@ export function pointInPolygon(p: LngLat, rings: readonly (readonly LngLat[])[])
   for (let i = 1; i < rings.length; i++) if (pointInRing(p, rings[i]!)) return false;
   return true;
 }
+
+/** A stretch of route geometry, from point index `from` to `to`, with a known speed limit. */
+export interface SpeedLimitRun {
+  from: number;
+  to: number;
+  kmh: number;
+}
+
+/** Unknown stretches shorter than this, between two known ones, keep the limit before them. */
+const SPEED_LIMIT_GAP_M = 60;
+
+/**
+ * Speed limits along a route, from the routing engine's `max_speed` runs
+ * ([first point, last point, km/h or null]). Roads with no limit mapped are left out rather
+ * than guessed, except for a short unknown stretch between two known roads (usually a junction
+ * or roundabout), which keeps the limit before it so a sign doesn't flicker off at every corner.
+ */
+export function speedLimitRuns(coords: readonly LngLat[], runs: ReadonlyArray<readonly [number, number, number | null]>): SpeedLimitRun[] {
+  const usable = (v: number | null): v is number => v !== null && Number.isFinite(v) && v > 0 && v <= 130;
+  const out: SpeedLimitRun[] = [];
+  runs.forEach(([from, to, kmh], i) => {
+    if (usable(kmh)) {
+      const prev = out.at(-1);
+      const limit = Math.round(kmh);
+      if (prev && prev.to === from && prev.kmh === limit) prev.to = to;
+      else out.push({ from, to, kmh: limit });
+      return;
+    }
+    const prev = out.at(-1);
+    const next = runs[i + 1];
+    const short = lineLengthM(coords.slice(from, to + 1)) < SPEED_LIMIT_GAP_M;
+    if (prev && prev.to === from && next && usable(next[2]) && short) prev.to = to;
+  });
+  return out;
+}

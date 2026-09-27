@@ -89,3 +89,18 @@ it('says you have arrived and offers Done', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
   expect(fake.router.back).toHaveBeenCalled();
 });
+
+it('shows the speed limit of the road you are on, when it is known', async () => {
+  const { rerender } = await renderScreen(<Navigate />);
+  mockNav.state = { status: 'navigating', nextInstruction: { sign: 0, text: 'Continue' }, distanceToNextManeuverM: 900, remainingDurationS: 600, remainingDistanceM: 5400, speedLimitKmh: 60 };
+  await rerender(<Navigate />);
+  expect(screen.getByLabelText('Speed limit 60 km/h')).toBeOnTheScreen();
+  expect(screen.getByText('60')).toBeOnTheScreen();
+  mockNav.state = { ...(mockNav.state as object), speedLimitKmh: null };
+  await rerender(<Navigate />);
+  expect(screen.queryByLabelText(/Speed limit/)).toBeNull();
+  // Off route, the road you are on isn't the route's: no limit rather than a wrong one.
+  mockNav.state = { ...(mockNav.state as object), status: 'offRoute', speedLimitKmh: 80 };
+  await rerender(<Navigate />);
+  expect(screen.queryByLabelText(/Speed limit/)).toBeNull();
+});
