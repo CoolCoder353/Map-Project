@@ -49,14 +49,25 @@ it('goes to Plan when there is nothing to go back to', async () => {
 it('waits for a position, then shows the next turn, distance and time left', async () => {
   const { rerender } = await renderScreen(<Navigate />);
   expect(screen.getByText('Getting your location…')).toBeOnTheScreen();
-  expect(fake.map.fitTo).toHaveBeenCalledWith(route().geometry);
+  // Follows you close up; fitting the whole route would zoom out of the drive.
   expect(fake.map.props.followUser).toBe(true);
+  expect(fake.map.fitTo).not.toHaveBeenCalled();
   mockNav.state = { status: 'navigating', nextInstruction: { sign: -2, text: 'Turn left onto Logan Road' }, distanceToNextManeuverM: 180, remainingDurationS: 600, remainingDistanceM: 5400 };
   await rerender(<Navigate />);
   expect(screen.getByText('Turn left onto Logan Road')).toBeOnTheScreen();
   expect(screen.getByText('180 m')).toBeOnTheScreen();
   expect(screen.getByText('10 min')).toBeOnTheScreen();
   expect(screen.getByText('5.4 km to go')).toBeOnTheScreen();
+});
+
+it('keeps following you, zoomed in, when a new route arrives', async () => {
+  const { rerender } = await renderScreen(<Navigate />);
+  mockNav.route = route({ id: 'r-new', geometry: [[153.1, -27.5], [153.2, -27.6]] });
+  await rerender(<Navigate />);
+  expect(fake.map.props.selectedRouteId).toBe('r-new');
+  expect(fake.map.props.followUser).toBe(true);
+  expect(fake.map.fitTo).not.toHaveBeenCalled();
+  expect(fake.map.flyTo).not.toHaveBeenCalled();
 });
 
 it('warns when off route or rerouting, and shows errors', async () => {

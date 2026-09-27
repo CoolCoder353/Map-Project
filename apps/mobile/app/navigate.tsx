@@ -1,12 +1,12 @@
 import { formatDistanceShort, formatDuration } from '@wayfinder/nav';
 import { ArrowLeft, ArrowRight, ArrowUp, Flag, RotateCcw, Volume2, VolumeX, X } from 'lucide-react-native';
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { goBack } from '../src/lib/goBack';
 import { takeRouteToNavigate } from '../src/lib/plannedStore';
 import { space, useTheme } from '../src/lib/theme';
-import { MapCanvas, type MapCanvasHandle } from '../src/map/MapCanvas';
+import { MapCanvas } from '../src/map/MapCanvas';
 import { useTurnByTurn } from '../src/nav/useTurnByTurn';
 import { Button, Empty, Notice } from '../src/ui/kit';
 
@@ -42,11 +42,6 @@ export default function Navigate() {
   const t = useTheme();
   const initial = useMemo(() => takeRouteToNavigate(), []);
   const nav = useTurnByTurn(initial);
-  const map = useRef<MapCanvasHandle>(null);
-
-  useEffect(() => {
-    if (nav.route) map.current?.fitTo(nav.route.geometry);
-  }, [nav.route]);
 
   if (!initial) {
     return (
@@ -79,7 +74,8 @@ export default function Navigate() {
       {s?.status === 'offRoute' && !nav.rerouting ? <Notice tone="warning">Off route</Notice> : null}
       {nav.error ? <Notice tone="error">{nav.error}</Notice> : null}
       <View style={{ flex: 1 }}>
-        <MapCanvas ref={map} style={{ flex: 1 }} routes={nav.route ? [nav.route] : []} selectedRouteId={nav.route?.id ?? null} followUser />
+        {/* Follows you close up. No fitting to the whole route: that zooms out of the drive. */}
+        <MapCanvas style={{ flex: 1 }} routes={nav.route ? [nav.route] : []} selectedRouteId={nav.route?.id ?? null} followUser />
         {/* Only while on the route: off it, the road you are on isn't the one the limit is for. */}
         {s?.status === 'navigating' && s.speedLimitKmh != null ? <SpeedSign kmh={s.speedLimitKmh} /> : null}
       </View>

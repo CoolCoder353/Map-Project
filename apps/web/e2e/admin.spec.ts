@@ -72,6 +72,8 @@ test('app name and voice changes reach the sign-in page', async ({ browser }) =>
   await expect(visitor.getByRole('heading', { name: 'Welcome back to Fogline' })).toBeVisible();
   await expect(visitor).toHaveTitle('Fogline');
 
+  // The first save's toast lasts 5 s; a quick visitor check leaves it up beside the second one.
+  await expect(admin.getByText(/Saved/)).toBeHidden();
   await admin.getByLabel('App name').fill('Wayfinder');
   await admin.getByLabel(/Plain and friendly/).check();
   await admin.getByRole('button', { name: 'Save changes' }).click();

@@ -167,7 +167,7 @@ Each feature a person can use, and where its tests are. Paths are relative to th
 | Contacts search (Android) | — | — | `contacts.screen.test.tsx`, `device.native.test.tsx`, `settings.screen.test.tsx` | — |
 | Start from your location | — | `directions.test.tsx` | `plan.screen.test.tsx`, `device.native.test.tsx` | `planner.spec.ts` |
 | Send a route to the phone; planned routes | `app-api.test.ts`, `trips-places-api.test.ts` | `directions.test.tsx`, `panels.test.tsx`, `settings.test.tsx` | `settings.screen.test.tsx` | `planner.spec.ts` |
-| Turn-by-turn navigation | `packages/nav/test/*` | — | `turn-by-turn.native.test.tsx`, `navigate.screen.test.tsx` | — |
+| Turn-by-turn navigation (following you zoomed in) | `packages/nav/test/*` | — | `turn-by-turn.native.test.tsx`, `navigate.screen.test.tsx`, `map-canvas.native.test.tsx` | — |
 | Speed limit while navigating | `geo.test.ts` (`speedLimitRuns`), `routing.test.ts`, `graphhopper.test.ts`, `packages/nav/test/engine.test.ts` | — | `navigate.screen.test.tsx` | — |
 | Recording trips (background and navigation) | `segmentation.test.ts`, `tracks.test.ts`, `queue.test.ts` (mobile), `apiClient.test.ts`, `androidManifest.test.ts` (the permissions background recording needs) | — | `tracking.native.test.tsx`, `settings.screen.test.tsx` | — |
 | Coverage: roads travelled, stats, the map layer | `tracks.test.ts` (road matching, new roads), `app-api.test.ts`, `copy.test.ts` (no hexagon words) | `panels.test.tsx`, `map-provider.test.tsx`, `map-shell.test.tsx` | `screens.screen.test.tsx`, `map-canvas.native.test.tsx` | `planner.spec.ts` |

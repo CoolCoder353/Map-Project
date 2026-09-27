@@ -38,6 +38,15 @@ interface Props {
 
 const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
+/** The whole country, for a map with nothing particular to show yet. */
+const OVERVIEW = { center: [134.5, -27.5] as LngLat, zoom: 3.6 };
+
+/**
+ * How close a map following the driver sits. Following only moves the camera to your position and
+ * keeps whatever zoom the map already had, so without this a trip starts on the country overview.
+ */
+export const FOLLOW_ZOOM = 16;
+
 const isLngLat = (c: LngLat | undefined): c is LngLat =>
   !!c && Number.isFinite(c[0]) && Number.isFinite(c[1]) && Math.abs(c[0]) <= 180 && Math.abs(c[1]) <= 90;
 
@@ -119,6 +128,10 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     type: 'FeatureCollection',
     features: markers.map((m) => ({ type: 'Feature', properties: { kind: m.kind, label: m.label ?? '' }, geometry: { type: 'Point', coordinates: m.lngLat } })),
   };
+  // Following starts close up on where the trip starts, so the map is already zoomed in before
+  // the first position fix arrives; the country overview is for maps with nothing to follow.
+  const start = (routes.find((r) => r.id === selectedRouteId) ?? routes[0])?.geometry[0];
+  const initialView = followUser ? { center: isLngLat(start) ? start : OVERVIEW.center, zoom: FOLLOW_ZOOM } : OVERVIEW;
   const trackData: GeoJSON.FeatureCollection = track && track.length > 1
     ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: track } }] }
     : EMPTY;
@@ -147,7 +160,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         onRegionChange?.(bounds as [number, number, number, number], zoom);
       }}
     >
-      <Camera ref={camera} initialViewState={{ center: [134.5, -27.5], zoom: 3.6 }} trackUserLocation={followUser ? 'course' : undefined} />
+      <Camera ref={camera} initialViewState={initialView} zoom={followUser ? FOLLOW_ZOOM : undefined} trackUserLocation={followUser ? 'course' : undefined} />
       {coverage ? (
         <GeoJSONSource id="coverage" data={coverage}>
           <Layer
