@@ -5,6 +5,10 @@ self-hosted routing, tiles and search. pnpm monorepo, TypeScript throughout.
 
 ## Hard rules
 
+- **Every feature is tested, and every change passes the whole suite.** New behaviour and bug
+  fixes come with tests in the same change (a fix gets a test that fails without it), and
+  `pnpm check` must pass before anything is called done. Never skip, delete or weaken a test,
+  or lower a coverage floor, to get a change through. See [docs/testing.md](docs/testing.md).
 - **No outside services for routing, tiles or search.** Everything runs on the one server; the
   only outside download is the OpenStreetMap extract. Ask before adding anything that calls out
   (live traffic was declined for this reason).
@@ -30,7 +34,8 @@ routing engine, live checks).
 | For | Read |
 |---|---|
 | How it fits together, main flows, jobs | [docs/architecture.md](docs/architecture.md) |
-| Running locally, tests, recipes for common changes, gotchas | [docs/development.md](docs/development.md) |
+| Running locally, recipes for common changes, gotchas | [docs/development.md](docs/development.md) |
+| Where each kind of test goes, harnesses, what tests what | [docs/testing.md](docs/testing.md) |
 | Endpoints | [docs/api.md](docs/api.md) — schemas in `packages/shared/src/schemas` are the contract |
 | Settings and env vars | [docs/configuration.md](docs/configuration.md) |
 | Operating a server, troubleshooting | [docs/operations.md](docs/operations.md) |
@@ -42,14 +47,17 @@ routing engine, live checks).
 ## Commands
 
 ```bash
-pnpm lint && pnpm typecheck && pnpm test && pnpm test:mobile   # before calling anything done
-pnpm --filter @wayfinder/web e2e                               # anything the web app shows
+pnpm check    # lint, types, every suite with coverage floors, Playwright: before calling anything done
 ```
 
-`pnpm test` is Vitest (unit + integration, PGlite). `pnpm test:mobile` is Jest for the Android
-screens (`*.screen.test.tsx`). Details and the dev servers are in docs/development.md; the preview
-configs in `.claude/launch.json` start `db`, `fake-gh`, `api` and `web`. A fresh dev database is
-empty — seed it once `db` is up, then sign in as `admin@demo.test` / `demo password`:
+While working: `pnpm test` (all Vitest: unit, integration on PGlite, web components),
+`pnpm test:mobile` (Jest: Android screens and device code), `pnpm test:e2e` (Playwright, starts
+its own stack). Run one file with `npx vitest run <path>` or, in `apps/mobile`, `npx jest <path>`.
+Tests go where [docs/testing.md](docs/testing.md#which-layer-a-test-belongs-in) says; web tests
+use `renderApp()` from `apps/web/test/harness.tsx`, Android ones the fakes in
+`apps/mobile/test/fakes.tsx`. The preview configs in `.claude/launch.json` start `db`, `fake-gh`,
+`api` and `web`. A fresh dev database is empty — seed it once `db` is up, then sign in as
+`admin@demo.test` / `demo password`:
 
 ```bash
 DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/postgres pnpm seed:demo
@@ -79,4 +87,5 @@ DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/postgres pnpm seed:dem
 - User-facing words: plain, specific, no jargon. Voice-dependent copy lives in
   `packages/shared/src/copy.ts` in three voices.
 - Keep docs current with the change: api.md for endpoints, configuration.md for settings,
-  architecture.md for flows and jobs, verification.md for checks.
+  architecture.md for flows and jobs, testing.md's feature map for new features, verification.md
+  for checks.

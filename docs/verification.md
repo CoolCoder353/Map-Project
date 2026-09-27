@@ -8,11 +8,16 @@ What has been checked, how to repeat it, and what is still open. Update this whe
 |---|---|---|
 | Lint | `pnpm lint` | clean |
 | Types (7 packages) | `pnpm typecheck` | clean |
-| Unit tests | `pnpm test:unit` | passing, 89 tests (geo/H3/novelty/segmentation, schemas, nav engine with simulated drives, OSM tag mapping, state/suburb boundaries, category words, opening hours across time zones, GraphHopper error wording, mobile upload queue and API client) |
-| Android screen tests | `pnpm test:mobile` | passing, 22 tests (sign-in, settings toggles and permission paths, feedback form, contacts search, map error boundary, route card) |
-| Integration tests, PGlite | `pnpm test:integration` | passing, 101 (+4 skipped unless `GRAPHHOPPER_LIVE_URL` is set): search ranking over 400 same-name stores, category words, feedback API and roles, pipeline location fill, road matching including trips that grow |
-| Integration tests, real Postgres 17 | `TEST_DATABASE_URL=… pnpm test:integration` | passing, 101 (+4 skipped), against `postgres:17-bookworm`, 2026-09-27 |
-| Web end-to-end | `pnpm --filter @wayfinder/web e2e` | passing (9 specs) |
+| Whole gate | `pnpm check` | passing, 2026-09-27 |
+| Unit tests | `pnpm test:unit` | passing, 124 tests: geo/H3/novelty/segmentation, schemas, copy in every voice, nav engine, OSM tag mapping, boundaries, opening hours, GraphHopper client, metrics, API and worker config, job registration, refresh steps, mobile upload queue and API client |
+| Web component tests | `pnpm test:web` | passing, 164 tests: every planner panel, sign-in/register/reset, route guards, account menu, feedback, every admin page, the map layer against a fake MapLibre |
+| Integration tests, PGlite | `pnpm test:integration` | passing, 125 (+4 skipped unless `GRAPHHOPPER_LIVE_URL` is set): services, every API area, the admin CLI, the job queue, data export, worker jobs and the refresh pipeline |
+| Integration tests, real Postgres 17 | `TEST_DATABASE_URL=… pnpm test:coverage` | passing, 413 (+4 skipped) across all Vitest projects, against `postgres:17-bookworm`, 2026-09-27 |
+| Vitest coverage | `pnpm test:coverage` | 96.6% lines, 94.2% statements, 92.4% functions, 86.0% branches; floors 95 / 92 / 90 / 84 |
+| Android tests | `pnpm test:mobile` | passing, 81 tests: every screen (the native map faked), navigation, background tracking and the upload queue, contacts, session, the map component |
+| Android coverage | `pnpm test:mobile:coverage` | 93.0% lines, 89.6% statements, 78.7% functions, 87.3% branches; floors 92 / 88 / 77 / 85 |
+| Web end-to-end | `pnpm test:e2e` | passing, 15 specs |
+| Flakiness | web and Android suites together, 8 rounds | 16/16 clean runs, 2026-09-27 |
 | Android JS bundle | `pnpm --filter @wayfinder/mobile exec expo export --platform android` | builds (Hermes bytecode) |
 | Web production build | `pnpm --filter @wayfinder/web build` | builds; smoke-tested under `vite preview` |
 | Design detector | `impeccable detect --json src` (in `apps/web`) | no findings |
@@ -35,6 +40,11 @@ What has been checked, how to repeat it, and what is still open. Update this whe
 - Search suggestions show type, suburb, state, postcode, distance and opening hours.
 - Coverage shows roads travelled, with kilometres of road in the stats.
 - The start field fills itself with "Your location" when the browser already allows it, and stays empty when it doesn't.
+- A wrong password is refused; a deep link (`/coverage`) survives signing in.
+- Settings persist across a reload; Download my data returns the account and travelled roads; signing out ends the session.
+- An admin's reset link sets a new password once; the old password stops working.
+- Deleting your account signs you out and blocks sign-in; an admin restores it, and the next sign-in starts at Directions.
+- Every dashboard page loads its data with no failed API call or script error, and the side menu reaches each one.
 
 ### Notable bugs these checks caught
 
@@ -56,6 +66,10 @@ What has been checked, how to repeat it, and what is still open. Update this whe
 - Trips, admin pages and icons still counted hexagons after coverage moved to roads.
 - CI only ran on pushes to `main`; the branch is `master`, so it never ran on a push.
 - A loop whose turning point had no mapped street within 3 km was dropped, so round trips vanished in sparsely mapped areas (caught by the E2E suite).
+- Signing in from a deep link always landed on Directions: the sign-in route's guard redirected before the page could (found by the web component tests).
+- Fixing that exposed a leak: after someone signed out on a planned trip, the next person to sign in on that browser landed on it, places and all. Signing out now forgets the page.
+- The Invites page's count box snapped back to 1 when cleared, so typing "2" gave "12".
+- Download my data left out the roads travelled, the main coverage data, while including the internal hexagon index.
 - The explore benchmark could never finish (a 40 km disc cannot hold 50k res-9 cells), and 21 integration tests were also running in the unit project.
 
 ## Live stack (Docker, real data)
@@ -79,7 +93,7 @@ Results are recorded in [live-stack-results.md](live-stack-results.md).
 ## Open / manual
 
 - **Android on a device.** Install the APK (`infra/scripts/build-apk.sh`) and check: background tracking survives the app being killed and Doze; a real walk appears as new coverage on the web; turn-by-turn with a deliberate wrong turn triggers a reroute; the offline queue uploads when connectivity returns.
-- **Screens beyond sign-in, settings and the route card** (plan, discover, coverage, navigation) render a native map, so they are covered by device testing rather than Jest.
+- **The native map itself.** Every Android screen is tested in Jest with the map faked, and the map component with MapLibre Native mocked; MapLibre Native on a device is covered only by device testing.
 - **Restore drill.** `infra/scripts/backup.sh` and `restore.sh` are written but a full restore has not been rehearsed on this machine.
 - **The live server has no backups yet.** Nothing is scheduled on `maps.paulsjones.com`; see [deploy-small-server.md](deploy-small-server.md#open-items).
 - **"The app crashes when I start the map"** (a user report, 2026-09-22) is unconfirmed. The likely causes were closed in code, but it has not been reproduced on a device; a logcat from an affected phone would settle it:
