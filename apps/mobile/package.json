@@ -9,7 +9,8 @@
     "prebuild": "expo prebuild --platform android",
     "bundle:check": "expo export --platform android --output-dir dist-check",
     "typecheck": "tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "test:coverage": "jest --coverage"
   },
   "dependencies": {
     "@maplibre/maplibre-react-native": "^11.3.10",
