@@ -14,7 +14,7 @@ What has been checked, how to repeat it, and what is still open. Update this whe
 | Integration tests, PGlite | `pnpm test:integration` | passing, 125 (+4 skipped unless `GRAPHHOPPER_LIVE_URL` is set): services, every API area, the admin CLI, the job queue, data export, worker jobs and the refresh pipeline |
 | Integration tests, real Postgres 17 | `TEST_DATABASE_URL=… pnpm test:coverage` | passing, 413 (+4 skipped) across all Vitest projects, against `postgres:17-bookworm`, 2026-09-27 |
 | Vitest coverage | `pnpm test:coverage` | 96.6% lines, 94.2% statements, 92.4% functions, 86.0% branches; floors 95 / 92 / 90 / 84 |
-| Android tests | `pnpm test:mobile` | passing, 122 tests: every screen (the native map faked), navigation, background tracking and the upload queue, contacts, session, the map component, and each failure below that the phone can throw at them |
+| Android tests | `pnpm test:mobile` | passing, 126 tests: every screen (the native map faked), navigation, background tracking and the upload queue, contacts, session, the map component, and each failure below that the phone can throw at them |
 | Android coverage | `pnpm test:mobile:coverage` | 93.9% lines, 90.1% statements, 79.5% functions, 87.8% branches; floors 92 / 88 / 77 / 85 |
 | Android app on the emulator | [development.md](development.md#emulator), APK built for the local stack | 2026-09-27: launches; register, sign-in errors, a server address without `https://`, planning (directions, explore, loops), contact search, navigation without a GPS fix, opening offline and Try again, Coverage against an older server. 2026-09-28: background tracking recording with the app open, and driving a real route (27 Whitby Place, Thornlands to Goodlife Ormiston, on the local Australia graph) to arrival with background tracking on: fastest and explore routes, speed limits, points from both reaching the server |
 | Web end-to-end | `pnpm test:e2e` | passing, 15 specs |
@@ -86,6 +86,7 @@ What has been checked, how to repeat it, and what is still open. Update this whe
   - Opening the app offline signed people out; the next account on a phone saw the last one's trips and planned routes until they refetched.
   - A place category the app didn't know crashed Discover; Trips said "no trips yet" when it couldn't load them; Settings' Sync, Remove, and switches failed silently.
   - Against a server from before coverage-by-roads, Coverage crashed on the missing numbers (found on the emulator). APKs and the server update separately, so the answers screens depend on are now checked against the shared schemas, and a mismatch says the app or server needs updating.
+- Android navigation never zoomed in when a trip started (a user report, 2026-09-27). Following your position only re-centres the map at the zoom it already has, and the map opened on the whole of Australia, so the trip was followed from the country overview; the screen's fit-to-the-whole-route never ran at start (the map wasn't loaded yet) but zoomed back out on every reroute. The map now sets a street-level zoom while following, opens at the route's start before the first fix, and navigation no longer fits the whole route.
 
 ## Live stack (Docker, real data)
 

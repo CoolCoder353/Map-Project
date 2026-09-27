@@ -2,7 +2,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
 import { createRef } from 'react';
-import { MapCanvas, type MapCanvasHandle } from '../src/map/MapCanvas';
+import { FOLLOW_ZOOM, MapCanvas, type MapCanvasHandle } from '../src/map/MapCanvas';
 import { lastMapView } from '../src/lib/mapView';
 import { route } from './fakes';
 
@@ -12,6 +12,7 @@ jest.mock('expo-location', () => ({ getForegroundPermissionsAsync: jest.fn(async
 const mockCamera = { fitBounds: jest.fn(), flyTo: jest.fn() };
 const mockSources: Record<string, { data: GeoJSON.FeatureCollection; onPress?: (e: unknown) => void }> = {};
 let mockMapProps: Record<string, unknown> = {};
+let mockCameraProps: Record<string, unknown> = {};
 jest.mock('@maplibre/maplibre-react-native', () => {
   const React = require('react');
   const { View, Text } = require('react-native');
@@ -20,7 +21,8 @@ jest.mock('@maplibre/maplibre-react-native', () => {
       mockMapProps = props;
       return React.createElement(View, { testID: 'native-map' }, props.children);
     },
-    Camera: React.forwardRef((_p: unknown, ref: unknown) => {
+    Camera: React.forwardRef((p: Record<string, unknown>, ref: unknown) => {
+      mockCameraProps = p;
       React.useImperativeHandle(ref, () => mockCamera);
       return null;
     }),
@@ -104,6 +106,32 @@ it('moves the camera: fit to points, fly to a place', async () => {
   expect(mockCamera.fitBounds).toHaveBeenCalledWith([152.9, -27.4, 153.2, -27], expect.objectContaining({ duration: 600 }));
   ref.current!.flyTo([150, -33]);
   expect(mockCamera.flyTo).toHaveBeenCalledWith({ center: [150, -33], zoom: 15, duration: 600 });
+});
+
+it('starts on the country overview when nothing is followed', async () => {
+  await render(<MapCanvas routes={[route()]} />);
+  await screen.findByTestId('native-map');
+  expect(mockCameraProps.initialViewState).toEqual({ center: [134.5, -27.5], zoom: 3.6 });
+  expect(mockCameraProps.zoom).toBeUndefined();
+  expect(mockCameraProps.trackUserLocation).toBeUndefined();
+});
+
+it('zooms in when following you, starting at the route’s start before a fix arrives', async () => {
+  // Following only re-centres on you at the current zoom, so the map has to set the zoom itself.
+  const trip = route({ id: 'go', geometry: [[153.02, -27.47], [153.05, -27.5]] });
+  await render(<MapCanvas routes={[route({ id: 'other', geometry: [[150, -30], [150.1, -30.1]] }), trip]} selectedRouteId="go" followUser />);
+  await screen.findByTestId('native-map');
+  expect(mockCameraProps.trackUserLocation).toBe('course');
+  expect(mockCameraProps.zoom).toBe(FOLLOW_ZOOM);
+  expect(FOLLOW_ZOOM).toBeGreaterThanOrEqual(15);
+  expect(mockCameraProps.initialViewState).toEqual({ center: [153.02, -27.47], zoom: FOLLOW_ZOOM });
+});
+
+it('still zooms in to follow you when there is no usable route start', async () => {
+  await render(<MapCanvas routes={[route({ geometry: [[Number.NaN, 0], [153, -27]] })]} followUser />);
+  await screen.findByTestId('native-map');
+  expect(mockCameraProps.zoom).toBe(FOLLOW_ZOOM);
+  expect(mockCameraProps.initialViewState).toEqual({ center: [134.5, -27.5], zoom: FOLLOW_ZOOM });
 });
 
 it('reports taps and remembers the view after moving', async () => {
