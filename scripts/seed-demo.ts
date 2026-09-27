@@ -2,7 +2,8 @@
  * Seed a development database with clearly-labelled DEMO data: an admin, a dev, two users,
  * invites, synthetic trips around Canberra, places/POIs, metrics, an error and pipeline runs.
  *   DATABASE_URL=... pnpm seed:demo
- * Never run against production.
+ * Start a routing engine first (`pnpm dev:fake-gh`, or GRAPHHOPPER_URL for another one) so the
+ * demo trips are snapped to roads. Never run against production.
  */
 import { randomUUID } from 'node:crypto';
 import {
@@ -65,8 +66,10 @@ for (let d = 1; d <= 14; d++) {
 }
 await trackService.processUserTracks(db, adminId);
 await trackService.processUserTracks(db, samId);
-// Snap the demo trips onto roads, as the worker does, so coverage has roads to draw.
-const graphhopper = new GraphHopperClient(process.env.GRAPHHOPPER_URL ?? 'http://127.0.0.1:8990');
+// Snap the demo trips onto roads, as the worker does, so coverage has roads to draw. Needs a
+// routing engine (`pnpm dev:fake-gh` listens on 8989); without one the trips stay unmatched and
+// the coverage map is empty.
+const graphhopper = new GraphHopperClient(process.env.GRAPHHOPPER_URL ?? 'http://127.0.0.1:8989');
 for (const id of [adminId, samId]) await roadService.matchTrips(db, graphhopper, id, 100);
 
 const places = [
