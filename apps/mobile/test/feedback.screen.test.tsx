@@ -5,7 +5,7 @@ import FeedbackScreen from '../app/feedback';
 const mockRequest = jest.fn();
 const mockPick = jest.fn();
 
-jest.mock('expo-router', () => ({ router: { back: jest.fn() } }));
+jest.mock('expo-router', () => ({ router: { back: jest.fn(), canGoBack: () => true, replace: jest.fn() } }));
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: '0.1.0' }, deviceName: 'Pixel 8' } }));
 jest.mock('expo-image-picker', () => ({ launchImageLibraryAsync: (...a: unknown[]) => mockPick(...a) }));
@@ -49,4 +49,24 @@ it('shows the server’s message when feedback has been switched off', async () 
   await fireEvent.changeText(screen.getByLabelText('What went wrong?'), 'Something broke');
   await fireEvent.press(screen.getByRole('button', { name: 'Send' }));
   expect(await screen.findByText('Feedback is turned off')).toBeOnTheScreen();
+});
+
+it('says so when the photo picker can’t open, and trims the message it sends', async () => {
+  mockPick.mockRejectedValueOnce(new Error('No activity found to handle intent'));
+  mockRequest.mockResolvedValue({ id: 'f1' });
+  await render(<FeedbackScreen />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Attach a screenshot' }));
+  expect(await screen.findByText(/Couldn’t open your photos/)).toBeOnTheScreen();
+  await fireEvent.changeText(screen.getByLabelText('What went wrong?'), '   Map went blank   ');
+  await fireEvent.press(screen.getByRole('button', { name: 'Send' }));
+  await waitFor(() => expect(mockRequest).toHaveBeenCalled());
+  expect(mockRequest.mock.calls[0]![1]).toMatchObject({ body: { message: 'Map went blank' }, timeoutMs: 120_000 });
+});
+
+it('turns down an image the picker couldn’t read', async () => {
+  mockPick.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///shot.heic', base64: null, mimeType: 'image/heic' }] });
+  await render(<FeedbackScreen />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Attach a screenshot' }));
+  expect(await screen.findByText(/Couldn’t read that image/)).toBeOnTheScreen();
+  expect(screen.queryByLabelText('Screenshot that will be sent')).toBeNull();
 });

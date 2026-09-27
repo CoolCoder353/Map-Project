@@ -4,7 +4,7 @@ import SignIn from '../app/sign-in';
 
 const mockSignIn = jest.fn();
 const mockReplace = jest.fn();
-const mockSetServerUrl = jest.fn(async (_url: string) => undefined);
+const mockSetServerUrl = jest.fn(async (url: string) => url);
 
 jest.mock('expo-router', () => ({
   Link: ({ children }: { children: string }) => require('react').createElement(require('react-native').Text, null, children),
@@ -50,4 +50,19 @@ it('shows the server’s message when sign-in fails and stays put', async () => 
   await fireEvent.press(screen.getByRole('button', { name: 'Sign in' }));
   expect(await screen.findByText('Wrong email or password.')).toBeOnTheScreen();
   expect(mockReplace).not.toHaveBeenCalled();
+});
+
+it('ignores the keyboard’s Go key until the form is filled, and while signing in', async () => {
+  let finish: () => void = () => undefined;
+  mockSignIn.mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+  await fill('', 'correct horse');
+  await fireEvent(screen.getByLabelText('Password'), 'submitEditing');
+  expect(mockSignIn).not.toHaveBeenCalled();
+  await fireEvent.changeText(screen.getByLabelText('Email'), 'sam@example.com');
+  await fireEvent(screen.getByLabelText('Password'), 'submitEditing');
+  await waitFor(() => expect(mockSignIn).toHaveBeenCalledTimes(1));
+  await fireEvent(screen.getByLabelText('Password'), 'submitEditing');
+  expect(mockSignIn).toHaveBeenCalledTimes(1);
+  finish();
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/plan'));
 });

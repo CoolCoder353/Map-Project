@@ -1,6 +1,6 @@
 /// <reference types="jest" />
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Text } from 'react-native';
 
 const mockStore = new Map<string, string>();
@@ -63,5 +63,17 @@ describe('app configuration', () => {
     await waitFor(() => expect(mockFetch).toHaveBeenCalled());
     answer(json({ appName: 'Roamer', voice: 'minimal', feedbackEnabled: true, osmDataDate: null }));
     expect(await screen.findByText('Roamer · Routes ranked by new ground.')).toBeOnTheScreen();
+  });
+});
+
+describe('when a screen fails', () => {
+  it('shows what happened and a way back instead of closing the app', async () => {
+    const { ScreenError } = require('../src/ui/ScreenError') as typeof import('../src/ui/ScreenError');
+    const retry = jest.fn(async () => undefined);
+    await render(<ScreenError error={new Error('Cannot read properties of undefined')} retry={retry} />);
+    expect(screen.getByText('Something went wrong')).toBeOnTheScreen();
+    expect(screen.getByText('Cannot read properties of undefined')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+    expect(retry).toHaveBeenCalled();
   });
 });

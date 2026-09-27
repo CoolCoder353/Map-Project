@@ -119,3 +119,8 @@ Both clients and the API share the Zod schemas in `packages/shared/src/schemas`,
 at compile time. The Android app still ships separately from the server, so an older APK can
 read fields a newer server no longer sends. `pnpm verify:mobile` checks a running server against
 what the app asks for. The server address is baked into the APK at build time.
+
+The Android app keeps its refresh token in secure storage and restores the session on launch. If
+the server can't be reached then, it says so with a Try again button rather than asking someone
+who is still signed in to sign in again. Cached server data (trips, coverage, planned routes) is
+dropped whenever the signed-in account changes, so the next person on a phone never sees it.

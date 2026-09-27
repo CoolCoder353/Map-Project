@@ -76,7 +76,8 @@ cd infra && docker compose exec api node dist/cli.js bootstrap-admin you@example
 
 The app is Expo; screens are in `apps/mobile/app` (expo-router), the rest in `apps/mobile/src`.
 The native map needs a device or emulator, so day to day the Jest screen tests cover the screens
-and a real APK covers the rest. Building an APK needs no local Android SDK:
+and a real APK covers the rest. Building one needs only Docker; the whole routine, from the
+checks before a build to sharing the file, is in [build-android.md](build-android.md):
 
 ```bash
 EXPO_PUBLIC_API_URL=https://maps.paulsjones.com infra/scripts/build-apk.sh
@@ -200,7 +201,8 @@ graph rebuild. `pnpm bench:explore 50000 20` checks explore stays under its targ
 2. Deploy the server: [operations.md](operations.md#upgrading) for a full-size server,
    [deploy-small-server.md](deploy-small-server.md) for the live Queensland one.
 3. `pnpm verify:stack` and `pnpm verify:mobile` against it.
-4. If the Android app changed, or the API changed shape, build a new APK and share it.
+4. If the Android app changed, or the API changed shape, build a new APK and share it
+   ([build-android.md](build-android.md)).
 5. Record anything notable in [verification.md](verification.md).
 
 ## Gotchas
@@ -210,7 +212,19 @@ graph rebuild. `pnpm bench:explore 50000 20` checks explore stays under its targ
 - **The Android build runs pnpm inside Docker** on your checkout. `build-apk.sh` restores
   `node_modules` afterwards; if a build is interrupted, run `CI=true pnpm install`.
 - **The APK's server address is fixed at build time.** Wrong address, broken app: every screen
-  says "Can't reach …". The build script checks it.
+  says "Can't reach …". The build script checks it. People can still change it on the sign-in
+  screen; what they type is tidied up (`maps.example.org/` becomes `https://maps.example.org`).
+- **Expo native modules must match the Expo SDK.** One from another SDK compiles, passes every
+  Jest test (Jest mocks native modules) and then kills the app on launch; that shipped once with
+  `expo-contacts`. After touching a native dependency, run `npx expo install --check` in
+  `apps/mobile` and open a new APK on the [emulator](#emulator). `expo-contacts` 57's main entry
+  is a new API whose old functions throw, so the app imports `expo-contacts/legacy`.
+- **The Android app must survive what the phone throws at it.** Location switched off, a
+  permission refused, secure storage unreadable, a server that never answers: catch it where it
+  happens and say so on screen. A render error anywhere shows `src/ui/ScreenError.tsx` (Expo
+  Router's `ErrorBoundary`, exported from `app/_layout.tsx`) instead of closing the app, and API
+  requests give up after 30 s (`timeoutMs` to change it). Pass the shared schema (`schema:`) for
+  an answer a screen reads fields from: an APK and the server are updated separately.
 - **`POSTGRES_PASSWORD` only applies when the database volume is created.** Changing `.env`
   afterwards makes the API and worker fail with `28P01`. See
   [operations.md](operations.md#rotating-secrets).

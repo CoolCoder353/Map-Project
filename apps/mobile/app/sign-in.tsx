@@ -19,14 +19,17 @@ export default function SignIn() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => void getServerUrl().then(setServer), []);
+  useEffect(() => void getServerUrl().then(setServer, () => undefined), []);
   if (status === 'authenticated') return <Redirect href="/plan" />;
 
+  const ready = !!email.trim() && !!password && !!server.trim();
   const submit = async () => {
+    // The keyboard's Go key submits too, so the button's disabled state isn't enough.
+    if (busy || !ready) return;
     setBusy(true);
     setError(null);
     try {
-      await setServerUrl(server);
+      setServer(await setServerUrl(server));
       await signIn(email.trim(), password);
       router.replace('/plan');
     } catch (e) {
@@ -44,9 +47,9 @@ export default function SignIn() {
           <Body muted>{copy.tagline}</Body>
           <Field label="Server" value={server} onChangeText={setServer} autoCapitalize="none" autoCorrect={false} keyboardType="url" hint="The address your group’s server runs on." />
           <Field label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" autoComplete="email" keyboardType="email-address" />
-          <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry autoComplete="password" onSubmitEditing={submit} />
+          <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry autoComplete="password" onSubmitEditing={() => void submit()} />
           {error ? <Notice tone="error">{error}</Notice> : null}
-          <Button label="Sign in" onPress={submit} busy={busy} disabled={!email || !password || !server} />
+          <Button label="Sign in" onPress={submit} busy={busy} disabled={!ready} />
           <View style={{ alignItems: 'center', gap: space[2] }}>
             <Link href="/register" style={{ color: t.accent, fontWeight: '600', padding: space[2] }}>Create an account with an invite code</Link>
             <Small>Forgot your password? Ask an admin for a reset link.</Small>

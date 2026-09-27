@@ -31,7 +31,11 @@ function db() {
       CREATE INDEX IF NOT EXISTS queued_points_batch ON queued_points (batch_id);
     `);
     return d;
-  })();
+  })().catch((err: unknown) => {
+    // Let the next call try again rather than failing for as long as the app runs.
+    dbPromise = null;
+    throw err;
+  });
   return dbPromise;
 }
 

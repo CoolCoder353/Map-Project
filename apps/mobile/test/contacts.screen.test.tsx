@@ -1,12 +1,13 @@
 /// <reference types="jest" />
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import * as Location from 'expo-location';
 import { PlaceSearch } from '../src/ui/PlaceSearch';
 
 const mockRequest = jest.fn();
 const mockFind = jest.fn();
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
-jest.mock('expo-location', () => ({ requestForegroundPermissionsAsync: jest.fn(), getCurrentPositionAsync: jest.fn(), Accuracy: { Balanced: 3 } }));
+jest.mock('expo-location', () => ({ requestForegroundPermissionsAsync: jest.fn(), getCurrentPositionAsync: jest.fn(), getLastKnownPositionAsync: jest.fn(), Accuracy: { Balanced: 3 } }));
 jest.mock('../src/lib/api', () => ({ api: { request: (...a: unknown[]) => mockRequest(...a) }, errorMessage: (e: Error) => e.message }));
 jest.mock('../src/lib/contacts', () => ({ findContacts: (...a: unknown[]) => mockFind(...a) }));
 
@@ -55,4 +56,41 @@ it('says so when the contact’s address cannot be found on the map', async () =
   await fireEvent.changeText(box, 'dad');
   await fireEvent.press(await screen.findByText('Dad'));
   expect(await screen.findByText(/Couldn’t find Dad’s address/)).toBeOnTheScreen();
+});
+
+describe('Your location', () => {
+  const open = async (onChange = jest.fn()) => {
+    await render(<PlaceSearch label="Starting point" placeholder="From" value={null} onChange={onChange} allowCurrentLocation />);
+    await fireEvent(screen.getByLabelText('Starting point'), 'focus');
+    return onChange;
+  };
+
+  it('uses a recent position straight away when the phone has one', async () => {
+    jest.mocked(Location.requestForegroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    jest.mocked(Location.getLastKnownPositionAsync).mockResolvedValue({ coords: { longitude: 153, latitude: -27.5 } } as never);
+    const onChange = await open();
+    await fireEvent.press(screen.getByText('Your location'));
+    expect(onChange).toHaveBeenCalledWith({ name: 'Your location', description: '', location: [153, -27.5] });
+    expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled();
+  });
+
+  it('explains when location is switched off, and keeps the message after the list closes', async () => {
+    jest.mocked(Location.requestForegroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    jest.mocked(Location.getLastKnownPositionAsync).mockResolvedValue(null as never);
+    jest.mocked(Location.getCurrentPositionAsync).mockRejectedValue(new Error('Location services are disabled'));
+    const onChange = await open();
+    await fireEvent.press(screen.getByText('Your location'));
+    expect(await screen.findByText(/Couldn’t find where you are/)).toBeOnTheScreen();
+    await fireEvent(screen.getByLabelText('Starting point'), 'blur');
+    await waitFor(() => expect(screen.queryByText('Your location')).toBeNull());
+    expect(screen.getByText(/Couldn’t find where you are/)).toBeOnTheScreen();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('explains a refused permission', async () => {
+    jest.mocked(Location.requestForegroundPermissionsAsync).mockResolvedValue({ granted: false } as never);
+    await open();
+    await fireEvent.press(screen.getByText('Your location'));
+    expect(await screen.findByText('Location permission is needed for this.')).toBeOnTheScreen();
+  });
 });

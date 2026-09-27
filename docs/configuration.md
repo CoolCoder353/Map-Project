@@ -58,6 +58,8 @@ Docker Compose passes on; copy [`infra/.env.example`](../infra/.env.example) to 
 
 ## Android build (`infra/scripts/build-apk.sh`)
 
+How to build, check and share the app: [build-android.md](build-android.md).
+
 | Variable | Needed | Notes |
 |---|---|---|
 | `EXPO_PUBLIC_API_URL` | yes | The server the app talks to, **baked into the APK**. Must be `https://`, and not a documentation address: the script refuses `example.com` and checks the finished APK |

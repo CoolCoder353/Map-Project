@@ -32,6 +32,11 @@ export interface QueueStore {
 
 export const groupKey = (p: Pick<QueuedPoint, 'source' | 'sessionId' | 'mode'>) => `${p.source}|${p.sessionId ?? ''}|${p.mode ?? ''}`;
 
+/** A point the server can accept: a real time and a place on Earth. */
+const usable = (p: QueuedPoint) =>
+  Number.isFinite(p.ts) && p.ts > 0 && Number.isFinite(p.lon) && Number.isFinite(p.lat) && Math.abs(p.lon) <= 180 && Math.abs(p.lat) <= 90;
+
+/** The upload for a batch, leaving out points the server would refuse (and the batch with them). */
 export function toBatchRequest(batch: ClaimedBatch): TrackBatchRequest {
   const first = batch.points[0]!;
   return {
@@ -39,15 +44,15 @@ export function toBatchRequest(batch: ClaimedBatch): TrackBatchRequest {
     source: first.source,
     ...(first.mode ? { mode: first.mode } : {}),
     ...(first.sessionId ? { navigationSessionId: first.sessionId } : {}),
-    points: batch.points.map((p) => ({
+    points: batch.points.filter(usable).map((p) => ({
       ts: Math.round(p.ts),
       lon: p.lon,
       lat: p.lat,
       // A fix from cell towers alone can claim tens of kilometres of accuracy, which the server
       // refuses; keep the point and cap the figure rather than losing the batch.
-      accuracyM: p.accuracyM === null || p.accuracyM < 0 ? null : Math.min(10_000, p.accuracyM),
-      speedMps: p.speedMps === null || p.speedMps < 0 ? null : Math.min(200, p.speedMps),
-      headingDeg: p.headingDeg === null || p.headingDeg < 0 ? null : p.headingDeg % 360,
+      accuracyM: !Number.isFinite(p.accuracyM) || p.accuracyM! < 0 ? null : Math.min(10_000, p.accuracyM!),
+      speedMps: !Number.isFinite(p.speedMps) || p.speedMps! < 0 ? null : Math.min(200, p.speedMps!),
+      headingDeg: !Number.isFinite(p.headingDeg) || p.headingDeg! < 0 ? null : p.headingDeg! % 360,
     })),
   };
 }
@@ -77,14 +82,21 @@ export async function flushQueue(
   while (batches < maxBatches) {
     const batch = await store.claim(batchSize, newBatchId);
     if (!batch || batch.points.length === 0) break;
+    const req = toBatchRequest(batch);
+    dropped += batch.points.length - req.points.length;
+    if (req.points.length === 0) {
+      await store.complete(batch.batchId);
+      batches++;
+      continue;
+    }
     try {
-      await upload(toBatchRequest(batch));
+      await upload(req);
     } catch (err) {
       // The same batch is claimed again next time, so a batch the server will never accept
       // would block every later point for good. Throw it away and keep the queue moving.
       if ((err as { status?: number }).status === 400) {
         await store.complete(batch.batchId);
-        dropped += batch.points.length;
+        dropped += req.points.length;
         batches++;
         continue;
       }
@@ -92,7 +104,7 @@ export async function flushQueue(
       break;
     }
     await store.complete(batch.batchId);
-    uploaded += batch.points.length;
+    uploaded += req.points.length;
     batches++;
   }
   return { uploaded, batches, remaining: await store.count(), dropped, error };

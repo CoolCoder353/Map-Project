@@ -1,9 +1,9 @@
-import type { CoverageStats } from '@wayfinder/shared/schemas';
+import { CoverageStatsSchema } from '@wayfinder/shared/schemas';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { api } from '../../src/lib/api';
+import { api, errorMessage } from '../../src/lib/api';
 import { useAppConfig } from '../../src/lib/appConfig';
 import { formatNumber } from '../../src/lib/format';
 import { useSession } from '../../src/lib/session';
@@ -15,7 +15,7 @@ export default function Coverage() {
   const t = useTheme();
   const { user } = useSession();
   const { copy } = useAppConfig();
-  const stats = useQuery({ queryKey: ['coverage-stats'], queryFn: () => api.request<CoverageStats>('api/coverage/stats') });
+  const stats = useQuery({ queryKey: ['coverage-stats'], queryFn: () => api.request('api/coverage/stats', { schema: CoverageStatsSchema }) });
   const [geo, setGeo] = useState<GeoJSON.FeatureCollection | null>(null);
   const pending = useRef<AbortController | null>(null);
 
@@ -52,6 +52,7 @@ export default function Coverage() {
         <Body muted>{copy.coverageIntro}</Body>
         {!user?.settings.trackingEnabled ? <Notice>{copy.trackingOffHint}</Notice> : null}
         {stats.isLoading ? <Loading /> : null}
+        {stats.error ? <Notice tone="error">{errorMessage(stats.error)}</Notice> : null}
         {s && s.roadsTravelled === 0 ? <Body muted>{copy.coverageEmpty}</Body> : null}
         {s && s.roadsTravelled > 0 ? (
           <>

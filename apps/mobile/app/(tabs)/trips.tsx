@@ -1,21 +1,21 @@
-import type { TripSummary } from '@wayfinder/shared/schemas';
+import { TripListResponseSchema } from '@wayfinder/shared/schemas';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { Car, Footprints, History } from 'lucide-react-native';
 import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { api } from '../../src/lib/api';
+import { api, errorMessage } from '../../src/lib/api';
 import { useAppConfig } from '../../src/lib/appConfig';
 import { formatDateTime, formatDistanceShort } from '../../src/lib/format';
 import { space, useTheme } from '../../src/lib/theme';
-import { Empty, NewBadge, Small, Title } from '../../src/ui/kit';
+import { Empty, NewBadge, Notice, Small, Title } from '../../src/ui/kit';
 
 export default function Trips() {
   const t = useTheme();
   const { copy } = useAppConfig();
   const q = useInfiniteQuery({
     queryKey: ['trips'],
-    queryFn: ({ pageParam }) => api.request<{ items: TripSummary[]; nextCursor: string | null }>('api/trips', { query: { limit: 30, cursor: pageParam ?? undefined } }),
+    queryFn: ({ pageParam }) => api.request('api/trips', { query: { limit: 30, cursor: pageParam ?? undefined }, schema: TripListResponseSchema }),
     initialPageParam: null as string | null,
     getNextPageParam: (p) => p.nextCursor,
   });
@@ -26,10 +26,18 @@ export default function Trips() {
         data={trips}
         keyExtractor={(i) => i.id}
         contentContainerStyle={{ padding: space[4], gap: space[2] }}
-        ListHeaderComponent={<Title style={{ marginBottom: space[2] }}>Trips</Title>}
-        ListEmptyComponent={q.isLoading ? null : <Empty icon={History} text={copy.tripsEmpty} />}
+        ListHeaderComponent={
+          <View style={{ gap: space[2], marginBottom: space[2] }}>
+            <Title>Trips</Title>
+            {q.error ? <Notice tone="error">{errorMessage(q.error)}</Notice> : null}
+          </View>
+        }
+        // A list that failed to load isn't an empty one.
+        ListEmptyComponent={q.isLoading || q.error ? null : <Empty icon={History} text={copy.tripsEmpty} />}
         refreshControl={<RefreshControl refreshing={q.isRefetching} onRefresh={() => void q.refetch()} />}
-        onEndReached={() => q.hasNextPage && void q.fetchNextPage()}
+        onEndReached={() => {
+          if (q.hasNextPage && !q.isFetchingNextPage && !q.isError) void q.fetchNextPage();
+        }}
         renderItem={({ item }) => (
           <Pressable accessibilityRole="button" onPress={() => router.push(`/trip/${item.id}`)} style={{ flexDirection: 'row', gap: space[3], alignItems: 'center', paddingVertical: space[2] }}>
             <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: t.surface3, alignItems: 'center', justifyContent: 'center' }}>

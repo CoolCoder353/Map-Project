@@ -1,9 +1,9 @@
 import { formatDistanceShort, formatDuration } from '@wayfinder/nav';
-import { router } from 'expo-router';
 import { ArrowLeft, ArrowRight, ArrowUp, Flag, RotateCcw, Volume2, VolumeX, X } from 'lucide-react-native';
 import { useEffect, useMemo, useRef } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { goBack } from '../src/lib/goBack';
 import { takeRouteToNavigate } from '../src/lib/plannedStore';
 import { space, useTheme } from '../src/lib/theme';
 import { MapCanvas, type MapCanvasHandle } from '../src/map/MapCanvas';
@@ -26,7 +26,7 @@ export default function Navigate() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg, justifyContent: 'center', padding: space[5] }}>
         <Empty icon={Flag} text="No route selected." />
-        <Button label="Back" onPress={() => router.back()} />
+        <Button label="Back" onPress={() => goBack()} />
       </SafeAreaView>
     );
   }
@@ -61,7 +61,7 @@ export default function Navigate() {
         <Pressable accessibilityRole="button" accessibilityLabel={nav.muted ? 'Unmute voice' : 'Mute voice'} onPress={() => nav.setMuted(!nav.muted)} style={{ padding: space[3] }}>
           {nav.muted ? <VolumeX size={24} color={t.text2} /> : <Volume2 size={24} color={t.text} />}
         </Pressable>
-        <Button label={arrived ? 'Done' : 'End'} kind={arrived ? 'primary' : 'secondary'} icon={X} onPress={() => { nav.stop(); router.back(); }} compact />
+        <Button label={arrived ? 'Done' : 'End'} kind={arrived ? 'primary' : 'secondary'} icon={X} onPress={() => { nav.stop(); goBack(); }} compact />
       </View>
     </SafeAreaView>
   );

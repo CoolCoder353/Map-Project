@@ -9,6 +9,7 @@ export default function TabsLayout() {
   const { status } = useSession();
   if (status === 'loading') return <Loading />;
   if (status === 'anonymous') return <Redirect href="/sign-in" />;
+  if (status === 'offline') return <Redirect href="/" />;
   return (
     <Tabs
       screenOptions={{

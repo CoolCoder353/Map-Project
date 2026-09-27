@@ -20,7 +20,8 @@ jest.mock('../src/tracking/background', () => ({
   requestTrackingPermission: () => mockRequestTrackingPermission(),
 }));
 jest.mock('../src/tracking/sqliteStore', () => ({ sqliteQueueStore: { count: async () => 0 } }));
-jest.mock('../src/tracking/sync', () => ({ syncQueue: jest.fn() }));
+const mockSync = jest.fn();
+jest.mock('../src/tracking/sync', () => ({ syncQueue: () => mockSync() }));
 const mockSetContacts = jest.fn();
 jest.mock('../src/lib/contacts', () => ({
   contactsSearchEnabled: async () => false,
@@ -115,3 +116,35 @@ it('leaves contacts search off when the phone refuses permission', async () => {
   expect(await screen.findByText(/Contacts permission was refused/)).toBeOnTheScreen();
   expect(screen.getByLabelText('Search my contacts')).toHaveProp('value', false);
 }, 20_000); // the whole file's queries are still settling by the time this one runs
+
+it('says why an upload failed, without pointing at the phone’s settings', async () => {
+  mockSync.mockRejectedValueOnce(new Error('database is locked'));
+  await renderSettings();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Sync now' }));
+  expect(await screen.findByText('Couldn’t upload. database is locked')).toBeOnTheScreen();
+  expect(screen.queryByRole('button', { name: 'Open app settings' })).toBeNull();
+  mockSync.mockResolvedValueOnce({ uploaded: 0, dropped: 2, error: null });
+  await fireEvent.press(screen.getByRole('button', { name: 'Sync now' }));
+  expect(await screen.findByText('2 points the server couldn’t accept were discarded.')).toBeOnTheScreen();
+});
+
+it('keeps a planned route listed, and says so, when removing it fails', async () => {
+  const planned = { id: 'p1', name: 'Coast loop', route: { distanceM: 5000, durationS: 600, geometry: [[153, -27], [153.1, -27.1]] } };
+  mockRequest.mockImplementation(async (path: string, init?: { method?: string }) => {
+    if (path === 'api/planned-routes') return { items: [planned] };
+    if (path === 'api/planned-routes/p1' && init?.method === 'DELETE') throw new Error('Try again shortly.');
+    throw new Error(`unexpected ${path}`);
+  });
+  await renderSettings();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Remove' }));
+  expect(await screen.findByText('Couldn’t remove that route. Try again shortly.')).toBeOnTheScreen();
+  expect(screen.getByText('Coast loop')).toBeOnTheScreen();
+});
+
+it('won’t start a planned route with nothing to follow', async () => {
+  const planned = { id: 'p2', name: 'Broken', route: { distanceM: 0, durationS: 0, geometry: [[153, -27]] } };
+  mockRequest.mockImplementation(async (path: string) => (path === 'api/planned-routes' ? { items: [planned] } : undefined));
+  await renderSettings();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Start' }));
+  expect(await screen.findByText(/can’t be followed/)).toBeOnTheScreen();
+});

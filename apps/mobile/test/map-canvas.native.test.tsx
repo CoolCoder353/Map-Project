@@ -117,3 +117,48 @@ it('reports taps and remembers the view after moving', async () => {
   expect(onRegionChange).toHaveBeenCalledWith([153, -27.6, 153.2, -27.4], 12);
   await waitFor(() => expect(lastMapView()).toEqual({ center: [153.1, -27.5], zoom: 12 }));
 });
+
+it('fits a very long route without overflowing, and skips points that aren’t on Earth', async () => {
+  const ref = createRef<MapCanvasHandle>();
+  await render(<MapCanvas ref={ref} />);
+  await screen.findByTestId('native-map');
+  // Spread into Math.min, 300,000 points overflow the stack.
+  const long: Array<[number, number]> = Array.from({ length: 300_000 }, (_, i) => [150 + i / 100_000, -30 + i / 100_000]);
+  long.push([Number.NaN, 0], [999, -27]);
+  ref.current!.fitTo(long);
+  expect(mockCamera.fitBounds).toHaveBeenCalledWith([150, -30, 152.99999, -27.00001], expect.anything());
+  ref.current!.fitTo([[Number.NaN, Number.NaN]]);
+  expect(mockCamera.fitBounds).toHaveBeenCalledTimes(1);
+});
+
+it('shows a single point close up instead of fitting an empty box', async () => {
+  const ref = createRef<MapCanvasHandle>();
+  await render(<MapCanvas ref={ref} />);
+  await screen.findByTestId('native-map');
+  ref.current!.fitTo([[153, -27], [153, -27]]);
+  expect(mockCamera.fitBounds).not.toHaveBeenCalled();
+  expect(mockCamera.flyTo).toHaveBeenCalledWith({ center: [153, -27], zoom: 15, duration: 600 });
+  ref.current!.flyTo([Number.NaN, 0]);
+  expect(mockCamera.flyTo).toHaveBeenCalledTimes(1);
+});
+
+it('ignores a map move that arrives without a usable view', async () => {
+  const onRegionChange = jest.fn();
+  await render(<MapCanvas onRegionChange={onRegionChange} />);
+  await screen.findByTestId('native-map');
+  await act(async () => (mockMapProps.onRegionDidChange as (e: unknown) => void)({ nativeEvent: { zoom: 12 } }));
+  await act(async () => (mockMapProps.onRegionDidChange as (e: unknown) => void)({ nativeEvent: { bounds: [153, Number.NaN, 153.2, -27.4], zoom: 12 } }));
+  expect(onRegionChange).not.toHaveBeenCalled();
+});
+
+it('leaves out a route line with fewer than two points', async () => {
+  await render(<MapCanvas routes={[route({ id: 'ok' }), route({ id: 'dot', geometry: [[153, -27]] })]} />);
+  await screen.findByTestId('native-map');
+  expect(mockSources.routes!.data.features.map((f) => f.properties!.id)).toEqual(['ok']);
+});
+
+it('treats a half-typed server address as no server', async () => {
+  mockServer = 'https://';
+  await render(<MapCanvas />);
+  expect(await screen.findByText(/No server set/)).toBeOnTheScreen();
+});

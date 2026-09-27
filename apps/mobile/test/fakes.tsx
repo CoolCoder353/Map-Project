@@ -49,7 +49,7 @@ export const fake = {
     },
   },
   user: makeUser(true) as PublicUser | null,
-  status: 'authenticated' as 'loading' | 'authenticated' | 'anonymous',
+  status: 'authenticated' as 'loading' | 'authenticated' | 'anonymous' | 'offline',
   config: { appName: 'Wayfinder', voice: 'plain', feedbackEnabled: false, osmDataDate: null } as PublicConfig,
   session: {
     setUser: jest.fn((u: PublicUser) => {
@@ -58,8 +58,9 @@ export const fake = {
     signIn: jest.fn(async (_email: string, _password: string) => undefined),
     register: jest.fn(async (_code: string, _email: string, _password: string) => undefined),
     signOut: jest.fn(async () => undefined),
+    retry: jest.fn(async () => undefined),
   },
-  router: { push: jest.fn(), replace: jest.fn(), back: jest.fn() },
+  router: { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) },
   params: {} as Record<string, string>,
   /** Props the screen last gave the map, and calls made through its handle. */
   map: { props: {} as Record<string, unknown>, fitTo: jest.fn(), flyTo: jest.fn() },

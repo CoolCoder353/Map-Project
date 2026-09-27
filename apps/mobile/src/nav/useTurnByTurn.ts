@@ -1,6 +1,6 @@
 import { type NavEvent, NavigationSession, type NavState } from '@wayfinder/nav';
 import type { LngLat } from '@wayfinder/shared/geo';
-import type { Route } from '@wayfinder/shared/schemas';
+import { type Route, RouteSchema } from '@wayfinder/shared/schemas';
 import * as Crypto from 'expo-crypto';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as Location from 'expo-location';
@@ -22,6 +22,17 @@ export interface TurnByTurn {
 }
 
 const KEEP_AWAKE_TAG = 'wayfinder-navigation';
+/** How long to wait before asking again for a new route after one couldn't be fetched. */
+export const REROUTE_RETRY_MS = 15_000;
+
+/** Run a phone service call whose failure shouldn't stop navigation (it may throw or reject). */
+function quietly(run: () => unknown) {
+  try {
+    void Promise.resolve(run()).catch(() => undefined);
+  } catch {
+    // ignored: see above
+  }
+}
 
 /**
  * Drives a navigation session from live GPS: snaps to the route, speaks manoeuvres,
@@ -39,90 +50,138 @@ export function useTurnByTurn(initial: Route | null): TurnByTurn {
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
   const watch = useRef<Location.LocationSubscription | null>(null);
+  const reroutingNow = useRef(false);
+  /** Set while off route without a new route yet, so a failed attempt is retried. */
+  const pendingReroute = useRef<{ to: LngLat; via: LngLat[]; at: number } | null>(null);
 
   const speak = (text: string) => {
     if (mutedRef.current) return;
-    Speech.stop();
-    Speech.speak(text, { language: 'en-AU', rate: 1.0 });
+    quietly(() => Speech.stop());
+    quietly(() => Speech.speak(text, { language: 'en-AU', rate: 1.0 }));
   };
 
-  const handleEvents = useCallback(async (events: NavEvent[]) => {
-    for (const e of events) {
-      if (e.type === 'announce') speak(e.text);
-      if (e.type === 'arrived') {
-        speak('You have arrived');
-        void syncQueue();
-      }
-      if (e.type === 'offRoute' && session.current) {
-        setRerouting(true);
-        try {
-          const next = await api.request<Route>('api/routes/fastest', {
-            method: 'POST',
-            body: { from: e.from, to: e.to, via: e.remainingVia, mode: session.current.mode },
-          });
-          session.current.replaceRoute(next);
-          setRoute(next);
-          speak('Route updated');
-        } catch {
-          setError('Couldn’t get a new route. Keep heading to the destination; retrying when you’re back online.');
-        } finally {
-          setRerouting(false);
-        }
-      }
+  const reroute = useCallback(async (from: LngLat, to: LngLat, via: LngLat[]) => {
+    const current = session.current;
+    if (!current || reroutingNow.current) return;
+    reroutingNow.current = true;
+    pendingReroute.current = { to, via, at: Date.now() };
+    setRerouting(true);
+    try {
+      const next = await api.request('api/routes/fastest', { method: 'POST', body: { from, to, via, mode: current.mode }, schema: RouteSchema });
+      if (session.current !== current) return; // navigation ended while waiting
+      current.replaceRoute(next);
+      pendingReroute.current = null;
+      setRoute(next);
+      setError(null);
+      speak('Route updated');
+    } catch {
+      setError('Couldn’t get a new route. Keep heading to the destination; trying again shortly.');
+    } finally {
+      reroutingNow.current = false;
+      setRerouting(false);
     }
   }, []);
 
+  const handleEvents = useCallback(
+    (events: NavEvent[]) => {
+      for (const e of events) {
+        if (e.type === 'announce') speak(e.text);
+        if (e.type === 'arrived') {
+          speak('You have arrived');
+          void syncQueue().catch(() => undefined);
+        }
+        if (e.type === 'backOnRoute') {
+          pendingReroute.current = null;
+          setError(null);
+        }
+        if (e.type === 'offRoute') void reroute(e.from, e.to, e.remainingVia);
+      }
+    },
+    [reroute],
+  );
+
   useEffect(() => {
     if (!initial) return;
-    session.current = new NavigationSession(initial);
-    void activateKeepAwakeAsync(KEEP_AWAKE_TAG);
+    try {
+      session.current = new NavigationSession(initial);
+    } catch {
+      // A route too short to follow (from and to the same place, say) must not take the app down.
+      setError('This route can’t be followed. Plan it again, then start the new one.');
+      return;
+    }
+    quietly(() => activateKeepAwakeAsync(KEEP_AWAKE_TAG));
     let cancelled = false;
-    (async () => {
-      const perm = await Location.requestForegroundPermissionsAsync();
-      if (!perm.granted) {
-        setError('Navigation needs location permission.');
-        return;
+    let sub: Location.LocationSubscription | null = null;
+    const onFix = (loc: Location.LocationObject) => {
+      const nav = session.current;
+      if (cancelled || !nav) return;
+      const { longitude: lon, latitude: lat } = loc.coords;
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+      const fix = {
+        ts: loc.timestamp,
+        lon,
+        lat,
+        accuracyM: loc.coords.accuracy,
+        speedMps: loc.coords.speed,
+        headingDeg: loc.coords.heading,
+      };
+      setPosition([lon, lat]);
+      let result: ReturnType<NavigationSession['update']>;
+      try {
+        result = nav.update(fix);
+      } catch {
+        return; // one odd fix; the next one carries on
       }
-      watch.current = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 5, timeInterval: 1000 },
-        (loc) => {
-          if (cancelled || !session.current) return;
-          const fix = {
-            ts: loc.timestamp,
-            lon: loc.coords.longitude,
-            lat: loc.coords.latitude,
-            accuracyM: loc.coords.accuracy,
-            speedMps: loc.coords.speed,
-            headingDeg: loc.coords.heading,
-          };
-          setPosition([fix.lon, fix.lat]);
-          const { state: s, events } = session.current.update(fix);
-          setState(s);
-          void handleEvents(events);
-          void sqliteQueueStore.append([
-            {
-              ...fix,
-              accuracyM: fix.accuracyM ?? null,
-              speedMps: fix.speedMps ?? null,
-              headingDeg: fix.headingDeg ?? null,
-              source: 'navigation',
-              mode: session.current.mode,
-              sessionId: sessionId.current,
-            },
-          ]);
-        },
-      );
+      setState(result.state);
+      handleEvents(result.events);
+      // Still off route after a failed attempt: ask again from here, now and then.
+      const pending = pendingReroute.current;
+      if (result.state.status === 'offRoute' && pending && !reroutingNow.current && Date.now() - pending.at >= REROUTE_RETRY_MS) {
+        void reroute([lon, lat], pending.to, pending.via);
+      }
+      void sqliteQueueStore
+        .append([
+          {
+            ...fix,
+            accuracyM: fix.accuracyM ?? null,
+            speedMps: fix.speedMps ?? null,
+            headingDeg: fix.headingDeg ?? null,
+            source: 'navigation',
+            mode: nav.mode,
+            sessionId: sessionId.current,
+          },
+        ])
+        .catch(() => undefined);
+    };
+    (async () => {
+      try {
+        const perm = await Location.requestForegroundPermissionsAsync();
+        if (cancelled) return;
+        if (!perm.granted) {
+          setError('Navigation needs location permission.');
+          return;
+        }
+        sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 5, timeInterval: 1000 }, onFix);
+        // Left the screen while the phone was asking or starting GPS: stop it straight away.
+        if (cancelled) sub.remove();
+        else watch.current = sub;
+      } catch {
+        if (!cancelled) setError('Can’t get your location. Check that location is switched on, then start again.');
+      }
     })();
     const uploader = setInterval(() => void syncQueue().catch(() => undefined), 60_000);
     return () => {
       cancelled = true;
       clearInterval(uploader);
-      watch.current?.remove();
-      Speech.stop();
-      deactivateKeepAwake(KEEP_AWAKE_TAG);
+      sub?.remove();
+      watch.current = null;
+      session.current = null;
+      pendingReroute.current = null;
+      quietly(() => Speech.stop());
+      quietly(() => deactivateKeepAwake(KEEP_AWAKE_TAG));
       void syncQueue().catch(() => undefined);
     };
-  }, [initial, handleEvents]);
+  }, [initial, handleEvents, reroute]);
 
   return {
     route,
@@ -134,7 +193,8 @@ export function useTurnByTurn(initial: Route | null): TurnByTurn {
     position,
     stop: () => {
       watch.current?.remove();
-      Speech.stop();
+      watch.current = null;
+      quietly(() => Speech.stop());
     },
   };
 }
