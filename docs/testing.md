@@ -160,15 +160,16 @@ Each feature a person can use, and where its tests are. Paths are relative to th
 | Feature | Unit / integration | Web components | Android | End to end |
 |---|---|---|---|---|
 | Sign in, register with an invite, reset a password, sign out | `packages/core/test/integration/auth.test.ts`, `apps/api/test/integration/auth-api.test.ts` | `auth-pages.test.tsx`, `app.test.tsx` (guards, deep links, sign-out) | `sign-in.screen.test.tsx`, `screens.screen.test.tsx` (Register, start-up), `device.native.test.tsx` (session) | `account.spec.ts`, `admin.spec.ts` |
-| Fastest and explore routes | `routing.test.ts`, `novelty.test.ts`, `graphhopper.test.ts`, `app-api.test.ts`, `trips-places-api.test.ts` | `directions.test.tsx` | `plan.screen.test.tsx`, `route-card.screen.test.tsx` | `planner.spec.ts` |
-| Round trips | `routing.test.ts`, `app-api.test.ts` | `panels.test.tsx` | `plan.screen.test.tsx` | `planner.spec.ts` |
+| Fastest and explore routes, including no U-turns on driving detours | `routing.test.ts`, `novelty.test.ts`, `graphhopper.test.ts`, `app-api.test.ts`, `trips-places-api.test.ts` | `directions.test.tsx` | `plan.screen.test.tsx`, `route-card.screen.test.tsx` | `planner.spec.ts` |
+| Round trips | `routing.test.ts`, `novelty.test.ts`, `app-api.test.ts` | `panels.test.tsx` | `plan.screen.test.tsx` | `planner.spec.ts` |
 | Discover | `routing.test.ts`, `app-api.test.ts` | `panels.test.tsx` | `screens.screen.test.tsx` | `planner.spec.ts` |
 | Place search and reverse lookup | `search.test.ts`, `places-context.test.ts`, `hours.test.ts`, `osm-places.test.ts`, `boundaries.test.ts`, `trips-places-api.test.ts` | `search-field.test.tsx`, `map-shell.test.tsx` | `contacts.screen.test.tsx` | `feedback.spec.ts` (suggestions) |
 | Contacts search (Android) | — | — | `contacts.screen.test.tsx`, `device.native.test.tsx`, `settings.screen.test.tsx` | — |
 | Start from your location | — | `directions.test.tsx` | `plan.screen.test.tsx`, `device.native.test.tsx` | `planner.spec.ts` |
 | Send a route to the phone; planned routes | `app-api.test.ts`, `trips-places-api.test.ts` | `directions.test.tsx`, `panels.test.tsx`, `settings.test.tsx` | `settings.screen.test.tsx` | `planner.spec.ts` |
 | Turn-by-turn navigation | `packages/nav/test/*` | — | `turn-by-turn.native.test.tsx`, `navigate.screen.test.tsx` | — |
-| Recording trips (background and navigation) | `segmentation.test.ts`, `tracks.test.ts`, `queue.test.ts` (mobile), `apiClient.test.ts` | — | `tracking.native.test.tsx`, `settings.screen.test.tsx` | — |
+| Speed limit while navigating | `geo.test.ts` (`speedLimitRuns`), `routing.test.ts`, `graphhopper.test.ts`, `packages/nav/test/engine.test.ts` | — | `navigate.screen.test.tsx` | — |
+| Recording trips (background and navigation) | `segmentation.test.ts`, `tracks.test.ts`, `queue.test.ts` (mobile), `apiClient.test.ts`, `androidManifest.test.ts` (the permissions background recording needs) | — | `tracking.native.test.tsx`, `settings.screen.test.tsx` | — |
 | Coverage: roads travelled, stats, the map layer | `tracks.test.ts` (road matching, new roads), `app-api.test.ts`, `copy.test.ts` (no hexagon words) | `panels.test.tsx`, `map-provider.test.tsx`, `map-shell.test.tsx` | `screens.screen.test.tsx`, `map-canvas.native.test.tsx` | `planner.spec.ts` |
 | Trips: list, replay, correct mode, delete | `tracks.test.ts`, `trips-places-api.test.ts` | `trips.test.tsx`, `trip-detail.test.tsx` | `screens.screen.test.tsx` | `planner.spec.ts` |
 | Settings, download my data, delete account | `account.test.ts`, `auth-api.test.ts` | `settings.test.tsx` | `settings.screen.test.tsx` | `account.spec.ts` |

@@ -51,11 +51,11 @@ const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { sta
 const path = { distance: 1000, time: 60_000, points: { type: 'LineString', coordinates: [[153, -27], [153.01, -27]] }, instructions: [] };
 
 describe('GraphHopper requests', () => {
-  it('asks for a plain fastest route with way ids, using the fast (CH) graph', async () => {
+  it('asks for a plain fastest route with way ids and speed limits, using the fast (CH) graph', async () => {
     const gh = recording(() => json({ paths: [path] }));
     expect(await gh.client.route({ points: [[153, -27], [153.1, -27.1]], profile: 'car' })).toEqual([path]);
     expect(gh.calls[0]!.url).toBe('http://gh/route');
-    expect(gh.body()).toEqual({ points: [[153, -27], [153.1, -27.1]], profile: 'car', points_encoded: false, instructions: true, calc_points: true, locale: 'en', details: ['osm_way_id'] });
+    expect(gh.body()).toEqual({ points: [[153, -27], [153.1, -27.1]], profile: 'car', points_encoded: false, instructions: true, calc_points: true, locale: 'en', details: ['osm_way_id', 'max_speed'] });
   });
 
   it('turns off CH for custom models, alternatives and pass-through vias', async () => {

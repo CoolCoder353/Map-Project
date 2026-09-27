@@ -67,10 +67,19 @@ routes; nothing user-facing shows them.
 - **Fastest:** one GraphHopper request (CH).
 - **Explore A→B:** builds the person's visited set, asks GraphHopper for alternatives that avoid
   visited areas (a custom model with `areas`) and routes via unexplored areas. Via points are
-  snapped to through-roads so detours don't end in cul-de-sacs. Candidates within the extra-time
-  budget are scored by new kilometres of road (`packages/shared/src/novelty.ts`); U-turns and
-  out-and-back retracing are penalised, and two or more U-turns rule a candidate out.
-- **Round trip:** loops through unexplored areas around the start.
+  snapped to through-roads so detours don't end in cul-de-sacs. A detour that still turns around
+  at its via (a dead end, or a via on a road node, where GraphHopper's `pass_through` can't tell
+  through from back) is asked for again, up to twice, with the via moved to the middle of the road
+  it turned off (`viasAvoidingTurnarounds`). Candidates within the extra-time budget are scored by
+  new kilometres of road (`packages/shared/src/novelty.ts`), with out-and-back retracing penalised.
+  A driving detour or round trip that asks for any U-turn is never offered (they're illegal at
+  lights and wherever signed); on foot, one is allowed.
+- **Speed limits:** every route carries GraphHopper's `max_speed` as `speedLimits`, and Android
+  turn-by-turn shows the limit of the road you're on. A short unknown stretch between two known
+  roads (a junction) keeps the limit before it; longer unknown ones show none.
+- **Round trip:** loops through unexplored areas around the start. Driving loops that need a
+  U-turn aren't offered, so when the first six directions leave fewer than three loops, the other
+  six are tried, then the 15° directions between them.
 - **Discover:** an isochrone for the time budget, then places in areas the person hasn't reached.
 
 ### Place search

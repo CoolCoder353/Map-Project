@@ -86,7 +86,10 @@ const server = createServer((req, res) => {
             time: (distance / SPEED.car!) * 1000,
             points: { type: 'LineString', coordinates },
             instructions: [],
-            details: { osm_way_id: [[0, mid, base + 1], [mid, coordinates.length - 1, base + 2]] },
+            details: {
+              osm_way_id: [[0, mid, base + 1], [mid, coordinates.length - 1, base + 2]],
+              max_speed: [[0, mid, 60], [mid, coordinates.length - 1, 80]],
+            },
           },
         ],
       });

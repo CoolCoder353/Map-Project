@@ -48,6 +48,8 @@ export interface NavState {
   nextInstruction: Instruction | null;
   nextInstructionIndex: number | null;
   distanceToNextManeuverM: number | null;
+  /** Speed limit where you are, in km/h, or null where it isn't known. */
+  speedLimitKmh: number | null;
 }
 
 export class NavigationSession {
@@ -138,7 +140,13 @@ export class NavigationSession {
       nextInstruction: this.route.instructions[1] ?? null,
       nextInstructionIndex: this.route.instructions.length > 1 ? 1 : null,
       distanceToNextManeuverM: this.instructionStart[1] ?? null,
+      speedLimitKmh: null,
     };
+  }
+
+  /** The limit on route segment i (between geometry points i and i + 1). */
+  private speedLimitOn(segment: number): number | null {
+    return this.route.speedLimits?.find((r) => r.from <= segment && segment < r.to)?.kmh ?? null;
   }
 
   /** Find the best segment for p, preferring forward progress near the last match. */
@@ -259,6 +267,7 @@ export class NavigationSession {
       nextInstruction: nextIdx !== null ? ins[nextIdx]! : null,
       nextInstructionIndex: nextIdx,
       distanceToNextManeuverM: distanceToNext,
+      speedLimitKmh: status === 'arrived' ? null : this.speedLimitOn(snap.segment),
     };
     return { state: this.state, events };
   }

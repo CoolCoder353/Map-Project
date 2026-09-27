@@ -180,23 +180,30 @@ export interface RoundTripRankOptions {
   tolerance?: number;
   limit?: number;
   dedupeOverlap?: number;
+  /** Score penalty in km for each U-turn the loop asks for. */
+  kmPenaltyPerUTurn?: number;
+  /** Loops asking for more U-turns than this are not offered at all. */
+  maxUTurns?: number;
 }
 
 export function rankRoundTripCandidates<T>(
-  candidates: ReadonlyArray<{ candidate: T; durationS: number; novelty: RouteNovelty }>,
+  candidates: ReadonlyArray<{ candidate: T; durationS: number; novelty: RouteNovelty; uTurns?: number }>,
   opts: RoundTripRankOptions,
 ): ScoredCandidate<T>[] {
   const tol = opts.tolerance ?? 0.15;
   const limit = opts.limit ?? 3;
   const dedupe = opts.dedupeOverlap ?? 0.8;
+  const uTurnPenalty = opts.kmPenaltyPerUTurn ?? 8;
+  const maxUTurns = opts.maxUTurns ?? 1;
   const scored = candidates
-    .filter((c) => Math.abs(c.durationS - opts.targetS) <= opts.targetS * tol)
+    .filter((c) => Math.abs(c.durationS - opts.targetS) <= opts.targetS * tol && (c.uTurns ?? 0) <= maxUTurns)
     .map((c) => {
       const timeFit = Math.abs(c.durationS - opts.targetS) / opts.targetS;
       const score =
         c.novelty.newKm * (1 - c.novelty.retraceRatio) +
         0.1 * c.novelty.totalKm * (1 - c.novelty.retraceRatio) -
-        timeFit * c.novelty.totalKm * 0.5;
+        timeFit * c.novelty.totalKm * 0.5 -
+        uTurnPenalty * (c.uTurns ?? 0);
       return { ...c, score };
     })
     .sort((x, y) => y.score - x.score);
@@ -243,6 +250,52 @@ export function pickExploreViaPoints(
     if (picked.length >= count) break;
   }
   return picked;
+}
+
+/**
+ * Via points to ask again with, for a route that turns around at one of its vias.
+ *
+ * Via points sit on mapped streets, often at a road node or down a dead end. There the router
+ * can only reach the via and leave it the way it came, so the route dips off the main road, makes
+ * a U-turn at the via and comes straight back out. Each such via is moved to the middle of the
+ * stretch of road the route was on just before it turned off. The route already drives through
+ * that stretch, and a point part-way along a road (not at a node) is somewhere the router can
+ * carry straight on through.
+ *
+ * `uTurnAt` holds the route-geometry index of each U-turn. Returns null when no U-turn is at a
+ * via, so there is nothing to ask again.
+ */
+export function viasAvoidingTurnarounds(
+  coords: readonly LngLat[],
+  uTurnAt: readonly number[],
+  vias: readonly LngLat[],
+  toleranceM = 5,
+): LngLat[] | null {
+  const same = (a: LngLat, b: LngLat) => haversineM(a, b) < 3;
+  const out = [...vias];
+  let moved = false;
+  for (const i of uTurnAt) {
+    const at = coords[i];
+    if (!at) continue;
+    const v = vias.findIndex((p) => haversineM(p, at) <= toleranceM);
+    if (v < 0) continue;
+    // Where two legs meet, the via can appear twice in a row.
+    let a = i;
+    let b = i;
+    while (a > 0 && same(coords[a - 1]!, at)) a--;
+    while (b < coords.length - 1 && same(coords[b + 1]!, at)) b++;
+    // Walk out along the dip while the way in and the way back out match.
+    while (a > 0 && b < coords.length - 1 && same(coords[a - 1]!, coords[b + 1]!)) {
+      a--;
+      b++;
+    }
+    // a is now where the route turned off; the route must have been somewhere before it.
+    if (a < 1) continue;
+    const [p, q] = [coords[a - 1]!, coords[a]!];
+    out[v] = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
+    moved = true;
+  }
+  return moved ? out : null;
 }
 
 /** Radius of the circle a round trip of the given road distance should follow. */

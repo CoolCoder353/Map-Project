@@ -8,15 +8,15 @@ What has been checked, how to repeat it, and what is still open. Update this whe
 |---|---|---|
 | Lint | `pnpm lint` | clean |
 | Types (7 packages) | `pnpm typecheck` | clean |
-| Whole gate | `pnpm check` | passing, 2026-09-27 |
-| Unit tests | `pnpm test:unit` | passing, 138 tests: geo/H3/novelty/segmentation, schemas, copy in every voice, nav engine, OSM tag mapping, boundaries, opening hours, GraphHopper client, metrics, API and worker config, job registration, refresh steps, mobile upload queue and API client (timeouts, server addresses, answers checked against the schemas) |
+| Whole gate | `pnpm check` | passing, 2026-09-28 |
+| Unit tests | `pnpm test:unit` | passing, 149 tests: geo/H3/novelty/segmentation, schemas, copy in every voice, nav engine, OSM tag mapping, boundaries, opening hours, GraphHopper client, metrics, API and worker config, job registration, refresh steps, mobile upload queue and API client (timeouts, server addresses, answers checked against the schemas), the Android manifest's permissions |
 | Web component tests | `pnpm test:web` | passing, 164 tests: every planner panel, sign-in/register/reset, route guards, account menu, feedback, every admin page, the map layer against a fake MapLibre |
 | Integration tests, PGlite | `pnpm test:integration` | passing, 125 (+4 skipped unless `GRAPHHOPPER_LIVE_URL` is set): services, every API area, the admin CLI, the job queue, data export, worker jobs and the refresh pipeline |
 | Integration tests, real Postgres 17 | `TEST_DATABASE_URL=… pnpm test:coverage` | passing, 413 (+4 skipped) across all Vitest projects, against `postgres:17-bookworm`, 2026-09-27 |
 | Vitest coverage | `pnpm test:coverage` | 96.6% lines, 94.2% statements, 92.4% functions, 86.0% branches; floors 95 / 92 / 90 / 84 |
-| Android tests | `pnpm test:mobile` | passing, 118 tests: every screen (the native map faked), navigation, background tracking and the upload queue, contacts, session, the map component, and each failure below that the phone can throw at them |
+| Android tests | `pnpm test:mobile` | passing, 122 tests: every screen (the native map faked), navigation, background tracking and the upload queue, contacts, session, the map component, and each failure below that the phone can throw at them |
 | Android coverage | `pnpm test:mobile:coverage` | 93.9% lines, 90.1% statements, 79.5% functions, 87.8% branches; floors 92 / 88 / 77 / 85 |
-| Android app on the emulator | [development.md](development.md#emulator), APK built for the local stack | 2026-09-27: launches; register, sign-in errors, a server address without `https://`, planning (directions, explore, loops), contact search, navigation without a GPS fix, opening offline and Try again, Coverage against an older server |
+| Android app on the emulator | [development.md](development.md#emulator), APK built for the local stack | 2026-09-27: launches; register, sign-in errors, a server address without `https://`, planning (directions, explore, loops), contact search, navigation without a GPS fix, opening offline and Try again, Coverage against an older server. 2026-09-28: background tracking recording with the app open, and driving a real route (27 Whitby Place, Thornlands to Goodlife Ormiston, on the local Australia graph) to arrival with background tracking on: fastest and explore routes, speed limits, points from both reaching the server |
 | Web end-to-end | `pnpm test:e2e` | passing, 15 specs |
 | Flakiness | web and Android suites together, 8 rounds | 16/16 clean runs, 2026-09-27 |
 | Android JS bundle | `pnpm --filter @wayfinder/mobile exec expo export --platform android` | builds (Hermes bytecode) |
@@ -72,6 +72,9 @@ What has been checked, how to repeat it, and what is still open. Update this whe
 - The Invites page's count box snapped back to 1 when cleared, so typing "2" gave "12".
 - Download my data left out the roads travelled, the main coverage data, while including the internal hexagon index.
 - The explore benchmark could never finish (a 40 km disc cannot hold 50k res-9 cells), and 21 integration tests were also running in the unit project.
+- Explore detours still U-turned at their via points after the cul-de-sac fix (a user report, 2026-09-27). Via points sit on road nodes, where GraphHopper's `pass_through` has no effect, so the route dipped into the side street and turned round. Measured on the live GraphHopper around Cleveland: 19 of 25 street-snapped vias gave a U-turn at the via; moving the via to the road the route turned off left 21 of 25 with no U-turn, and driving routes with any U-turn are no longer offered.
+- Android contacts with several addresses offered only the first, and the feedback message box drew black text on the dark panel (a caller's `style` replaced the field's own, colour included). Both user reports, 2026-09-27.
+- Android closed a few seconds into a trip (a user report, 2026-09-28; found on the emulator). With background tracking on, `expo-task-manager` hands each batch of locations to a persisted JobScheduler job, which Android refuses to apps without `RECEIVE_BOOT_COMPLETED`; the app lists its permissions, so it never had it, and the refusal went uncaught on the main thread. It took moving to set it off, so it showed up as starting a trip.
 - The Android app died on launch: `expo-contacts` was from an older Expo SDK (found on the emulator). Its SDK 57 main entry also throws for the functions the app used, so a bare version bump would have left contact search silently empty.
 - Android, found reading every screen after crash reports (each now has a test):
   - A round trip that finished after switching to Directions crashed Plan (`routes[0].id` of an empty list); clearing a place left its routes up, with Start still going there.
@@ -116,6 +119,8 @@ Results are recorded in [live-stack-results.md](live-stack-results.md).
   the emulator, 2026-09-27: `expo-contacts ~15.0.11` was from an older Expo SDK and needs
   `AnyTypeProvider`, which `expo-modules-core` 57 no longer has, so every launch died with
   `NoClassDefFoundError` before the first screen. Fixed in code (`expo-contacts ~57.0.6`, used
-  through `expo-contacts/legacy`) and checked on the emulator with a build against the dev stack;
-  a release APK for `maps.paulsjones.com` hasn't been built or shared yet. This is likely what
-  the crash reports were.
+  through `expo-contacts/legacy`) and checked on the emulator with a build against the dev stack.
+  App 0.2.0 (versionCode 2), with this fix and the 2026-09-28 feedback fixes, was built for
+  `maps.paulsjones.com` on 2026-09-28: it installs over the old build, opens on the emulator with no
+  crash, and its sign-in screen reaches the server. It hasn't been shared with testers yet. This
+  is likely what the crash reports were.

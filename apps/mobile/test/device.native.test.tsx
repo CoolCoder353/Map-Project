@@ -97,12 +97,12 @@ describe('contacts search', () => {
     expect(await findContacts('m')).toEqual([]);
   });
 
-  it('finds contacts with an address, one address each, up to the limit', async () => {
+  it('finds contacts with an address, up to the limit', async () => {
     mockStore.set('wf.contactsSearch', 'on');
     jest.mocked(Contacts.getPermissionsAsync).mockResolvedValue({ granted: true } as never);
     jest.mocked(Contacts.getContactsAsync).mockResolvedValue({
       data: [
-        contact('Mum', [{ street: '12 Queen St ', city: 'Brisbane', region: 'QLD', postalCode: '4000', label: 'home' }, { street: 'Work' }]),
+        contact('Mum', [{ street: '12 Queen St ', city: 'Brisbane', region: 'QLD', postalCode: '4000', label: 'home' }]),
         contact('Mumbles', []),
         contact('Mumford', [{ street: '', city: '' }]),
         contact('Mummy', [{ city: 'Cairns' }]),
@@ -112,9 +112,28 @@ describe('contacts search', () => {
     const found = await findContacts(' Mum ', 2);
     expect(found).toEqual([
       { id: 'Mum:0', name: 'Mum', address: '12 Queen St, Brisbane, QLD, 4000', label: 'home' },
-      { id: 'Mummy:1', name: 'Mummy', address: 'Cairns', label: null },
+      { id: 'Mummy:0', name: 'Mummy', address: 'Cairns', label: null },
     ]);
     expect(jest.mocked(Contacts.getContactsAsync).mock.calls[0]![0]).toMatchObject({ name: 'mum' });
+  });
+
+  it('offers every address a contact has, once each', async () => {
+    mockStore.set('wf.contactsSearch', 'on');
+    jest.mocked(Contacts.getPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    jest.mocked(Contacts.getContactsAsync).mockResolvedValue({
+      data: [
+        contact('Mum', [
+          { street: '12 Queen St', city: 'Brisbane', label: 'home' },
+          { street: '', city: '' },
+          { street: '1 William St', city: 'Brisbane', label: 'work' },
+          { street: '12 Queen St', city: 'Brisbane', label: 'other' },
+        ]),
+      ],
+    } as never);
+    expect(await findContacts('mum')).toEqual([
+      { id: 'Mum:0', name: 'Mum', address: '12 Queen St, Brisbane', label: 'home' },
+      { id: 'Mum:2', name: 'Mum', address: '1 William St, Brisbane', label: 'work' },
+    ]);
   });
 
   it('treats a failure to read contacts as no matches', async () => {

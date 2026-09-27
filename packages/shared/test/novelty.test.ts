@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type LngLat, destination, haversineM } from '../src/geo.js';
+import { type LngLat, bearingDeg, destination, haversineM } from '../src/geo.js';
 import { AREA_RES, pathCells, pointToCell } from '../src/h3.js';
 import { latLngToCell, gridDisk } from 'h3-js';
 import {
@@ -12,6 +12,7 @@ import {
   roundTripRadiusM,
   roundTripViaPoints,
   routeNovelty,
+  viasAvoidingTurnarounds,
 } from '../src/novelty.js';
 
 const line: LngLat[] = [
@@ -183,5 +184,58 @@ describe('explore ranking prefers routes people want to drive', () => {
       opts,
     );
     expect(ranked[0]!.candidate).toBe('loop');
+  });
+});
+
+describe('rankRoundTripCandidates and U-turns', () => {
+  const novelty = (newKm: number) => ({ newKm, totalKm: newKm + 5, noveltyPct: 50, retraceRatio: 0, cells: [] as string[] });
+
+  it('leaves out loops with more U-turns than allowed, and ranks U-turns down', () => {
+    const cands = [
+      { candidate: 'uturn', durationS: 3600, novelty: novelty(20), uTurns: 1 },
+      { candidate: 'clean', durationS: 3600, novelty: novelty(15), uTurns: 0 },
+    ];
+    expect(rankRoundTripCandidates(cands, { targetS: 3600, maxUTurns: 0 }).map((r) => r.candidate)).toEqual(['clean']);
+    expect(rankRoundTripCandidates(cands, { targetS: 3600 }).map((r) => r.candidate)).toEqual(['clean', 'uturn']);
+  });
+});
+
+describe('viasAvoidingTurnarounds', () => {
+  // Along a main road heading east, a dip 300 m north into a dead end at the via, back out to the
+  // same junction, and on east: the shape of "Turn left onto X · Waypoint · Make a U-turn".
+  const start: LngLat = [153.2, -27.5];
+  const junction = destination(start, 90, 1000);
+  const deadEnd = destination(junction, 0, 300);
+  // n evenly spaced points from a (exclusive) to b (inclusive), as route geometry comes.
+  const along = (a: LngLat, b: LngLat, n: number) => Array.from({ length: n }, (_, k) => destination(a, bearingDeg(a, b), (haversineM(a, b) * (k + 1)) / n));
+  const coords: LngLat[] = [start, ...along(start, junction, 5), ...along(junction, deadEnd, 3), ...along(deadEnd, junction, 3), ...along(junction, destination(junction, 90, 1000), 5)];
+  const uTurnAt = coords.findIndex((c) => haversineM(c, deadEnd) < 1);
+
+  it('moves a via the route turned around at back onto the road it left, before the turn-off', () => {
+    const [moved] = viasAvoidingTurnarounds(coords, [uTurnAt], [deadEnd])!;
+    // Mid-way along the last stretch of the main road before the junction, where the router
+    // can carry straight on through it.
+    expect(haversineM(moved!, junction)).toBeCloseTo(100, -1);
+    expect(Math.abs(moved![1] - start[1])).toBeLessThan(1e-6);
+  });
+
+  it('copes with the via point repeated where two route legs meet', () => {
+    const doubled = [...coords.slice(0, uTurnAt + 1), coords[uTurnAt]!, ...coords.slice(uTurnAt + 1)];
+    const [moved] = viasAvoidingTurnarounds(doubled, [uTurnAt + 1], [deadEnd])!;
+    expect(haversineM(moved!, junction)).toBeCloseTo(100, -1);
+  });
+
+  it('leaves other vias alone', () => {
+    const other = destination(start, 180, 5000);
+    const out = viasAvoidingTurnarounds(coords, [uTurnAt], [other, deadEnd])!;
+    expect(out[0]).toEqual(other);
+    expect(out[1]).not.toEqual(deadEnd);
+  });
+
+  it('has nothing to change when no U-turn is at a via, or the route starts with the turn-around', () => {
+    expect(viasAvoidingTurnarounds(coords, [], [deadEnd])).toBeNull();
+    expect(viasAvoidingTurnarounds(coords, [3], [deadEnd])).toBeNull();
+    const fromDeadEnd = coords.slice(uTurnAt - 1);
+    expect(viasAvoidingTurnarounds(fromDeadEnd, [1], [deadEnd])).toBeNull();
   });
 });

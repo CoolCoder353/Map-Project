@@ -128,3 +128,25 @@ describe('NavigationSession', () => {
     expect(back[0]!.progressM).toBeGreaterThan(1500);
   });
 });
+
+describe('speed limit', () => {
+  it('tells you the limit of the road you are on, and nothing where it is not known', () => {
+    const route = { ...lRoute(), geometry: [start, destination(start, 90, 500), corner, end], speedLimits: [{ from: 0, to: 1, kmh: 60 }, { from: 2, to: 3, kmh: 80 }] };
+    route.instructions = [
+      { ...route.instructions[0]!, interval: [0, 2] },
+      { ...route.instructions[1]!, interval: [2, 3] },
+      { ...route.instructions[2]!, interval: [3, 3] },
+    ];
+    const s = new NavigationSession(route);
+    expect(s.snapshot.speedLimitKmh).toBeNull();
+    const at = (p: LngLat) => s.update({ ts: 0, lon: p[0], lat: p[1], accuracyM: 5 }).state.speedLimitKmh;
+    expect(at(destination(start, 90, 200))).toBe(60);
+    expect(at(destination(start, 90, 700))).toBeNull();
+    expect(at(destination(corner, 0, 300))).toBe(80);
+  });
+
+  it('shows none for a route from a server that does not send limits', () => {
+    const s = new NavigationSession(lRoute());
+    expect(s.update({ ts: 0, lon: start[0] + 0.001, lat: start[1], accuracyM: 5 }).state.speedLimitKmh).toBeNull();
+  });
+});

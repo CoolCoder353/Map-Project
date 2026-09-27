@@ -10,6 +10,7 @@ import {
   projectOntoSegment,
   sampleLine,
   simplifyLine,
+  speedLimitRuns,
 } from '../src/geo.js';
 
 const civic: LngLat = [149.1310, -35.2809];
@@ -70,5 +71,37 @@ describe('geo', () => {
     expect(s.length).toBe(2);
     expect(s[0]).toEqual(pts[0]);
     expect(s[1]).toEqual(pts[49]);
+  });
+});
+
+describe('speedLimitRuns', () => {
+  // Ten 20 m steps east: points 0..10.
+  const line: LngLat[] = Array.from({ length: 11 }, (_, i) => destination(civic, 90, i * 20));
+
+  it('keeps known limits, joining neighbouring stretches with the same one', () => {
+    expect(speedLimitRuns(line, [[0, 3, 60], [3, 6, 60], [6, 10, 80]])).toEqual([
+      { from: 0, to: 6, kmh: 60 },
+      { from: 6, to: 10, kmh: 80 },
+    ]);
+  });
+
+  it('carries a limit across a short unknown stretch, like a junction, but not a long one', () => {
+    // 40 m unknown between two known roads: the earlier limit carries on to the next.
+    expect(speedLimitRuns(line, [[0, 3, 60], [3, 5, null], [5, 10, 80]])).toEqual([
+      { from: 0, to: 5, kmh: 60 },
+      { from: 5, to: 10, kmh: 80 },
+    ]);
+    // 100 m unknown: no limit is shown there.
+    expect(speedLimitRuns(line, [[0, 2, 60], [2, 7, null], [7, 10, 60]])).toEqual([
+      { from: 0, to: 2, kmh: 60 },
+      { from: 7, to: 10, kmh: 60 },
+    ]);
+    // Unknown at the start or end stays unknown.
+    expect(speedLimitRuns(line, [[0, 1, null], [1, 9, 50], [9, 10, null]])).toEqual([{ from: 1, to: 9, kmh: 50 }]);
+  });
+
+  it('ignores values that are not a usable limit', () => {
+    expect(speedLimitRuns(line, [[0, 5, 0], [5, 8, Number.POSITIVE_INFINITY], [8, 10, 200]])).toEqual([]);
+    expect(speedLimitRuns(line, [])).toEqual([]);
   });
 });

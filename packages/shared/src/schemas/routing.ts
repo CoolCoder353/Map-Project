@@ -34,6 +34,11 @@ export const RouteSchema = z.object({
   instructions: z.array(InstructionSchema),
   viaPoints: z.array(LngLatSchema),
   novelty: NoveltySchema,
+  /**
+   * Speed limits along the route: km/h from geometry point `from` to `to`. Stretches with no
+   * limit mapped are missing. Absent from older servers.
+   */
+  speedLimits: z.array(z.object({ from: z.number().int().nonnegative(), to: z.number().int().nonnegative(), kmh: z.number().positive() })).optional(),
 });
 export type Route = z.infer<typeof RouteSchema>;
 

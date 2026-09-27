@@ -127,7 +127,7 @@ checks before a build, and how to test the file before sharing it, are in
 
 ## What is deployed now
 
-Queensland (OSM 2026-09-16), 892,695 places, on a 2 GB / 14 GB VM: about 1.5 GB RAM and 5.6 GB disk in use. Caddy sees the proxy at 192.168.50.34 and takes the forwarded client IP and `https` from it.
+Queensland (OSM 2026-09-16), 892,695 places, on a 2 GB / 14 GB VM: about 1.5 GB RAM and 5.6 GB disk in use. Code from 2026-09-28 (explore without U-turns, speed limits on routes); checked by running the deployed routing against the live graph and places, read-only: detours on four Brisbane-area trips with no U-turns, and car loops offered from Cleveland, Carindale and Toowoomba at 20, 30 and 60 minutes, except Toowoomba at 30 (no loop there fits the time). Caddy sees the proxy at 192.168.50.34 and takes the forwarded client IP and `https` from it.
 
 ## Checking it
 

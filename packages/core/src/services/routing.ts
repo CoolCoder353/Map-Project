@@ -14,6 +14,7 @@ import {
   bboxToCells,
   bigIntToCell,
   cellToBigInt,
+  destination,
   haversineM,
   pickExploreViaPoints,
   pointInRing,
@@ -26,6 +27,8 @@ import {
   roundTripViaPoints,
   routeNovelty,
   routeNoveltyByWays,
+  speedLimitRuns,
+  viasAvoidingTurnarounds,
   visitedAreaPolygon,
 } from '@wayfinder/shared';
 import { gridDisk } from 'h3-js';
@@ -66,6 +69,7 @@ export function toRoute(
       ...(i.exit_number !== undefined ? { exitNumber: i.exit_number } : {}),
     })),
     viaPoints: opts.viaPoints,
+    speedLimits: speedLimitRuns(path.points.coordinates, path.details?.max_speed ?? []),
     novelty: {
       totalKm: Math.round(opts.novelty.totalKm * 100) / 100,
       newKm: Math.round(opts.novelty.newKm * 100) / 100,
@@ -95,8 +99,14 @@ function exploreModel(mode: Mode, polygon: ReturnType<typeof visitedAreaPolygon>
   };
 }
 
-/** Instructions that turn the driver around; GraphHopper signs: -98 unknown, ±8 left/right. */
-const uTurnCount = (path: GhPath) => (path.instructions ?? []).filter((i) => i.sign === -98 || Math.abs(i.sign) === 8).length;
+/** Where the route turns the driver around; GraphHopper signs: -98 unknown, ±8 left/right. */
+const uTurnsIn = (path: GhPath) => (path.instructions ?? []).filter((i) => i.sign === -98 || Math.abs(i.sign) === 8).map((i) => i.interval[0]);
+
+/**
+ * U-turns a route may ask for. In Australia they are illegal at traffic lights and wherever
+ * signed, so a driving detour that needs one is not offered. On foot, turning round is fine.
+ */
+const MAX_UTURNS: Record<Mode, number> = { car: 0, foot: 1 };
 
 async function recordRequest(db: DbClient, userId: string, kind: string, mode: Mode) {
   await db.query('INSERT INTO route_requests (user_id, kind, mode) VALUES ($1, $2, $3)', [userId, kind, mode]);
@@ -127,12 +137,16 @@ interface Candidate {
   vias: LngLat[];
 }
 
-/** Run route requests concurrently, ignoring individual failures (e.g. unreachable via). */
-async function tryRoutes(
-  deps: RoutingDeps,
-  requests: Array<{ points: LngLat[]; mode: Mode; customModel?: CustomModel; alternatives?: number; vias: LngLat[] }>,
-  label: string,
-): Promise<Candidate[]> {
+interface RouteRequest {
+  points: LngLat[];
+  mode: Mode;
+  customModel?: CustomModel;
+  alternatives?: number;
+  vias: LngLat[];
+}
+
+/** Run route requests concurrently; a request that fails (e.g. unreachable via) gives no paths. */
+async function runRoutes(deps: RoutingDeps, requests: readonly RouteRequest[], label: string): Promise<GhPath[][]> {
   const results = await Promise.allSettled(
     requests.map((r) =>
       deps.metrics.time('graphhopper.route', label, () =>
@@ -147,11 +161,44 @@ async function tryRoutes(
       ),
     ),
   );
-  const out: Candidate[] = [];
-  results.forEach((res, i) => {
-    if (res.status === 'fulfilled') for (const path of res.value) out.push({ path, uTurns: uTurnCount(path), vias: requests[i]!.vias });
-  });
-  return out;
+  return results.map((res) => (res.status === 'fulfilled' ? res.value : []));
+}
+
+/** Rounds of asking again, with vias moved, for routes that turn around at a via. */
+const TURNAROUND_RETRIES = 2;
+
+/**
+ * Candidate routes for the requests. A detour that turns around at one of its vias (a dead end,
+ * or a via the router can only leave the way it came) is asked for again with that via moved
+ * onto the road it turned off, and the new route replaces it if it asks for fewer U-turns.
+ */
+async function tryRoutes(deps: RoutingDeps, requests: readonly RouteRequest[], label: string): Promise<Candidate[]> {
+  const found = (await runRoutes(deps, requests, label)).flatMap((paths, i) =>
+    paths.map((path) => ({ path, uTurns: uTurnsIn(path), request: requests[i]! })),
+  );
+  for (let round = 0; round < TURNAROUND_RETRIES; round++) {
+    const retries: Array<{ slot: number; request: RouteRequest }> = [];
+    found.forEach((f, slot) => {
+      if (f.uTurns.length === 0 || f.request.vias.length === 0) return;
+      const snapped = f.path.snapped_waypoints?.coordinates.slice(1, -1);
+      const vias = viasAvoidingTurnarounds(
+        f.path.points.coordinates,
+        f.uTurns,
+        snapped && snapped.length === f.request.vias.length ? snapped : f.request.vias,
+      );
+      if (!vias) return;
+      retries.push({ slot, request: { ...f.request, points: [f.request.points[0]!, ...vias, f.request.points.at(-1)!], vias } });
+    });
+    if (retries.length === 0) break;
+    const again = await runRoutes(deps, retries.map((r) => r.request), label);
+    retries.forEach(({ slot, request }, i) => {
+      const path = again[i]?.[0];
+      if (!path) return;
+      const uTurns = uTurnsIn(path);
+      if (uTurns.length < found[slot]!.uTurns.length) found[slot] = { path, uTurns, request };
+    });
+  }
+  return found.map((f) => ({ path: f.path, uTurns: f.uTurns.length, vias: f.request.vias }));
 }
 
 export async function fastestRoute(
@@ -210,7 +257,7 @@ export async function exploreRoutes(
   const snappedVias = await snapToRoads(deps.db, picked);
   const vias = picked.map((p, i) => snappedVias[i] ?? p);
 
-  const requests: Parameters<typeof tryRoutes>[1] = [
+  const requests: RouteRequest[] = [
     { points: [req.from, req.to], mode: req.mode, alternatives: 3, vias: [] },
   ];
   for (const factor of [0.5, 0.2]) {
@@ -238,7 +285,7 @@ export async function exploreRoutes(
       }))
       // Only keep candidates that actually add new ground over the fastest route.
       .filter((c) => c.novelty.newKm > fastestNovelty.newKm + 0.05),
-    { fastestDurationS: t0, fastestCells: fastestNovelty.cells, budgetS, limit: 3 },
+    { fastestDurationS: t0, fastestCells: fastestNovelty.cells, budgetS, limit: 3, maxUTurns: MAX_UTURNS[req.mode] },
   );
 
   await recordRequest(deps.db, userId, 'explore', req.mode);
@@ -306,14 +353,33 @@ export async function roundTrips(
   const bearings = roundTripBearings(req.start, radius, unexploredAt, 6);
   const candidates = [...probe, ...(await tryRoutes(deps, await loopRequests(bearings, radius), 'roundtrip.candidate'))];
 
-  const ranked = rankRoundTripCandidates(
-    candidates.map((c) => ({
-      candidate: c,
-      durationS: c.path.time / 1000,
-      novelty: noveltyOf(c.path, isVisited, visitedWays),
-    })),
-    { targetS, tolerance: 0.2, limit: 3 },
-  );
+  const LOOPS = 3;
+  const rank = () =>
+    rankRoundTripCandidates(
+      candidates.map((c) => ({
+        candidate: c,
+        durationS: c.path.time / 1000,
+        uTurns: c.uTurns,
+        novelty: noveltyOf(c.path, isVisited, visitedWays),
+      })),
+      { targetS, tolerance: 0.2, limit: LOOPS, maxUTurns: MAX_UTURNS[req.mode] },
+    );
+  let ranked = rank();
+  if (req.mode === 'car') {
+    // Driving loops that need a U-turn aren't offered, which can leave too few from the
+    // directions tried first. Try the rest, then the directions between them, only as needed.
+    const tried = new Set([...probeBearings, ...bearings]);
+    const byUnexplored = (bs: number[]) => bs.sort((a, b) => unexploredAt(destination(req.start, b, radius)) - unexploredAt(destination(req.start, a, radius)));
+    const more = [
+      roundTripBearings(req.start, radius, unexploredAt, 12).filter((b) => !tried.has(b)),
+      byUnexplored(Array.from({ length: 12 }, (_, i) => i * 30 + 15)),
+    ];
+    for (const next of more) {
+      if (ranked.length >= LOOPS || next.length === 0) break;
+      candidates.push(...(await tryRoutes(deps, await loopRequests(next, radius), 'roundtrip.candidate')));
+      ranked = rank();
+    }
+  }
   await recordRequest(deps.db, userId, 'roundtrip', req.mode);
   return ranked.map((r) =>
     toRoute(r.candidate.path, {
