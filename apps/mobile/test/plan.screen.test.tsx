@@ -1,5 +1,5 @@
 /// <reference types="jest" />
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import Plan from '../app/(tabs)/plan';
 import { takeRouteToNavigate } from '../src/lib/plannedStore';
 import { apiError, fake, place, renderScreen, resetFakes, route } from './fakes';
@@ -114,6 +114,40 @@ it('says when no loop fits, and needs a start', async () => {
   await fireEvent.press(await screen.findByText('Gumdale State School'));
   await fireEvent.press(screen.getByRole('button', { name: 'Make loops' }));
   expect(await screen.findByText(/Couldn’t make a loop that length from here/)).toBeOnTheScreen();
+});
+
+it('drops round trips that arrive after switching to directions, rather than crashing', async () => {
+  let answer: (v: unknown) => void = () => undefined;
+  fake.api.on({ 'POST api/routes/roundtrip': () => new Promise((resolve) => (answer = resolve)) });
+  await renderScreen(<Plan />);
+  await fireEvent.press(screen.getByRole('radio', { name: 'Round trip' }));
+  // Not awaited: fireEvent.press resolves with the handler's promise, which is still waiting.
+  void fireEvent.press(screen.getByRole('button', { name: 'Make loops' }));
+  await waitFor(() => expect(fake.api.callsTo('POST api/routes/roundtrip')).toHaveLength(1));
+  await fireEvent.press(screen.getByRole('radio', { name: 'Directions' }));
+  // No loop fitted: an empty list used to reach the Directions cards, which read routes[0].id.
+  await act(async () => answer({ routes: [] }));
+  expect(screen.getByText(/Choose where you’re going/)).toBeOnTheScreen();
+  expect(screen.queryByText(/Couldn’t make a loop/)).toBeNull();
+});
+
+it('forgets routes when the destination is cleared, so Start can’t go to the old one', async () => {
+  await renderScreen(<Plan />);
+  await chooseDestination();
+  expect(await screen.findByText('Explore 1')).toBeOnTheScreen();
+  await fireEvent.press(screen.getByRole('button', { name: 'Clear destination' }));
+  expect(screen.queryByText('Fastest')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Start' })).toBeNull();
+  expect(fake.map.props.routes).toEqual([]);
+});
+
+it('keeps what you type over a chosen place', async () => {
+  await renderScreen(<Plan />);
+  await chooseDestination();
+  const box = screen.getByLabelText('Destination');
+  await fireEvent(box, 'focus');
+  await fireEvent.changeText(box, 'Gumdale State SchoolX');
+  expect(box).toHaveDisplayValue('Gumdale State SchoolX');
 });
 
 afterEach(() => expect(fake.api.unhandled).toEqual([]));

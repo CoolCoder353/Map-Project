@@ -37,6 +37,15 @@ it('says when there is no route to follow', async () => {
   expect(fake.router.back).toHaveBeenCalled();
 });
 
+it('goes to Plan when there is nothing to go back to', async () => {
+  fake.router.canGoBack.mockReturnValueOnce(false);
+  await renderScreen(<Navigate />);
+  await fireEvent.press(screen.getByRole('button', { name: 'End' }));
+  expect(mockNav.stop).toHaveBeenCalled();
+  expect(fake.router.replace).toHaveBeenCalledWith('/plan');
+  expect(fake.router.back).not.toHaveBeenCalled();
+});
+
 it('waits for a position, then shows the next turn, distance and time left', async () => {
   const { rerender } = await renderScreen(<Navigate />);
   expect(screen.getByText('Getting your location…')).toBeOnTheScreen();

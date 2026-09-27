@@ -1,6 +1,7 @@
 /// <reference types="jest" />
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react-native';
-import * as Contacts from 'expo-contacts';
+import * as Contacts from 'expo-contacts/legacy';
 import * as Location from 'expo-location';
 import { Text } from 'react-native';
 
@@ -11,7 +12,7 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn(async (k: string) => void mockStore.delete(k)),
 }));
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { extra: { apiUrl: 'https://built-in.example.test/' } } } }));
-jest.mock('expo-contacts', () => ({
+jest.mock('expo-contacts/legacy', () => ({
   Fields: { Addresses: 'addresses', Name: 'name' },
   requestPermissionsAsync: jest.fn(),
   getPermissionsAsync: jest.fn(),
@@ -22,8 +23,10 @@ const mockReconcile = jest.fn(async (_on: boolean, _name: string) => undefined);
 jest.mock('../src/tracking/background', () => ({ reconcileTracking: (on: boolean, name: string) => mockReconcile(on, name) }));
 // The session's API client: refresh() restores `mockSaved`, logout() signs out.
 let mockSaved: unknown = null;
+let mockHasSaved = false;
 const mockListeners = new Set<(a: unknown) => void>();
 jest.mock('../src/lib/api', () => ({
+  hasSavedSession: async () => mockHasSaved,
   onSession: (fn: (a: unknown) => void) => {
     mockListeners.add(fn);
     return () => mockListeners.delete(fn);
@@ -54,6 +57,18 @@ describe('server address', () => {
   it('uses the address baked into the build until one is chosen, without trailing slashes', async () => {
     expect(await getServerUrl()).toBe('https://built-in.example.test');
     await setServerUrl('  https://maps.example.test//  ');
+    expect(await getServerUrl()).toBe('https://maps.example.test');
+  });
+
+  it('adds https:// to an address typed without it, and refuses one that can’t work', async () => {
+    expect(await setServerUrl('Maps.Example.test')).toBe('https://maps.example.test');
+    expect(await getServerUrl()).toBe('https://maps.example.test');
+    await expect(setServerUrl('https://')).rejects.toThrow(/like maps\.example\.com/);
+    expect(await getServerUrl()).toBe('https://maps.example.test');
+  });
+
+  it('repairs an address saved by an older version without https://', async () => {
+    mockStore.set('wf.serverUrl', 'maps.example.test');
     expect(await getServerUrl()).toBe('https://maps.example.test');
   });
 });
@@ -152,11 +167,15 @@ describe('session', () => {
     signOut = s.signOut;
     return <Text>{`${s.status}:${s.user?.email ?? '-'}`}</Text>;
   }
-  const show = () =>
+  // gcTime Infinity: no clean-up timers left running after the test (see fakes.tsx).
+  const client = () => new QueryClient({ defaultOptions: { queries: { gcTime: Infinity } } });
+  const show = (qc = client()) =>
     render(
-      <SessionProvider>
-        <Probe />
-      </SessionProvider>,
+      <QueryClientProvider client={qc}>
+        <SessionProvider>
+          <Probe />
+        </SessionProvider>
+      </QueryClientProvider>,
     );
 
   it('restores a saved session, starts tracking to match the account, and stops it on sign-out', async () => {
@@ -169,8 +188,47 @@ describe('session', () => {
     expect(await screen.findByText('anonymous:-')).toBeOnTheScreen();
   });
 
+  it('says the server can’t be reached, rather than signing out, when a saved sign-in can’t be checked', async () => {
+    mockSaved = null;
+    mockHasSaved = true;
+    let retry: () => Promise<void> = async () => undefined;
+    function RetryProbe() {
+      retry = useSession().retry;
+      return null;
+    }
+    await render(
+      <QueryClientProvider client={client()}>
+        <SessionProvider>
+          <Probe />
+          <RetryProbe />
+        </SessionProvider>
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText('offline:-')).toBeOnTheScreen();
+    mockSaved = auth;
+    await act(async () => retry());
+    expect(await screen.findByText('authenticated:sam@example.test')).toBeOnTheScreen();
+  });
+
+  it('forgets the last account’s trips and coverage when another signs in, but keeps the app settings', async () => {
+    mockSaved = auth;
+    const qc = client();
+    qc.setQueryData(['trips'], { pages: [] });
+    qc.setQueryData(['config'], { appName: 'Roamer' });
+    await show(qc);
+    await screen.findByText('authenticated:sam@example.test');
+    expect(qc.getQueryData(['trips'])).toBeUndefined();
+    qc.setQueryData(['trips'], { pages: ['sam’s'] });
+    await act(async () => mockListeners.forEach((l) => l(auth))); // same account refreshing
+    expect(qc.getQueryData(['trips'])).toEqual({ pages: ['sam’s'] });
+    await act(async () => signOut());
+    expect(qc.getQueryData(['trips'])).toBeUndefined();
+    expect(qc.getQueryData(['config'])).toEqual({ appName: 'Roamer' });
+  });
+
   it('is signed out when there is no saved session', async () => {
     mockSaved = null;
+    mockHasSaved = false;
     await show();
     expect(await screen.findByText('anonymous:-')).toBeOnTheScreen();
     expect(mockReconcile).not.toHaveBeenCalled();

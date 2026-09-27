@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
 import * as Speech from 'expo-speech';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { useTurnByTurn } from '../src/nav/useTurnByTurn';
+import { REROUTE_RETRY_MS, useTurnByTurn } from '../src/nav/useTurnByTurn';
 import { fake, resetFakes, route } from './fakes';
 
 jest.mock('../src/lib/api', () => require('./fakes').apiModule);
@@ -31,7 +31,8 @@ const mockReplaced: unknown[] = [];
 jest.mock('@wayfinder/nav', () => ({
   NavigationSession: class {
     mode: string;
-    constructor(r: { mode: string }) {
+    constructor(r: { mode: string; geometry: unknown[] }) {
+      if (r.geometry.length < 2) throw new Error('Route geometry needs at least two points');
       this.mode = r.mode;
     }
     update() {
@@ -125,4 +126,81 @@ it('stop() ends location updates and speech', async () => {
   result.current.stop();
   expect(mockRemove).toHaveBeenCalled();
   expect(Speech.stop).toHaveBeenCalled();
+});
+
+it('explains a route too short to follow instead of crashing', async () => {
+  const { result } = await renderHook(() => useTurnByTurn(route({ geometry: [[153, -27.4]] })));
+  await waitFor(() => expect(result.current.error).toMatch(/can’t be followed/));
+  expect(Location.watchPositionAsync).not.toHaveBeenCalled();
+});
+
+it('stops GPS at once if navigation ends while it was still starting', async () => {
+  let started: (sub: { remove(): void }) => void = () => undefined;
+  jest.mocked(Location.watchPositionAsync).mockImplementationOnce(() => new Promise((resolve) => (started = resolve as never)));
+  const { unmount } = await renderHook(() => useTurnByTurn(route()));
+  await waitFor(() => expect(Location.watchPositionAsync).toHaveBeenCalled());
+  await unmount();
+  const late = { remove: jest.fn() };
+  await act(async () => started(late));
+  expect(late.remove).toHaveBeenCalled();
+});
+
+it('says so when location is switched off', async () => {
+  jest.mocked(Location.watchPositionAsync).mockRejectedValueOnce(new Error('Location services are disabled'));
+  const { result } = await renderHook(() => useTurnByTurn(route()));
+  await waitFor(() => expect(result.current.error).toMatch(/Check that location is switched on/));
+});
+
+it('asks again for a new route while still off route, and clears the warning once back on it', async () => {
+  let fail = true;
+  fake.api.on({
+    'POST api/routes/fastest': () => {
+      if (fail) throw new Error('offline');
+      return route({ id: 'r-new' });
+    },
+  });
+  // Shift the clock rather than freeze it: waitFor keeps time with Date.now too.
+  const realNow = Date.now.bind(Date);
+  let ahead = 0;
+  const now = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + ahead);
+  const r = route(); // one route object, as the Navigate screen holds it
+  const { result } = await renderHook(() => useTurnByTurn(r));
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2, -27.4], to: [153.1, -27.5], remainingVia: [] }] });
+  await act(async () => mockOnFix!(fix(153.2, -27.4)));
+  await waitFor(() => expect(result.current.error).toMatch(/Couldn’t get a new route/));
+  // Too soon: no second request yet.
+  mockResults.push({ state: { status: 'offRoute' }, events: [] });
+  await act(async () => mockOnFix!(fix(153.21, -27.4)));
+  expect(fake.api.callsTo('POST api/routes/fastest')).toHaveLength(1);
+  // Later, from where you are now.
+  fail = false;
+  ahead = REROUTE_RETRY_MS;
+  mockResults.push({ state: { status: 'offRoute' }, events: [] });
+  await act(async () => mockOnFix!(fix(153.22, -27.4)));
+  await waitFor(() => expect(result.current.route?.id).toBe('r-new'));
+  expect(fake.api.callsTo('POST api/routes/fastest')[1]!.body).toMatchObject({ from: [153.22, -27.4], to: [153.1, -27.5] });
+  expect(result.current.error).toBeNull();
+  now.mockRestore();
+});
+
+it('drops the reroute warning when you find your own way back to the route', async () => {
+  fake.api.on({ 'POST api/routes/fastest': () => { throw new Error('offline'); } });
+  const r = route();
+  const { result } = await renderHook(() => useTurnByTurn(r));
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2, -27.4], to: [153.1, -27.5], remainingVia: [] }] });
+  await act(async () => mockOnFix!(fix(153.2, -27.4)));
+  await waitFor(() => expect(result.current.error).not.toBeNull());
+  mockResults.push({ state: { status: 'navigating' }, events: [{ type: 'backOnRoute' }] });
+  await act(async () => mockOnFix!(fix(153.05, -27.45)));
+  expect(result.current.error).toBeNull();
+});
+
+it('ignores a fix without a usable position', async () => {
+  const { result } = await renderHook(() => useTurnByTurn(route()));
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  await act(async () => mockOnFix!(fix(Number.NaN, -27.4)));
+  expect(result.current.position).toBeNull();
+  expect(mockAppend).not.toHaveBeenCalled();
 });

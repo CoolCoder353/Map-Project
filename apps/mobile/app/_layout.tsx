@@ -32,3 +32,6 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+// Any screen that fails to render shows this instead of closing the app.
+export { ScreenError as ErrorBoundary } from '../src/ui/ScreenError';

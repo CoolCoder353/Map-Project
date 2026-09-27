@@ -121,7 +121,9 @@ VERIFY_REGION=qld API_URL=https://maps.paulsjones.com EMAIL=… PASSWORD=… pnp
 
 The address is baked into the APK at build time and is what the app talks to, so pass the real
 one. The script refuses a documentation address and checks the finished file points where you
-meant; `verify:mobile` then proves the server still answers everything the app asks for.
+meant; `verify:mobile` then proves the server still answers everything the app asks for. The
+checks before a build, and how to test the file before sharing it, are in
+[build-android.md](build-android.md).
 
 ## What is deployed now
 

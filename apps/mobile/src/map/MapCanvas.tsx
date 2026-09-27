@@ -4,6 +4,7 @@ import type { Route } from '@wayfinder/shared/schemas';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { type StyleProp, Text, View, type ViewStyle } from 'react-native';
 import * as Location from 'expo-location';
+import { isServerUrl } from '../lib/apiClient';
 import { getServerUrl } from '../lib/server';
 import { MapErrorBoundary } from './MapErrorBoundary';
 import { useTheme } from '../lib/theme';
@@ -37,6 +38,28 @@ interface Props {
 
 const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
+const isLngLat = (c: LngLat | undefined): c is LngLat =>
+  !!c && Number.isFinite(c[0]) && Number.isFinite(c[1]) && Math.abs(c[0]) <= 180 && Math.abs(c[1]) <= 90;
+
+/**
+ * [west, south, east, north] of the usable points, or null if there are none. A loop, not
+ * Math.min(...xs): spreading a long route's tens of thousands of points overflows the stack.
+ */
+export function boundsOf(coords: LngLat[]): [number, number, number, number] | null {
+  let w = Infinity;
+  let s = Infinity;
+  let e = -Infinity;
+  let n = -Infinity;
+  for (const c of coords) {
+    if (!isLngLat(c)) continue;
+    if (c[0] < w) w = c[0];
+    if (c[0] > e) e = c[0];
+    if (c[1] < s) s = c[1];
+    if (c[1] > n) n = c[1];
+  }
+  return w === Infinity ? null : [w, s, e, n];
+}
+
 export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   { style, routes = [], selectedRouteId = null, onRoutePress, markers = [], coverage, track, showUser = true, followUser = false, onPress, onRegionChange },
   ref,
@@ -48,10 +71,12 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   const [canShowUser, setCanShowUser] = useState(false);
 
   useEffect(() => {
-    void getServerUrl().then((u) => {
-      // A relative style URL (no server set yet) crashes the native map.
-      setStyleUrl(/^https?:\/\//i.test(u) ? `${u}/map/style.json?theme=${t.dark ? 'dark' : 'light'}` : '');
-    });
+    void getServerUrl()
+      .catch(() => '')
+      .then((u) => {
+        // A relative style URL (no server set yet) crashes the native map.
+        setStyleUrl(isServerUrl(u) ? `${u}/map/style.json?theme=${t.dark ? 'dark' : 'light'}` : '');
+      });
   }, [t.dark]);
 
   // The user-location layer asks Android for updates; rendering it without permission can take
@@ -68,17 +93,20 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
 
   useImperativeHandle(ref, () => ({
     fitTo(coords, padding = { top: 80, bottom: 80, left: 48, right: 48 }) {
-      if (coords.length === 0) return;
-      const xs = coords.map((c) => c[0]);
-      const ys = coords.map((c) => c[1]);
-      camera.current?.fitBounds([Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)], { padding, duration: 600 });
+      const b = boundsOf(coords);
+      if (!b) return;
+      // A single point has no extent to fit; show it close up instead.
+      if (b[0] === b[2] && b[1] === b[3]) camera.current?.flyTo({ center: [b[0], b[1]], zoom: 15, duration: 600 });
+      else camera.current?.fitBounds(b, { padding, duration: 600 });
     },
     flyTo(center, zoom = 15) {
+      if (!isLngLat(center)) return;
       camera.current?.flyTo({ center, zoom, duration: 600 });
     },
   }));
 
-  const ordered = [...routes].sort((a, b) => Number(a.id === selectedRouteId) - Number(b.id === selectedRouteId));
+  // A line needs two points; anything shorter is invalid GeoJSON to the native map.
+  const ordered = routes.filter((r) => r.geometry.length > 1).sort((a, b) => Number(a.id === selectedRouteId) - Number(b.id === selectedRouteId));
   const routeData: GeoJSON.FeatureCollection = {
     type: 'FeatureCollection',
     features: ordered.map((r) => ({
@@ -113,9 +141,10 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       compass={false}
       onPress={onPress ? (e) => onPress(e.nativeEvent.lngLat as LngLat) : undefined}
       onRegionDidChange={(e) => {
-        const bounds = e.nativeEvent.bounds as [number, number, number, number];
-        rememberMapView(bounds, e.nativeEvent.zoom);
-        onRegionChange?.(bounds, e.nativeEvent.zoom);
+        const { bounds, zoom } = e.nativeEvent;
+        if (!Array.isArray(bounds) || bounds.length !== 4 || !bounds.every(Number.isFinite) || !Number.isFinite(zoom)) return;
+        rememberMapView(bounds as [number, number, number, number], zoom);
+        onRegionChange?.(bounds as [number, number, number, number], zoom);
       }}
     >
       <Camera ref={camera} initialViewState={{ center: [134.5, -27.5], zoom: 3.6 }} trackUserLocation={followUser ? 'course' : undefined} />

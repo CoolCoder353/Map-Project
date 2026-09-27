@@ -1,4 +1,4 @@
-import type { PlannedRoute, PublicUser, UserSettings } from '@wayfinder/shared/schemas';
+import { type PlannedRoute, PlannedRouteListSchema, PublicUserSchema, type UserSettings } from '@wayfinder/shared/schemas';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
@@ -28,36 +28,102 @@ export default function SettingsScreen() {
   const [contactsOn, setContactsOn] = useState(false);
   const [queued, setQueued] = useState(0);
   const [server, setServer] = useState('');
-  const [message, setMessage] = useState<string | null>(null);
-  const planned = useQuery({ queryKey: ['planned-routes'], queryFn: () => api.request<{ items: PlannedRoute[] }>('api/planned-routes') });
+  // A message, and whether the fix is in the phone's settings for this app.
+  const [message, setMessageState] = useState<{ text: string; openSettings: boolean } | null>(null);
+  const setMessage = (text: string | null, openSettings = false) => setMessageState(text ? { text, openSettings } : null);
+  const [syncing, setSyncing] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const planned = useQuery({ queryKey: ['planned-routes'], queryFn: () => api.request('api/planned-routes', { schema: PlannedRouteListSchema }) });
 
+  // Each check stands alone: one failing phone service shouldn't blank the others.
   const refreshStatus = async () => {
-    setContactsOn(await contactsSearchEnabled());
-    setPermission(await trackingPermission());
-    setQueued(await sqliteQueueStore.count());
+    await Promise.all([
+      contactsSearchEnabled().then(setContactsOn, () => undefined),
+      trackingPermission().then(setPermission, () => undefined),
+      sqliteQueueStore.count().then(setQueued, () => undefined),
+    ]);
   };
   useEffect(() => {
     void refreshStatus();
-    void getServerUrl().then(setServer);
+    void getServerUrl().then(setServer, () => undefined);
   }, []);
 
   const save = useMutation({
-    mutationFn: (patch: Partial<UserSettings>) => api.request<PublicUser>('api/me/settings', { method: 'PATCH', body: patch }),
+    mutationFn: (patch: Partial<UserSettings>) => api.request('api/me/settings', { method: 'PATCH', body: patch, schema: PublicUserSchema }),
     onSuccess: (u) => setUser(u),
-    onError: (e) => setMessage(errorMessage(e)),
+    onError: (e) => setMessage(`Couldn’t save that setting. ${errorMessage(e)}`),
   });
 
   const toggleTracking = async (on: boolean) => {
     setMessage(null);
     if (on) {
-      const p = await requestTrackingPermission();
+      let p: Awaited<ReturnType<typeof requestTrackingPermission>>;
+      try {
+        p = await requestTrackingPermission();
+      } catch {
+        p = 'denied';
+      }
       setPermission(p);
       if (p !== 'granted') {
-        setMessage('Background tracking needs location access set to “Allow all the time”. Open app settings to change it.');
+        setMessage('Background tracking needs location access set to “Allow all the time”. Open app settings to change it.', true);
         return;
       }
     }
     save.mutate({ trackingEnabled: on });
+  };
+
+  const syncNow = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    setMessage(null);
+    try {
+      const r = (await syncQueue()) as { error?: unknown; dropped?: number } | null;
+      setMessage(
+        r?.error
+          ? errorMessage(r.error)
+          : r?.dropped
+            ? `${r.dropped} point${r.dropped === 1 ? '' : 's'} the server couldn’t accept were discarded.`
+            : null,
+      );
+      void qc.invalidateQueries({ queryKey: ['trips'] });
+    } catch (e) {
+      setMessage(`Couldn’t upload. ${errorMessage(e)}`);
+    } finally {
+      await refreshStatus();
+      setSyncing(false);
+    }
+  };
+
+  const toggleContacts = async (on: boolean) => {
+    setMessage(null);
+    try {
+      const now = await setContactsSearchEnabled(on);
+      setContactsOn(now);
+      if (on && !now) setMessage('Contacts permission was refused, so contact search stays off.', true);
+    } catch (e) {
+      setMessage(`Couldn’t change contact search. ${errorMessage(e)}`);
+    }
+  };
+
+  const removePlanned = async (id: string) => {
+    if (removing) return;
+    setRemoving(id);
+    setMessage(null);
+    try {
+      await api.request(`api/planned-routes/${id}`, { method: 'DELETE' });
+      await planned.refetch();
+    } catch (e) {
+      setMessage(`Couldn’t remove that route. ${errorMessage(e)}`);
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  const startPlanned = (p: PlannedRoute) => {
+    // A route drawn on the website with too few points has nothing to follow.
+    if (!p.route?.geometry || p.route.geometry.length < 2) return setMessage('That route can’t be followed. Plan it again on the website.');
+    setRouteToNavigate(p.route);
+    router.push('/navigate');
   };
 
   if (!user) return null;
@@ -76,6 +142,7 @@ export default function SettingsScreen() {
           <Switch
             accessibilityLabel="Background tracking"
             value={user.settings.trackingEnabled}
+            disabled={save.isPending}
             onValueChange={(v) => void toggleTracking(v)}
             trackColor={{ true: t.accent, false: t.borderStrong }}
           />
@@ -83,8 +150,10 @@ export default function SettingsScreen() {
         {permission && permission !== 'granted' && user.settings.trackingEnabled ? (
           <Notice tone="warning">Location access isn’t “Allow all the time”, so nothing is being recorded.</Notice>
         ) : null}
-        {message ? <Notice tone="warning">{message}</Notice> : null}
-        {message ? <Button label="Open app settings" kind="secondary" compact onPress={() => void Linking.openSettings()} style={{ alignSelf: 'flex-start' }} /> : null}
+        {message ? <Notice tone="warning">{message.text}</Notice> : null}
+        {message?.openSettings ? (
+          <Button label="Open app settings" kind="secondary" compact onPress={() => void Linking.openSettings().catch(() => undefined)} style={{ alignSelf: 'flex-start' }} />
+        ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
           <Small style={{ flex: 1 }}>{queued ? `${queued} location points waiting to upload` : 'Everything is uploaded'}</Small>
           <Button
@@ -92,18 +161,8 @@ export default function SettingsScreen() {
             kind="secondary"
             compact
             icon={RefreshCw}
-            onPress={async () => {
-              const r = (await syncQueue()) as { error?: unknown; dropped?: number } | null;
-              setMessage(
-                r?.error
-                  ? errorMessage(r.error)
-                  : r?.dropped
-                    ? `${r.dropped} point${r.dropped === 1 ? '' : 's'} the server couldn’t accept were discarded.`
-                    : null,
-              );
-              await refreshStatus();
-              void qc.invalidateQueries({ queryKey: ['trips'] });
-            }}
+            busy={syncing}
+            onPress={() => void syncNow()}
           />
         </View>
 
@@ -116,11 +175,7 @@ export default function SettingsScreen() {
           <Switch
             accessibilityLabel="Search my contacts"
             value={contactsOn}
-            onValueChange={async (on) => {
-              const now = await setContactsSearchEnabled(on);
-              setContactsOn(now);
-              if (on && !now) setMessage('Contacts permission was refused, so contact search stays off.');
-            }}
+            onValueChange={(on) => void toggleContacts(on)}
             trackColor={{ true: t.accent, false: t.borderStrong }}
           />
         </View>
@@ -133,21 +188,23 @@ export default function SettingsScreen() {
           options={[{ value: 'car', label: 'Drive', icon: Car }, { value: 'foot', label: 'Walk', icon: Footprints }]}
         />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
-          <Button label="−" kind="secondary" compact onPress={() => save.mutate({ exploreBudgetMin: Math.max(5, user.settings.exploreBudgetMin - 5) })} />
-          <Body>Explore routes may take up to {user.settings.exploreBudgetMin} min extra</Body>
-          <Button label="+" kind="secondary" compact onPress={() => save.mutate({ exploreBudgetMin: Math.min(60, user.settings.exploreBudgetMin + 5) })} />
+          {/* Off while saving: each step counts from the saved value, so quick taps would be lost. */}
+          <Button label="−" kind="secondary" compact disabled={save.isPending} onPress={() => save.mutate({ exploreBudgetMin: Math.max(5, user.settings.exploreBudgetMin - 5) })} />
+          <Body style={{ flexShrink: 1 }}>Explore routes may take up to {user.settings.exploreBudgetMin} min extra</Body>
+          <Button label="+" kind="secondary" compact disabled={save.isPending} onPress={() => save.mutate({ exploreBudgetMin: Math.min(60, user.settings.exploreBudgetMin + 5) })} />
         </View>
 
         <Heading>Planned routes</Heading>
         <Small>Routes sent from the website.</Small>
+        {planned.error ? <Notice tone="error">{errorMessage(planned.error)}</Notice> : null}
         {planned.data?.items.length === 0 ? <Body muted>Nothing planned yet.</Body> : null}
         {planned.data?.items.map((p) => (
           <Card key={p.id}>
             <Text style={{ color: t.text, fontWeight: '700' }}>{p.name}</Text>
             <Small>{formatDistanceShort(p.route.distanceM)} · {formatDuration(p.route.durationS)}</Small>
             <View style={{ flexDirection: 'row', gap: space[2], marginTop: space[2] }}>
-              <Button label="Start" icon={Navigation} compact onPress={() => { setRouteToNavigate(p.route); router.push('/navigate'); }} />
-              <Button label="Remove" kind="ghost" icon={Trash2} compact onPress={async () => { await api.request(`api/planned-routes/${p.id}`, { method: 'DELETE' }); void planned.refetch(); }} />
+              <Button label="Start" icon={Navigation} compact onPress={() => startPlanned(p)} />
+              <Button label="Remove" kind="ghost" icon={Trash2} compact busy={removing === p.id} disabled={!!removing} onPress={() => void removePlanned(p.id)} />
             </View>
           </Card>
         ))}
@@ -160,7 +217,7 @@ export default function SettingsScreen() {
           </>
         ) : null}
 
-        <Button label="Sign out" kind="secondary" icon={LogOut} onPress={() => void signOut().then(() => router.replace('/sign-in'))} style={{ marginTop: space[4] }} />
+        <Button label="Sign out" kind="secondary" icon={LogOut} onPress={() => void signOut().finally(() => router.replace('/sign-in'))} style={{ marginTop: space[4] }} />
         <Small>Delete your account or download your data from the website’s Settings.</Small>
       </ScrollView>
     </SafeAreaView>

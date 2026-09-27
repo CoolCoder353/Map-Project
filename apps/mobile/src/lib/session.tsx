@@ -1,10 +1,12 @@
 import type { AuthResponse, PublicUser } from '@wayfinder/shared/schemas';
-import { type ReactNode, createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { type ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { reconcileTracking } from '../tracking/background';
-import { api, onSession } from './api';
+import { api, hasSavedSession, onSession } from './api';
 import { useAppConfig } from './appConfig';
 
-type Status = 'loading' | 'authenticated' | 'anonymous';
+/** "offline": signed in on this phone, but the server couldn't be reached to confirm it. */
+type Status = 'loading' | 'authenticated' | 'anonymous' | 'offline';
 
 interface SessionValue {
   status: Status;
@@ -13,6 +15,8 @@ interface SessionValue {
   signIn(email: string, password: string): Promise<void>;
   register(code: string, email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
+  /** Try the saved sign-in again (after "offline"). */
+  retry(): Promise<void>;
 }
 
 const Ctx = createContext<SessionValue | null>(null);
@@ -21,17 +25,31 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
   const [user, setUser] = useState<PublicUser | null>(null);
   const { config } = useAppConfig();
+  const qc = useQueryClient();
+  const accountId = useRef<string | null>(null);
+
+  const restore = useCallback(async () => {
+    setStatus('loading');
+    const auth = await api.refresh();
+    // No answer but a saved sign-in: the phone is offline or the server is down. Saying so beats
+    // sending someone who is still signed in back to the sign-in screen.
+    if (!auth) setStatus((await hasSavedSession()) ? 'offline' : 'anonymous');
+  }, []);
 
   useEffect(() => {
     const off = onSession((auth: AuthResponse | null) => {
+      const id = auth?.user.id ?? null;
+      if (id !== accountId.current) {
+        // Cached trips, coverage and planned routes belong to the account that fetched them.
+        qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'config' });
+        accountId.current = id;
+      }
       setUser(auth?.user ?? null);
       setStatus(auth ? 'authenticated' : 'anonymous');
     });
-    void api.refresh().then((auth) => {
-      if (!auth) setStatus('anonymous');
-    });
+    void restore();
     return off;
-  }, []);
+  }, [qc, restore]);
 
   // Keep background tracking in line with the account setting on this device.
   useEffect(() => {
@@ -47,10 +65,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       register: async (code, email, password) => void (await api.register(code, email, password)),
       signOut: async () => {
         await reconcileTracking(false, config.appName).catch(() => undefined);
-        await api.logout();
+        await api.logout().catch(() => undefined);
+        qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'config' });
+        accountId.current = null;
+        setUser(null);
+        setStatus('anonymous');
       },
+      retry: restore,
     }),
-    [status, user, config.appName],
+    [status, user, config.appName, restore, qc],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

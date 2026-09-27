@@ -26,7 +26,7 @@ jest.mock('../src/map/MapCanvas', () => require('./fakes').mapCanvasModule);
 jest.mock('../src/lib/contacts', () => ({ findContacts: async () => [] }));
 jest.mock('../src/lib/useApproxLocation', () => ({ useApproxLocation: () => undefined }));
 jest.mock('expo-location', () => ({ requestForegroundPermissionsAsync: jest.fn(), getCurrentPositionAsync: jest.fn(), Accuracy: { Balanced: 3 } }));
-const mockSetServerUrl = jest.fn(async (_u: string) => undefined);
+const mockSetServerUrl = jest.fn(async (u: string) => u);
 jest.mock('../src/lib/server', () => ({ getServerUrl: async () => 'https://maps.example.com', setServerUrl: (u: string) => mockSetServerUrl(u) }));
 
 beforeEach(() => resetFakes());
@@ -57,6 +57,12 @@ describe('Coverage', () => {
     expect(await screen.findByText(/No roads travelled yet/)).toBeOnTheScreen();
     expect(screen.getByText(/Tracking’s off/)).toBeOnTheScreen();
     expect(screen.queryByText(/hexagon|fog/i)).toBeNull();
+  });
+
+  it('shows why the numbers couldn’t load', async () => {
+    fake.api.on({ 'GET api/coverage/stats': () => apiError(0, 'Can’t reach maps.example.com. Check the server address and your connection.') });
+    await renderScreen(<Coverage />);
+    expect(await screen.findByText(/Can’t reach maps\.example\.com/)).toBeOnTheScreen();
   });
 });
 
@@ -99,6 +105,31 @@ describe('Discover', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Find places' }));
     expect(await screen.findByText('Routing is down')).toBeOnTheScreen();
   });
+
+  it('lists a kind of place this version doesn’t know yet instead of crashing', async () => {
+    fake.api.on({ 'GET api/search': () => ({ results: [place()] }), 'GET api/discover': () => ({ items: [discoverItem({ category: 'hot_spring' as never, name: 'Innot Hot Springs' })] }) });
+    await renderScreen(<Discover />);
+    const from = screen.getByLabelText('Search from');
+    await fireEvent(from, 'focus');
+    await fireEvent.changeText(from, 'gumdale');
+    await fireEvent.press(await screen.findByText('Gumdale State School'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Find places' }));
+    expect(await screen.findByText('Innot Hot Springs')).toBeOnTheScreen();
+    expect(screen.getByText(/^Place · 7\.4 km away/)).toBeOnTheScreen();
+  });
+
+  it('clears places found from a start that’s been cleared', async () => {
+    fake.api.on({ 'GET api/search': () => ({ results: [place()] }), 'GET api/discover': () => ({ items: [discoverItem()] }) });
+    await renderScreen(<Discover />);
+    const from = screen.getByLabelText('Search from');
+    await fireEvent(from, 'focus');
+    await fireEvent.changeText(from, 'gumdale');
+    await fireEvent.press(await screen.findByText('Gumdale State School'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Find places' }));
+    expect(await screen.findByText('Mount Coot-tha Lookout')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Clear search from' }));
+    expect(screen.queryByText('Mount Coot-tha Lookout')).toBeNull();
+  });
 });
 
 describe('Trips', () => {
@@ -116,6 +147,13 @@ describe('Trips', () => {
     fake.api.on({ 'GET api/trips': () => ({ items: [], nextCursor: null }) });
     await renderScreen(<Trips />);
     expect(await screen.findByText(/No trips yet/)).toBeOnTheScreen();
+  });
+
+  it('says trips couldn’t load, rather than that there are none', async () => {
+    fake.api.on({ 'GET api/trips': () => apiError(503, 'The server had a problem. Try again shortly.') });
+    await renderScreen(<Trips />);
+    expect(await screen.findByText('The server had a problem. Try again shortly.')).toBeOnTheScreen();
+    expect(screen.queryByText(/No trips yet/)).toBeNull();
   });
 });
 
@@ -144,6 +182,28 @@ describe('Trip', () => {
     expect(await screen.findByText('Trip not found')).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: 'Trips' }));
     expect(fake.router.back).toHaveBeenCalled();
+  });
+
+  it('says a delete failed and stays on the trip', async () => {
+    fake.params = { id: 't-1' };
+    fake.api.on({ 'GET api/trips/t-1': () => tripDetail(), 'DELETE api/trips/t-1': () => apiError(503, 'Try again shortly.') });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    await renderScreen(<Trip />);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Delete trip' }));
+    const buttons = alert.mock.calls[0]![2] as Array<{ text: string; onPress?: () => void }>;
+    await act(async () => buttons.find((b) => b.text === 'Delete')!.onPress!());
+    expect(await screen.findByText('Couldn’t delete the trip. Try again shortly.')).toBeOnTheScreen();
+    expect(fake.router.back).not.toHaveBeenCalled();
+  });
+
+  it('goes to the trip list when opened from a link, with nothing to go back to', async () => {
+    fake.params = { id: 't-1' };
+    fake.router.canGoBack.mockReturnValueOnce(false);
+    fake.api.on({ 'GET api/trips/t-1': () => tripDetail() });
+    await renderScreen(<Trip />);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Trips' }));
+    expect(fake.router.back).not.toHaveBeenCalled();
+    expect(fake.router.replace).toHaveBeenCalledWith('/trips');
   });
 });
 
@@ -176,6 +236,18 @@ describe('Register', () => {
     expect(await screen.findByText('That invite code has expired.')).toBeOnTheScreen();
     expect(fake.router.replace).not.toHaveBeenCalled();
   });
+
+  it('shows the server address as it was saved, and refuses one that can’t work', async () => {
+    await fill();
+    mockSetServerUrl.mockResolvedValueOnce('https://maps.example.org');
+    await fireEvent.changeText(screen.getByLabelText('Server'), 'Maps.Example.org');
+    await fireEvent.press(screen.getByRole('button', { name: 'Create account' }));
+    await waitFor(() => expect(screen.getByLabelText('Server')).toHaveDisplayValue('https://maps.example.org'));
+    mockSetServerUrl.mockRejectedValueOnce(new Error('Enter your group’s server address, like maps.example.com.'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Create account' }));
+    expect(await screen.findByText(/like maps\.example\.com/)).toBeOnTheScreen();
+    expect(fake.session.register).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('Start-up routing', () => {
@@ -189,6 +261,18 @@ describe('Start-up routing', () => {
     fake.status = 'anonymous';
     await rerender(<Index />);
     expect(screen.getByText('Redirect to /sign-in')).toBeOnTheScreen();
+  });
+
+  it('says the server can’t be reached, rather than asking a signed-in person to sign in again', async () => {
+    fake.status = 'offline';
+    await renderScreen(<Index />);
+    expect(screen.getByText('Can’t reach the server')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+    expect(fake.session.retry).toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole('button', { name: 'Sign in with a different server' }));
+    expect(fake.router.push).toHaveBeenCalledWith('/sign-in');
+    await renderScreen(<TabsLayout />);
+    expect(screen.getByText('Redirect to /')).toBeOnTheScreen();
   });
 
   it('shows the five tabs only when signed in', async () => {

@@ -8,20 +8,26 @@ export const BACKGROUND_TASK = 'wayfinder-background-location';
 // Must be defined at module scope and imported from the root layout so Android can wake it.
 TaskManager.defineTask<{ locations: Location.LocationObject[] }>(BACKGROUND_TASK, async ({ data, error }) => {
   if (error || !data?.locations?.length) return;
-  await sqliteQueueStore.append(
-    data.locations.map((l) => ({
-      ts: l.timestamp,
-      lon: l.coords.longitude,
-      lat: l.coords.latitude,
-      accuracyM: l.coords.accuracy ?? null,
-      speedMps: l.coords.speed ?? null,
-      headingDeg: l.coords.heading ?? null,
-      source: 'background' as const,
-      mode: null,
-      sessionId: null,
-    })),
-  );
-  if ((await sqliteQueueStore.count()) >= 50) await syncQueue().catch(() => undefined);
+  try {
+    await sqliteQueueStore.append(
+      data.locations
+        .filter((l) => l?.coords && Number.isFinite(l.coords.longitude) && Number.isFinite(l.coords.latitude))
+        .map((l) => ({
+          ts: l.timestamp,
+          lon: l.coords.longitude,
+          lat: l.coords.latitude,
+          accuracyM: l.coords.accuracy ?? null,
+          speedMps: l.coords.speed ?? null,
+          headingDeg: l.coords.heading ?? null,
+          source: 'background' as const,
+          mode: null,
+          sessionId: null,
+        })),
+    );
+    if ((await sqliteQueueStore.count()) >= 50) await syncQueue();
+  } catch {
+    // Storage or upload failed while the app was in the background; the next wake-up retries.
+  }
 });
 
 export type TrackingPermission = 'granted' | 'foreground-only' | 'denied';

@@ -19,14 +19,17 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => void getServerUrl().then(setServer), []);
+  useEffect(() => void getServerUrl().then(setServer, () => undefined), []);
 
+  const ready = !!code.trim() && !!email.trim() && !!password && !!server.trim();
   const submit = async () => {
+    if (busy || !ready) return;
     if (password.length < 10) return setError('Use at least 10 characters for your password.');
+    if (password.length > 200) return setError('Use at most 200 characters for your password.');
     setBusy(true);
     setError(null);
     try {
-      await setServerUrl(server);
+      setServer(await setServerUrl(server));
       await register(code.trim(), email.trim(), password);
       router.replace('/plan');
     } catch (e) {
@@ -45,9 +48,9 @@ export default function Register() {
           <Field label="Server" value={server} onChangeText={setServer} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
           <Field label="Invite code" value={code} onChangeText={(s) => setCode(s.toUpperCase())} autoCapitalize="characters" autoCorrect={false} placeholder="XXXX-XXXX-XXXX" />
           <Field label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
-          <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry hint="At least 10 characters." />
+          <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry hint="At least 10 characters." onSubmitEditing={() => void submit()} />
           {error ? <Notice tone="error">{error}</Notice> : null}
-          <Button label="Create account" onPress={submit} busy={busy} disabled={!code || !email || !password || !server} />
+          <Button label="Create account" onPress={submit} busy={busy} disabled={!ready} />
           <Link href="/sign-in" style={{ color: t.accent, fontWeight: '600', textAlign: 'center', padding: space[2] }}>I already have an account</Link>
         </ScrollView>
       </KeyboardAvoidingView>

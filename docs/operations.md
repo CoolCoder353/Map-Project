@@ -25,8 +25,8 @@ part; serving needs far less).
    Australia extract (~1 GB) and builds the routing graph, tiles and search index (1–2 hours).
    It then refreshes monthly.
 5. Create invite codes under **Admin → Invite codes** and send people the sign-up links.
-6. Build the Android app for this server and share it
-   ([install-android.md](install-android.md) is the guide to send with it):
+6. Build the Android app for this server and share it ([build-android.md](build-android.md) has
+   the details; [install-android.md](install-android.md) is the guide to send with it):
    ```bash
    EXPO_PUBLIC_API_URL=https://your-domain infra/scripts/build-apk.sh
    ```

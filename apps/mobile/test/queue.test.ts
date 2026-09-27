@@ -83,4 +83,25 @@ describe('tracking queue', () => {
     const second = await flushQueue(store, upload, ids);
     expect(second).toMatchObject({ uploaded: 1, dropped: 0, remaining: 0 });
   });
+
+  it('leaves out a point the server would refuse, not the whole batch with it', async () => {
+    const store = new MemoryQueueStore();
+    await store.append([pt(0), pt(1, { lat: Number.NaN }), pt(2, { lon: 500 }), pt(3, { accuracyM: Number.NaN, speedMps: Number.POSITIVE_INFINITY }), pt(4)]);
+    const sent: number[] = [];
+    const res = await flushQueue(store, async (req) => {
+      expect(TrackBatchRequestSchema.safeParse(req).success).toBe(true);
+      sent.push(req.points.length);
+    }, ids);
+    expect(sent).toEqual([3]);
+    expect(res).toMatchObject({ uploaded: 3, dropped: 2, remaining: 0, error: null });
+  });
+
+  it('clears a batch with nothing usable in it without calling the server', async () => {
+    const store = new MemoryQueueStore();
+    await store.append([pt(0, { ts: 0 }), pt(1, { lat: 91 })]);
+    let calls = 0;
+    const res = await flushQueue(store, async () => void calls++, ids);
+    expect(calls).toBe(0);
+    expect(res).toMatchObject({ uploaded: 0, dropped: 2, remaining: 0 });
+  });
 });

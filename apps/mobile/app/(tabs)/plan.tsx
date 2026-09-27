@@ -1,4 +1,4 @@
-import type { ExploreRouteResponse, Mode, Route, RoundTripResponse } from '@wayfinder/shared/schemas';
+import { ExploreRouteResponseSchema, type Mode, type Route, RoundTripResponseSchema } from '@wayfinder/shared/schemas';
 import { router } from 'expo-router';
 import { Car, Footprints, Repeat } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
@@ -43,42 +43,60 @@ export default function Plan() {
   const [fastestNew, setFastestNew] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Every request takes a number; an answer that arrives after a newer request (or after the
+  // tab, places or mode changed) is dropped, so a late round trip can't land in Directions.
+  const latest = useRef(0);
 
   useEffect(() => {
-    if (tab !== 'directions' || !from || !to) return;
-    let cancelled = false;
+    const ticket = ++latest.current;
+    if (tab !== 'directions') {
+      // A change of start or mode also retires a round trip still on its way.
+      setLoading(false);
+      return;
+    }
+    // Routes for places that are no longer chosen would start navigation somewhere else.
+    setRoutes(null);
+    setSelected(null);
+    if (!from || !to) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     api
-      .request<ExploreRouteResponse>('api/routes/explore', { method: 'POST', body: { from: from.location, to: to.location, mode, budgetMin: budget } })
+      .request('api/routes/explore', { method: 'POST', body: { from: from.location, to: to.location, mode, budgetMin: budget }, schema: ExploreRouteResponseSchema })
       .then((res) => {
-        if (cancelled) return;
+        if (ticket !== latest.current) return;
         const all = [res.fastest, ...res.explore];
         setRoutes(all);
         setSelected(res.fastest.id);
         setFastestNew(res.fastest.novelty.noveltyPct);
         map.current?.fitTo(all.flatMap((r) => r.geometry), { top: 60, bottom: 60, left: 40, right: 40 });
       })
-      .catch((e) => !cancelled && setError(errorMessage(e)))
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
+      .catch((e) => ticket === latest.current && setError(errorMessage(e)))
+      .finally(() => ticket === latest.current && setLoading(false));
   }, [tab, from, to, mode, budget]);
 
+  // Loops made for another start or mode no longer match what the form shows.
+  useEffect(() => {
+    if (tab === 'loop') setRoutes(null);
+  }, [tab, from, mode]);
+
   const makeLoops = async () => {
-    if (!from) return;
+    if (!from || loading) return;
+    const ticket = ++latest.current;
     setLoading(true);
     setError(null);
     try {
-      const res = await api.request<RoundTripResponse>('api/routes/roundtrip', { method: 'POST', body: { start: from.location, mode, targetMin: loopMinutes } });
+      const res = await api.request('api/routes/roundtrip', { method: 'POST', body: { start: from.location, mode, targetMin: loopMinutes }, schema: RoundTripResponseSchema });
+      if (ticket !== latest.current) return;
       setRoutes(res.routes);
       setSelected(res.routes[0]?.id ?? null);
       if (res.routes.length) map.current?.fitTo(res.routes.flatMap((r) => r.geometry));
     } catch (e) {
-      setError(errorMessage(e));
+      if (ticket === latest.current) setError(errorMessage(e));
     } finally {
-      setLoading(false);
+      if (ticket === latest.current) setLoading(false);
     }
   };
 
@@ -102,6 +120,8 @@ export default function Plan() {
           onChange={(v) => {
             setTab(v);
             setRoutes(null);
+            setError(null);
+            setLoading(false);
           }}
           options={[
             { value: 'directions', label: 'Directions' },
@@ -130,6 +150,7 @@ export default function Plan() {
         {loading && tab === 'directions' ? <Loading /> : null}
         {!loading && routes ? (
           tab === 'directions' ? (
+            routes[0] ? (
             <>
               <RouteCard route={routes[0]!} title="Fastest" selected={selected === routes[0]!.id} onSelect={() => setSelected(routes[0]!.id)} onStart={() => start(routes[0]!)} />
               <Heading>{copy.exploreHeading}</Heading>
@@ -141,6 +162,7 @@ export default function Plan() {
                 <Small>{fastestNew >= 90 ? copy.allNewAlready : `No explore routes fit within ${budget} extra minutes.`}</Small>
               )}
             </>
+            ) : null
           ) : routes.length ? (
             routes.map((r, i) => <RouteCard key={r.id} route={r} title={`Loop ${i + 1}`} selected={selected === r.id} onSelect={() => setSelected(r.id)} onStart={() => start(r)} />)
           ) : (

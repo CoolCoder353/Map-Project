@@ -1,4 +1,5 @@
 import type { AuthResponse, ErrorResponse } from '@wayfinder/shared/schemas';
+import type { ZodType } from 'zod';
 
 /** Platform-free API client (tokens and fetch injected) so it can be unit tested. */
 export class ApiError extends Error {
@@ -25,12 +26,45 @@ export interface ApiClientOptions {
   onSession?: (auth: AuthResponse | null) => void;
 }
 
-export interface RequestOptions {
+export interface RequestOptions<T = unknown> {
   method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
   query?: Record<string, string | number | boolean | null | undefined>;
   signal?: AbortSignal;
+  /** Give up after this long; Android's HTTP client otherwise waits forever on a dead connection. */
+  timeoutMs?: number;
+  /**
+   * The shared schema the answer must match. An APK and the server are updated separately, so
+   * a server a version ahead or behind can leave out a field a screen reads; checking here turns
+   * that into a plain message rather than a crash deep in the screen.
+   */
+  schema?: ZodType<T>;
 }
+
+const VERSION_MISMATCH =
+  'The server sent something this version of the app doesn’t understand, so the app or the server needs updating. Tell whoever runs your group’s server.';
+
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+/**
+ * The server address as typed, made usable: "maps.example.com/" becomes
+ * "https://maps.example.com". Null when it can't be a server address.
+ */
+export function normaliseServerUrl(input: string): string | null {
+  let s = input.replace(/\s+/g, '');
+  if (!s) return null;
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = `https://${s}`;
+  const m = /^(https?):\/\/([^/?#@]+)(\/[^?#]*)?$/i.exec(s);
+  if (!m) return null;
+  const [, scheme, host, path = ''] = m;
+  if (!/^(?:[a-z0-9-]+(?:\.[a-z0-9-]+)*|\[[0-9a-f:.]+\])(?::\d{1,5})?$/i.test(host!)) return null;
+  return `${scheme!.toLowerCase()}://${host!.toLowerCase()}${path.replace(/\/+$/, '')}`;
+}
+
+/** Whether a stored address can be used to reach a server (it has a scheme and a host). */
+export const isServerUrl = (u: string) => normaliseServerUrl(u) === u;
+
+const hostOf = (u: string) => /^https?:\/\/([^/?#]+)/i.exec(u)?.[1] ?? u;
 
 export function createApiClient(opts: ApiClientOptions) {
   const doFetch = opts.fetch ?? fetch;
@@ -41,10 +75,12 @@ export function createApiClient(opts: ApiClientOptions) {
     const base = await opts.baseUrl();
     // Without a server there is nothing to resolve a path against, which would otherwise throw
     // an unreadable "Invalid URL" from deep inside a screen.
-    if (!/^https?:\/\//i.test(base)) throw new ApiError(0, 'no_server', 'No server address set. Sign out and enter the address of your group’s server.');
-    const u = new URL(path, `${base}/`);
-    for (const [k, v] of Object.entries(query ?? {})) if (v !== undefined && v !== null && v !== '') u.searchParams.set(k, String(v));
-    return u.toString();
+    if (!isServerUrl(base)) throw new ApiError(0, 'no_server', 'No server address set. Sign out and enter the address of your group’s server.');
+    // Built by hand: React Native's URL class is a partial polyfill that differs from the web's.
+    const params = Object.entries(query ?? {})
+      .filter(([, v]) => v !== undefined && v !== null && v !== '')
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+    return `${base}/${path}${params.length ? `?${params.join('&')}` : ''}`;
   };
 
   const toError = async (res: Response) => {
@@ -54,18 +90,39 @@ export function createApiClient(opts: ApiClientOptions) {
     } catch {
       // not JSON
     }
-    const fallback = res.status >= 500 ? 'The server had a problem. Try again shortly.' : `Request failed (${res.status})`;
+    const fallback =
+      res.status >= 500
+        ? 'The server had a problem. Try again shortly.'
+        : // A 404 without the API's error body means there is no API at this address at all.
+          res.status === 404 && !body.error
+          ? `${hostOf(res.url || '') || 'That address'} doesn’t look like your group’s server. Check the server address.`
+          : `Request failed (${res.status})`;
     return new ApiError(res.status, body.error?.code ?? 'error', body.error?.message ?? fallback, body.error?.details);
   };
 
   const session = async (auth: AuthResponse | null) => {
     accessToken = auth?.accessToken ?? null;
-    await opts.tokens.setRefreshToken(auth?.refreshToken ?? null);
-    opts.onSession?.(auth);
+    try {
+      await opts.tokens.setRefreshToken(auth?.refreshToken ?? null);
+    } finally {
+      // Screens follow the session even if the phone's secure storage failed, so signing out
+      // can never leave the app stuck signed in.
+      opts.onSession?.(auth);
+    }
   };
 
   const raw = async (path: string, init: RequestOptions, withAuth: boolean) => {
     const target = await url(path, init.query);
+    // Cancelled before it started (the search box moved on): don't send it at all.
+    if (init.signal?.aborted) throw Object.assign(new Error('Aborted'), { name: 'AbortError' });
+    const ctrl = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      ctrl.abort();
+    }, init.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    const cancel = () => ctrl.abort();
+    init.signal?.addEventListener('abort', cancel);
     try {
       return await doFetch(target, {
         method: init.method ?? 'GET',
@@ -75,13 +132,28 @@ export function createApiClient(opts: ApiClientOptions) {
           ...(withAuth && accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
         },
         body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
-        signal: init.signal,
+        signal: ctrl.signal,
       });
     } catch (err) {
+      if (timedOut) throw new ApiError(0, 'timeout', `${hostOf(target)} took too long to answer. Check your connection and try again.`);
       // A cancelled request is not a failure to reach the server.
-      if ((err as Error).name === 'AbortError') throw err;
+      if (init.signal?.aborted || (err as Error).name === 'AbortError') throw err;
       // Name the server: the usual cause is that the app is pointed at the wrong one.
-      throw new ApiError(0, 'offline', `Can’t reach ${new URL(target).host}. Check the server address and your connection.`);
+      throw new ApiError(0, 'offline', `Can’t reach ${hostOf(target)}. Check the server address and your connection.`);
+    } finally {
+      clearTimeout(timer);
+      init.signal?.removeEventListener('abort', cancel);
+    }
+  };
+
+  /** The body as JSON; a page that isn't JSON (a login portal, the wrong server) says so plainly. */
+  const readJson = async <T>(res: Response): Promise<T> => {
+    const text = await res.text();
+    if (!text) return undefined as T;
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new ApiError(res.status, 'bad_response', `${hostOf(res.url || '') || 'The server'} sent something the app couldn’t read. Check the server address, or sign in to the Wi-Fi network if it asks.`);
     }
   };
 
@@ -96,7 +168,8 @@ export function createApiClient(opts: ApiClientOptions) {
           return null;
         }
         if (!res.ok) return null; // offline or server error: keep the refresh token for later
-        const auth = (await res.json()) as AuthResponse;
+        const auth = await readJson<AuthResponse>(res);
+        if (!auth?.accessToken) return null;
         await session(auth);
         return auth;
       } catch {
@@ -108,7 +181,13 @@ export function createApiClient(opts: ApiClientOptions) {
     return refreshing;
   }
 
-  async function request<T>(path: string, init: RequestOptions = {}): Promise<T> {
+  /** A sign-in answer without a session isn't from this app's server. */
+  const signedIn = (auth: AuthResponse | undefined) => {
+    if (!auth?.accessToken || !auth.user) throw new ApiError(0, 'bad_response', 'That server didn’t answer the way this app expects. Check the server address.');
+    return auth;
+  };
+
+  async function request<T>(path: string, init: RequestOptions<T> = {}): Promise<T> {
     const clean = path.replace(/^\//, '');
     let res = await raw(clean, init, true);
     if (res.status === 401 && !clean.startsWith('api/auth/')) {
@@ -116,7 +195,11 @@ export function createApiClient(opts: ApiClientOptions) {
     }
     if (!res.ok) throw await toError(res);
     if (res.status === 204) return undefined as T;
-    return (await res.json()) as T;
+    const body = await readJson<T>(res);
+    if (!init.schema) return body;
+    const parsed = init.schema.safeParse(body);
+    if (!parsed.success) throw new ApiError(res.status, 'unexpected_response', VERSION_MISMATCH, parsed.error.issues.slice(0, 5));
+    return parsed.data;
   }
 
   return {
@@ -126,12 +209,12 @@ export function createApiClient(opts: ApiClientOptions) {
       return accessToken !== null;
     },
     async login(email: string, password: string) {
-      const auth = await request<AuthResponse>('api/auth/login', { method: 'POST', body: { email, password } });
+      const auth = signedIn(await request<AuthResponse>('api/auth/login', { method: 'POST', body: { email, password } }));
       await session(auth);
       return auth;
     },
     async register(inviteCode: string, email: string, password: string) {
-      const auth = await request<AuthResponse>('api/auth/register', { method: 'POST', body: { inviteCode, email, password } });
+      const auth = signedIn(await request<AuthResponse>('api/auth/register', { method: 'POST', body: { inviteCode, email, password } }));
       await session(auth);
       return auth;
     },

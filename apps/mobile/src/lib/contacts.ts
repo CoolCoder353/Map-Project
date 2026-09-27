@@ -1,4 +1,6 @@
-import * as Contacts from 'expo-contacts';
+// The SDK 57 package's main entry is a new API whose old-style functions throw when called; the
+// functions this file uses live on in the legacy entry point.
+import * as Contacts from 'expo-contacts/legacy';
 import * as SecureStore from 'expo-secure-store';
 
 const KEY = 'wf.contactsSearch';

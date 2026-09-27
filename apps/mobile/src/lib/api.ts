@@ -27,4 +27,13 @@ export const api = createApiClient({
   onSession: (auth) => listeners.forEach((l) => l(auth)),
 });
 
+/** Whether a sign-in is saved on this phone, even if the server can't be reached to use it. */
+export async function hasSavedSession(): Promise<boolean> {
+  try {
+    return !!(await SecureStore.getItemAsync(REFRESH_KEY));
+  } catch {
+    return false;
+  }
+}
+
 export { ApiError, errorMessage } from './apiClient';
