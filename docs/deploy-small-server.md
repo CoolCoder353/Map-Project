@@ -4,6 +4,12 @@ For a server too small to build images or map data itself: about 2 GB RAM and 10
 
 Everything heavy happens on a bigger machine: Docker images, the OSM import (graph, tiles, places). `infra/scripts/deploy-small.sh` streams the results over SSH.
 
+**Access:** `ssh root@maps` from the build machine (key-based). The checkout is `/opt/wayfinder`, and compose commands there always take both files:
+
+```bash
+cd /opt/wayfinder/infra && docker compose -f docker-compose.yml -f docker-compose.small.yml ps
+```
+
 ## What runs on the server
 
 `docker compose -f docker-compose.yml -f docker-compose.small.yml`:
@@ -72,11 +78,25 @@ infra/scripts/deploy-small.sh data     # graph + tiles; swapped in beside the li
 infra/scripts/deploy-small.sh places   # search data + data date (needs the server stack running)
 ```
 
-Each step checks free disk space on the server first. Configuration comes from the server's git checkout (`/opt/wayfinder`): `git pull`, then:
+Each step checks free disk space on the server first. Configuration (compose files, Caddyfile, GraphHopper config) comes from the server's git checkout, `/opt/wayfinder`, so bring it up to date too. If the commits are on GitHub:
+
+```bash
+ssh root@maps "cd /opt/wayfinder && git pull --ff-only"
+```
+
+If they aren't pushed yet, send them as a bundle (replace `<last-deployed>` with the commit the server is on, from `git log -1` there):
+
+```bash
+git bundle create /tmp/wf.bundle <last-deployed>..HEAD master && scp /tmp/wf.bundle root@maps:/tmp/ && ssh root@maps "cd /opt/wayfinder && git fetch /tmp/wf.bundle master:refs/remotes/bundle/master && git merge --ff-only refs/remotes/bundle/master"
+```
+
+Then restart onto the new images. The API applies any new migrations as it starts:
 
 ```bash
 cd /opt/wayfinder/infra && docker compose -f docker-compose.yml -f docker-compose.small.yml up -d
 ```
+
+Finish with `verify:stack` and `verify:mobile` (below).
 
 First admin (then invite people from the dashboard):
 
@@ -96,7 +116,7 @@ the new APK, because an older build reads fields that no longer exist.
 
 ```bash
 EXPO_PUBLIC_API_URL=https://maps.paulsjones.com infra/scripts/build-apk.sh
-API_URL=https://maps.paulsjones.com EMAIL=… PASSWORD=… pnpm verify:mobile
+VERIFY_REGION=qld API_URL=https://maps.paulsjones.com EMAIL=… PASSWORD=… pnpm verify:mobile
 ```
 
 The address is baked into the APK at build time and is what the app talks to, so pass the real
@@ -113,4 +133,21 @@ Queensland (OSM 2026-09-16), 892,695 places, on a 2 GB / 14 GB VM: about 1.5 GB 
 VERIFY_REGION=qld API_URL=https://maps.paulsjones.com ADMIN_EMAIL=… ADMIN_PASSWORD=… pnpm verify:stack
 ```
 
-Live on 2026-09-23 against `https://maps.paulsjones.com`: all 19 checks pass. Search takes about 100 ms, fastest routes about 100 ms, and Discover about 7 s (its isochrone is the slow part with a memory-mapped graph). Explore finds nothing for Brisbane to the Gold Coast within 45 minutes extra: every road that differs from the M1 costs more than that.
+```bash
+VERIFY_REGION=qld API_URL=https://maps.paulsjones.com EMAIL=… PASSWORD=… pnpm verify:mobile
+```
+
+`VERIFY_REGION=qld` matters: the default tests Canberra, which this server has no map for. `verify:mobile` records a short trip and a feedback item, so use a throwaway account and delete it afterwards.
+
+Live on 2026-09-23 against `https://maps.paulsjones.com`: all 19 `verify:stack` checks and all 15 `verify:mobile` checks pass. Search takes about 100 ms, fastest routes about 100 ms, and Discover about 7 s (its isochrone is the slow part with a memory-mapped graph). Explore finds nothing for Brisbane to the Gold Coast within 45 minutes extra: every road that differs from the M1 costs more than that.
+
+## Open items
+
+Found on the live server and not yet dealt with (checked 2026-09-27):
+
+- **No backups.** There is no cron entry for `infra/scripts/backup.sh`, so the database (accounts,
+  trips, feedback) exists only on this VM. Set one up as in
+  [operations.md](operations.md#daily--weekly), pointing at storage off the VM.
+- **The Docker API listens unauthenticated on `127.0.0.1:2375`.** Only local processes can reach
+  it, but any of them can control every container, which is root on the host. Unless something
+  needs it, remove the `tcp://` host from the Docker daemon's configuration.

@@ -1,6 +1,6 @@
 # ADR 0001: H3 cells as the spatial index instead of PostGIS/osm2pgsql
 
-**Status:** accepted (2026-09-17). Amends the design spec's "Search" and "DB" choices.
+**Status:** accepted (2026-09-17). Amends the design spec's "Search" and "DB" choices. Partly superseded by [0003](0003-coverage-by-roads.md): coverage people see is now roads travelled, and H3 cells remain only as the internal index for explore.
 
 ## Context
 The spec proposed PostgreSQL + PostGIS, with osm2pgsql importing places/POIs. Everything the app

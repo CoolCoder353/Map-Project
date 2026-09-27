@@ -2,6 +2,50 @@
 
 Everything runs from `infra/docker-compose.yml` on one server. Run `docker compose` commands from the `infra` directory.
 
+This page is for a server big enough to build its own map data. The live Queensland deployment is
+a small server that gets its data built elsewhere: see
+[deploy-small-server.md](deploy-small-server.md), which uses these same procedures where it can.
+
+## Installing
+
+Sizing for all of Australia: 8 vCPU, 32 GB RAM, 250 GB SSD (building the map data is the heavy
+part; serving needs far less).
+
+1. Copy `infra/.env.example` to `infra/.env` and fill it in: the domain, passwords, a random
+   `JWT_SECRET`. Every setting is in [configuration.md](configuration.md).
+2. Download the map fonts, build the images and start everything:
+   ```bash
+   infra/scripts/bootstrap.sh
+   ```
+3. Create the first admin:
+   ```bash
+   docker compose exec api node dist/cli.js bootstrap-admin you@example.com
+   ```
+4. Sign in and open **Admin → Jobs & data → Refresh map data**. The first build downloads the
+   Australia extract (~1 GB) and builds the routing graph, tiles and search index (1–2 hours).
+   It then refreshes monthly.
+5. Create invite codes under **Admin → Invite codes** and send people the sign-up links.
+6. Build the Android app for this server and share it
+   ([install-android.md](install-android.md) is the guide to send with it):
+   ```bash
+   EXPO_PUBLIC_API_URL=https://your-domain infra/scripts/build-apk.sh
+   ```
+
+Caddy obtains TLS certificates automatically.
+
+## The admin dashboard
+
+`/admin` in the web app, for `dev` (read-only) and `admin`:
+
+- **Monitoring:** service health, request, error and latency charts, error groups with stack
+  traces, job queues with retry, map data refresh history, usage stats.
+- **People:** roles, disabling, *Sign out everywhere*, password reset links, deleting and
+  restoring accounts, each person's trips and coverage.
+- **Invite codes**, the **audit log**, **Recently deleted** (7-day undo).
+- **App settings:** the app's name, its copy voice (plain, playful or minimal), and the user
+  feedback switch, for everyone on web and Android.
+- **Feedback:** bug reports and ideas, when switched on (below).
+
 ## Daily / weekly
 
 | Task | How |
@@ -89,7 +133,12 @@ Off by default. An admin turns it on under **Admin → App settings → User fee
 docker compose exec api node dist/cli.js bootstrap-admin you@example.com   # first admin, or promote
 docker compose exec api node dist/cli.js create-invite 3 user             # invite codes
 docker compose exec api node dist/cli.js reset-link you@example.com       # one-time reset link
+docker compose exec api node dist/cli.js migrate                          # apply migrations now
 ```
+
+`bootstrap-admin` takes an optional password as a second argument. Without one, a new admin gets
+a generated password, printed once; an existing account is just promoted and keeps its password.
+Invite codes from the CLI last 14 days.
 
 There is no email service: password reset links are generated in the dashboard (**Users → Password reset link**) or by the CLI, and you send them yourself.
 
@@ -101,7 +150,9 @@ docker compose build
 docker compose up -d
 ```
 
-Database migrations run automatically when the API and worker start. Both are safe to restart at any time; in-flight jobs are retried.
+Database migrations run automatically when the API and worker start. Both are safe to restart at any time; in-flight jobs are retried. The small server is upgraded differently: its images are built elsewhere ([deploy-small-server.md](deploy-small-server.md#shipping)).
+
+Afterwards run `pnpm verify:stack` and `pnpm verify:mobile` against the server (below). If the API changed shape, build and share a new APK: an older app reads fields the new server may no longer send.
 
 ## Rotating secrets
 
@@ -136,7 +187,19 @@ docker compose build worker && docker compose up -d
 It writes a heartbeat every minute. Check `docker compose logs worker`; if the database was unreachable the worker exits and Docker restarts it.
 
 **Coverage looks wrong for one person**
-Admin → the user → *Rebuild coverage*. This recomputes their hexagons from their remaining trips (it runs automatically after a trip is deleted, restored or has its mode changed).
+Admin → the user → *Rebuild coverage*. This clears their roads and re-matches every remaining trip to the road network (it runs automatically after a trip is deleted, restored or has its mode changed). Trips off the road network, such as bush walks, can't be matched and count no road.
+
+**API and worker keep restarting with `password authentication failed` (`28P01`)**
+`POSTGRES_PASSWORD` in `.env` was changed after the database was created; Postgres only reads it the first time. Put the old value back, or set the database to the new one:
+
+```bash
+docker compose exec db psql -U wayfinder -d wayfinder -c "ALTER ROLE wayfinder PASSWORD 'the-value-in-.env'"
+```
+
+Then `docker compose up -d api worker`.
+
+**The Android app says "Can't reach …" everywhere**
+The message names the server the app tried. If it isn't yours, the APK was built with the wrong `EXPO_PUBLIC_API_URL`; build it again (the build now refuses example addresses). If it is yours, check the server is up and `https://` works from the phone's network.
 
 **A background job keeps failing**
 Admin → Jobs & data shows the error output; fix the cause and press Retry. `process-tracks` and `rebuild-coverage` are safe to retry; they are idempotent.

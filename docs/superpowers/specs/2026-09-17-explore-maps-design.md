@@ -1,6 +1,6 @@
 # Wayfinder (working name) — Design Spec: Explore-first maps for Australia
 
-_Status: approved 2026-09-17. Next: per-phase implementation plans (starting with Phase 0)._
+_Status: approved 2026-09-17; implemented. **Kept as history, not maintained.** Where this spec and the code disagree, the code and these are right: [architecture.md](../../architecture.md) for the current design, [api.md](../../api.md) for the API, and the ADRs, which replaced parts of it: [0001](../../adr/0001-h3-instead-of-postgis.md) (no PostGIS or osm2pgsql), [0002](../../adr/0002-place-search.md) (place search), [0003](../../adr/0003-coverage-by-roads.md) (coverage is roads travelled, not hexagons)._
 
 ## Context
 

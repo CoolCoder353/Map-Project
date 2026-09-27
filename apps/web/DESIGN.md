@@ -272,14 +272,14 @@ A cool neutral grey interface with one confident blue and one route green, laid 
 
 ### Secondary
 - **Explore Green** (explore): text and icon colour for anything about unexplored ground: the "new" badge, explore route swatches, explore card selection ring, explore callout text on the map.
-- **Trail Green** (explore-line): the brighter stroke used for explore route lines and the outline of recently explored coverage cells.
+- **Trail Green** (explore-line): the brighter stroke used for explore route lines and for roads first travelled in the last week on the coverage map.
 - **Meadow Wash** (explore-soft): badge and swatch backgrounds behind Explore Green.
 
 ### Tertiary
 - **Status set**: danger, warning and success, each with a soft wash, used as tinted notice, badge and banner pairs (text in the strong tone on the soft tone). Danger also marks the destination pin and the end search field icon.
 - **Chart series** (series-1 Chart Blue, series-2 Chart Orange): admin charts only, assigned by slot. Dark theme uses #3987e5 and #d95926.
 - **Basemap** (map-land warm paper, map-water, map-park, map-motorway, map-label): served by the API style (`apps/api/src/style.ts`), deliberately warmer than the UI greys so the chrome reads as floating over terrain. The full basemap palette, including roads, sand, buildings and a matching dark set, lives there.
-- **Fog** (map-fog): the unexplored-land veil on the coverage map, #26303a at 34% in light and black at 62% in dark.
+- **Fog** (map-fog): retired. It veiled unexplored land when coverage was drawn as hexagons; the token (`--fog`, `--fog-opacity`) and the `.legend-fog` style are still defined but nothing uses them.
 
 ### Neutral
 - **Desk Grey** (bg): app background behind the map and admin pages.
@@ -400,7 +400,7 @@ A Fog Grey pill track with 3px padding; the selected option lifts onto Paper Whi
 - **Route lines:** the selected fastest route is 7px Route Blue on an 11px white casing (#0b0d10 in dark); a selected explore route is 7px Trail Green dashed [2, 0.6] on the same casing. Unselected routes are 5px at 60 to 65% opacity on an 8px surface casing (explore dashed [2, 1]) and thicken by 2px on hover.
 - **Callouts:** "37 min · 22 km new" chips beside each route, text in the route's colour; the selected callout always shows, others yield on collision.
 - **Pins:** 7 to 8px circles with a 2.5 to 3px contrasting stroke; destination in danger, start and via stroked in Ink.
-- **Coverage:** unexplored land is fogged; explored H3 cells are cut out, tinted Route Blue at 6 to 22% (10 to 32% dark) by fraction explored and outlined in blue; cells reached in the last week take a heavier Trail Green outline. The legend repeats all three as swatches.
+- **Coverage:** the roads you've travelled, drawn beneath place labels as Route Blue lines (1.5px at zoom 8 to 5px at zoom 15, 90% opacity) on a half-opacity surface casing; roads first travelled in the last week are Trail Green. The rest of the map is untouched. The legend shows both as swatches and says to zoom in to see individual streets.
 
 ### Charts (admin)
 Recharts lines (2px, no dots, 4px active dot ringed in surface) and bars (4px end radius, 1px surface separators when stacked) on Hairline gridlines with 11px Slate ticks. Every chart has a title, a one-line description, a legend when there are two or more series, a surface tooltip with the raised float, and a table view toggle.

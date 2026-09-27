@@ -18,19 +18,19 @@ A self-hosted maps app that remembers where you have travelled and steers you to
 
 ## Positioning
 
-Every route and suggestion is measured against *your own* travel history: explore routes are ranked by kilometres through hexagons you have never entered, within a time budget you set, shown side by side with the fastest route. All routing, tiles and search run on the operator's own server; no third-party map APIs.
+Every route and suggestion is measured against *your own* travel history: explore routes are ranked by kilometres of road you have never travelled, within a time budget you set, shown side by side with the fastest route. All routing, tiles and search run on the operator's own server; no third-party map APIs.
 
 ## Operating Context
 
 - Web app for planning; Android app (separate) for navigation and background tracking (off by default, user-toggleable).
-- Coverage is tracked on an H3 hexagon grid (~0.1 km² cells) shared across travel modes.
+- Coverage is the set of roads and paths you have driven or walked: trips are snapped to the road network. (Hexagons remain an internal index for steering explore routes and are never shown.)
 - Invite-only sign-up with email and password.
 - Admin dashboard lives inside the web app under `/admin`, role-gated; views of other users' data are audited; deletions are soft with a 7-day undo.
 
 ## Capabilities and Constraints
 
 - Travel modes: car and foot (walking/hiking). No transit, no cycling.
-- Features: search, fastest route, explore route A→B with time budget, round-trip generator, discover destinations in unexplored areas, coverage ("fog of war") map with stats, trip history with replay, send route to phone, settings, data export, account deletion.
+- Features: search, fastest route, explore route A→B with time budget, round-trip generator, discover destinations in unexplored areas, coverage map of roads travelled with stats (km of road, new roads this week), trip history with replay, send route to phone, settings, data export, account deletion.
 - Online only.
 - **The app name and the copy voice are admin-configurable in the dashboard** (defaults: name "Wayfinder", voice "plain and friendly"; alternatives "playful explorer" and "minimal and technical"). UI must never hard-code the product name.
 - Map data: OpenStreetMap; attribution must be shown.
