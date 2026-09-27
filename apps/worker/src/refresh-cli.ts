@@ -9,18 +9,17 @@
  */
 import { createPool, opsService } from '@wayfinder/core';
 import { loadConfig } from './config.js';
-import { runOsmRefresh } from './pipeline/refresh.js';
+import { runOsmRefresh, stepsToSkip } from './pipeline/refresh.js';
 
-const STEPS = ['download', 'graph', 'tiles', 'places'];
-const only = process.argv.slice(2);
-const unknown = only.filter((s) => !STEPS.includes(s));
-if (unknown.length) {
-  console.error(`Unknown step(s): ${unknown.join(', ')}. Steps: ${STEPS.join(', ')}`);
+let skip: string[];
+try {
+  skip = stepsToSkip(process.argv.slice(2), process.env.OSM_REFRESH_SKIP ?? '');
+} catch (err) {
+  console.error((err as Error).message);
   process.exit(1);
 }
 const c = loadConfig();
 const db = createPool(c.DATABASE_URL, 2);
-const skip = only.length ? STEPS.filter((s) => !only.includes(s)) : c.OSM_REFRESH_SKIP.split(',').map((s) => s.trim()).filter(Boolean);
 const runId = await opsService.createPipelineRun(db, 'osm_refresh', null);
 console.log(`run ${runId}${skip.length ? ` (skipping ${skip.join(', ')})` : ''}`);
 try {

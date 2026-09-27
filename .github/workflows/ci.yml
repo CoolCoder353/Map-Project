@@ -30,14 +30,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
-      - name: Unit tests
-        run: pnpm test:unit
-      - name: Android screen tests
-        run: pnpm test:mobile
-      - name: Integration tests (real Postgres)
-        run: pnpm test:integration
+      # Every suite must pass and coverage must stay above the floors in vitest.config.ts and
+      # apps/mobile/jest.config.js (docs/testing.md).
+      - name: Vitest (unit, web, integration on real Postgres) with coverage floors
+        run: pnpm test:coverage
         env:
           TEST_DATABASE_URL: postgres://wayfinder:wayfinder@localhost:5432/wayfinder
+      - name: Android tests with coverage floors
+        run: pnpm test:mobile:coverage
       - name: Build server packages and web
         run: pnpm -r --filter "./packages/*" --filter @wayfinder/api --filter @wayfinder/worker --filter @wayfinder/web build
       - name: Android JS bundle

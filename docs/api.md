@@ -43,7 +43,7 @@ exactly what each field is.
 |---|---|---|
 | GET | `/` | `PublicUserSchema` |
 | PATCH | `/settings` | `UpdateSettingsSchema` → `PublicUserSchema` (tracking, default mode, explore budget) |
-| GET | `/export` | Everything stored about you, as a JSON download |
+| GET | `/export` | Everything stored about you, as a JSON download: account, trips with every point, `travelledRoads` (a GeoJSON FeatureCollection of the roads travelled, with OSM way id, length, first and last travelled, modes), the internal explore index (`visitedCells`), planned routes and stats |
 | DELETE | `/` | Delete your account (purged after 7 days) |
 
 ## Places

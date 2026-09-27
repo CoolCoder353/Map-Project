@@ -88,41 +88,16 @@ APK is in [install-android.md](install-android.md).
 
 ## Tests
 
-| Suite | Command | What and where |
-|---|---|---|
-| Unit | `pnpm test:unit` | Vitest. `packages/*/test/**`, `apps/{api,worker}/test/unit/**`, and the non-screen mobile tests `apps/mobile/test/*.test.ts` |
-| Integration | `pnpm test:integration` | Vitest against a database: `packages/core/test/integration/**`, `apps/{api,worker}/test/integration/**`. In-process PGlite, one file at a time |
-| Android screens | `pnpm test:mobile` | Jest (jest-expo + React Native Testing Library): `apps/mobile/test/*.screen.test.tsx` |
-| Web end-to-end | `pnpm --filter @wayfinder/web e2e` | Playwright boots its own stack (PGlite, demo seed, fake routing engine, API, Vite): `apps/web/e2e/*.spec.ts` |
-| Everything Vitest | `pnpm test` | Unit and integration together |
-| Lint and types | `pnpm lint && pnpm typecheck` | |
-
-Before calling a change done, run lint, typecheck, `pnpm test` and `pnpm test:mobile`; add the
-end-to-end suite for anything the web app shows. CI (`.github/workflows/ci.yml`) runs all of
-these, plus the Android JS bundle and a real Postgres, on every push to `master` and every PR.
-
-On a fresh machine the end-to-end suite first needs a browser:
+Every feature is tested, and every change passes the whole suite. The rule, where each kind of
+test goes, the test harnesses and a map of what tests what are in [testing.md](testing.md).
 
 ```bash
-pnpm --filter @wayfinder/web exec playwright install chromium
+pnpm check
 ```
 
-Options:
-
-- `TEST_DATABASE_URL=postgres://…` runs integration tests on real Postgres; each file gets a
-  throwaway database.
-- `GRAPHHOPPER_LIVE_URL=http://localhost:8989` adds tests against a real routing graph (the four
-  otherwise skipped).
-- `CAPTURE=1` makes the end-to-end run capture design-review screenshots instead.
-
-Test helpers:
-
-- `packages/core/test/helpers`: `createTestDb()` (migrated database), `FakeQueue` (records jobs
-  instead of running them; `queue.take(name)`), `makeUser()`, `straightPath()` for fake routes.
-- `apps/api/test/helpers/app.ts`: `createTestApp()` (the Fastify app on a test database) and
-  `tokenFor(app, user, role)`.
-- `apps/mobile/test/mocks.tsx`: mocks for native modules and app services in screen tests.
-  Screen tests render with `await render(...)`: React Native Testing Library 14 is async.
+That's lint, types, every Vitest project (unit, integration on PGlite, web components) and the
+Android tests with their coverage floors, then Playwright. While working, `pnpm test`,
+`pnpm test:mobile` and `pnpm test:e2e` run the pieces.
 
 ## Making common changes
 
@@ -134,9 +109,11 @@ Test helpers:
    as arguments so tests can pass fakes.
 3. The route in `apps/api/src/routes/<area>.ts`: `parse(Schema, req.body)` to validate, then
    call the service. Routes register in `apps/api/src/app.ts`.
-4. An integration test in `apps/api/test/integration/`.
-5. If the Android app calls it, add it to `scripts/verify-mobile-contract.ts`.
-6. Add it to [api.md](api.md).
+4. An integration test in `apps/api/test/integration/`: success, validation, who may call it.
+5. Tests for each screen that uses it: `apps/web/test` (declare the endpoint in the fake API)
+   and `apps/mobile/test`.
+6. If the Android app calls it, add it to `scripts/verify-mobile-contract.ts`.
+7. Add it to [api.md](api.md), and the feature to [testing.md](testing.md#what-tests-what).
 
 ### A database change
 
@@ -150,13 +127,15 @@ apps until they update, so say so in the commit and in [deploy-small-server.md](
 
 The handler goes in `apps/worker/src/jobs.ts`; a schedule, if any, in `apps/worker/src/main.ts`
 (`boss.schedule`). Queue work from a service with `queue.send(name, data, { singletonKey })`.
-Handlers must be safe to retry: pg-boss retries failures. Add it to the jobs table in
-[architecture.md](architecture.md#background-jobs).
+Handlers must be safe to retry: pg-boss retries failures. Test the handler in
+`apps/worker/test/integration/jobs.test.ts`, and a schedule in `register.test.ts`. Add it to the
+jobs table in [architecture.md](architecture.md#background-jobs).
 
 ### Words people read
 
 User-facing copy that varies with the app's voice lives in `packages/shared/src/copy.ts`, in
-three voices (`plain`, `playful`, `minimal`); the type makes you write all three. Coverage is
+three voices (`plain`, `playful`, `minimal`); the type makes you write all three, and
+`packages/shared/test/copy.test.ts` fails on any that names hexagons, cells or fog. Coverage is
 **roads travelled**: hexagons are internal and never named to users.
 
 ### The places import (search data)
@@ -181,7 +160,7 @@ graph rebuild. `pnpm bench:explore 50000 20` checks explore stays under its targ
 
 ## Releasing
 
-1. Checks green (above).
+1. `pnpm check` passes.
 2. Deploy the server: [operations.md](operations.md#upgrading) for a full-size server,
    [deploy-small-server.md](deploy-small-server.md) for the live Queensland one.
 3. `pnpm verify:stack` and `pnpm verify:mobile` against it.

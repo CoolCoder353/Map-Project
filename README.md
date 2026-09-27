@@ -20,7 +20,8 @@ Live at **https://maps.paulsjones.com** (Queensland only, invite-only).
 | If you want to… | Read |
 |---|---|
 | Understand how it fits together | [docs/architecture.md](docs/architecture.md) |
-| Run it locally, test it, make a change | [docs/development.md](docs/development.md) |
+| Run it locally, make a change | [docs/development.md](docs/development.md) |
+| Test a change, and find what tests what | [docs/testing.md](docs/testing.md) |
 | Look up an endpoint | [docs/api.md](docs/api.md) |
 | Look up a setting | [docs/configuration.md](docs/configuration.md) |
 | Deploy on a full-size server, refresh map data, back up, troubleshoot | [docs/operations.md](docs/operations.md) |
@@ -67,15 +68,15 @@ Docker stack with real data, and everything else, is in
 
 ## Checks
 
-```bash
-pnpm lint && pnpm typecheck && pnpm test && pnpm test:mobile
-```
+Every feature is tested, and every change must pass the whole suite:
 
 ```bash
-pnpm --filter @wayfinder/web e2e
+pnpm check
 ```
 
-CI runs these on every push to `master` and every pull request.
+That runs lint, types, the Vitest suites (unit, integration, web components) and the Android
+tests, each with coverage floors, then the Playwright end-to-end suite. CI runs the same on every
+push to `master` and every pull request. Details in [docs/testing.md](docs/testing.md).
 
 ## Repository layout
 

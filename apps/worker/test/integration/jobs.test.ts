@@ -113,4 +113,18 @@ describe('worker job handlers', () => {
     const groups = await adminService.listErrorGroups(t.db, { limit: 10 });
     expect(groups[0]).toMatchObject({ service: 'worker', count: 1 });
   });
+
+  it('osm-refresh on a server that can’t build map data records a failed run explaining why', async () => {
+    const handlers = jobHandlers({ ...deps(), refreshEnabled: false });
+    // A scheduled run has no run id yet; the job creates one.
+    const out = (await handlers['osm-refresh']({})) as { runId: string; skipped: boolean };
+    expect(out.skipped).toBe(true);
+    const run = (await t.db.query('SELECT status, finished_at, log_tail FROM pipeline_runs WHERE id = $1', [out.runId])).rows[0];
+    expect(run.status).toBe('failed');
+    expect(run.finished_at).not.toBeNull();
+    expect(run.log_tail).toMatch(/OSM_REFRESH_ENABLED=false/);
+    // A run queued from the dashboard keeps its id.
+    const runId = await opsService.createPipelineRun(t.db, 'osm_refresh', null);
+    expect(await handlers['osm-refresh']({ runId })).toEqual({ runId, skipped: true });
+  });
 });

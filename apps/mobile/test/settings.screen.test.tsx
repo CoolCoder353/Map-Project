@@ -32,7 +32,8 @@ jest.mock('../src/lib/appConfig', () => ({
 }));
 
 function renderSettings() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  // gcTime Infinity: no clean-up timers left running after the test (see fakes.tsx).
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } } });
   return render(
     <QueryClientProvider client={qc}>
       <SettingsScreen />
