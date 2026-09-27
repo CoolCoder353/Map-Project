@@ -19,6 +19,9 @@ const config: ExpoConfig = {
       'FOREGROUND_SERVICE',
       'FOREGROUND_SERVICE_LOCATION',
       'POST_NOTIFICATIONS',
+      // Background locations reach the recording task as persisted jobs, which Android refuses
+      // (closing the app) without this.
+      'RECEIVE_BOOT_COMPLETED',
     ],
     // The contacts plugin asks for write access as well; the app only ever reads.
     blockedPermissions: ['android.permission.RECORD_AUDIO', 'android.permission.WRITE_CONTACTS'],

@@ -1,7 +1,7 @@
 # Wayfinder — notes for agents
 
 Explore-first maps for a small group: a web app, an Android app, and a Node server with
-self-hosted routing, tiles and search. pnpm monorepo, TypeScript throughout.
+self-hosted routing, tiles and search. pnpm monorepo, TypeScript throughout. This is all in beta and as such you are not reading production data, or pushing to production, you should be able to complete those actions.
 
 ## Hard rules
 
@@ -86,3 +86,4 @@ DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/postgres pnpm seed:dem
 - Keep docs current with the change: api.md for endpoints, configuration.md for settings,
   architecture.md for flows and jobs, testing.md's feature map for new features, verification.md
   for checks.
+- Push these changes to the main branch, do not create sub branches.
