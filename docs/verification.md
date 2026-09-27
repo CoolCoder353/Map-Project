@@ -100,3 +100,8 @@ Results are recorded in [live-stack-results.md](live-stack-results.md).
   ```bash
   adb logcat -c && adb logcat | grep -iE "wayfinder|AndroidRuntime|maplibre"
   ```
+- **The 2026-09-23 APK crashes on launch** (found on the emulator, 2026-09-27; not fixed yet).
+  `expo-contacts ~15.0.11` is from an older Expo SDK and needs `AnyTypeProvider`, which
+  `expo-modules-core` 57 no longer has, so the app dies with `NoClassDefFoundError` before the
+  first screen. The Expo 57 version is `57.0.x`. Jest mocks `expo-contacts`, so the screen tests
+  can't catch this; check a new APK on the emulator ([development.md](development.md#emulator)).

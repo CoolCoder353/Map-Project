@@ -86,6 +86,42 @@ EXPO_PUBLIC_API_URL=https://maps.paulsjones.com infra/scripts/build-apk.sh
 native settings in `apps/mobile/app.config.ts`, never in the generated project. Installing the
 APK is in [install-android.md](install-android.md).
 
+#### Emulator
+
+An Android 16 emulator runs without a window and is driven with `adb`. It needs hardware
+virtualisation (`/dev/kvm`; switch on SVM or VT-x in the BIOS). Setup is one-off, puts a JDK and
+the Android SDK under `~/Android` (about 6 GB), and needs no system packages:
+
+```bash
+infra/scripts/android-emulator.sh setup
+```
+
+```bash
+infra/scripts/android-emulator.sh start
+```
+
+```bash
+infra/scripts/android-emulator.sh install
+```
+
+`install` takes an APK path (default `dist/wayfinder.apk`) and opens the app; `stop` shuts the
+emulator down. The APK already includes x86_64 code, so the same file runs on phones and the
+emulator. Useful `adb` commands (`~/Android/Sdk/platform-tools/adb`):
+
+| To | Run |
+|---|---|
+| See the screen | `adb exec-out screencap -p > screen.png` |
+| Tap, type, go back | `adb shell input tap 540 1200`, `adb shell input text hello`, `adb shell input keyevent BACK` |
+| Read what's on screen | `adb shell uiautomator dump /dev/stdout` |
+| Crashes and app logs | `adb logcat -d \| grep -iE "AndroidRuntime\|ReactNativeJS\|maplibre"` |
+| Set the GPS position | `adb emu geo fix 153.0251 -27.4698` (lon then lat) |
+| Force Doze | `adb shell dumpsys deviceidle force-idle` |
+
+An APK built for `maps.paulsjones.com` talks to the live server, which has real users: look,
+but don't sign in with a real account or create data there. To test against the local
+dev stack, build with `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000 ALLOW_HTTP=1` (`10.0.2.2` is this
+machine as the emulator sees it), and don't hand that APK to anyone.
+
 ## Tests
 
 Every feature is tested, and every change passes the whole suite. The rule, where each kind of
