@@ -18,6 +18,19 @@ export interface RefreshConfig {
   skip: string[];
 }
 
+/** Steps a hand-run refresh can pick (refresh-cli.js). */
+export const REFRESH_STEPS = ['download', 'graph', 'tiles', 'places'] as const;
+
+/**
+ * Which steps to skip for a hand-run refresh: every step not named, or with no names, the
+ * OSM_REFRESH_SKIP list. Throws on a name that isn't a step.
+ */
+export function stepsToSkip(only: string[], skipEnv: string): string[] {
+  const unknown = only.filter((s) => !(REFRESH_STEPS as readonly string[]).includes(s));
+  if (unknown.length) throw new Error(`Unknown step(s): ${unknown.join(', ')}. Steps: ${REFRESH_STEPS.join(', ')}`);
+  return only.length ? REFRESH_STEPS.filter((s) => !only.includes(s)) : skipEnv.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
 export type RunCommand = (cmd: string, args: string[], onLine: (line: string) => void) => Promise<void>;
 
 export const runCommand: RunCommand = (cmd, args, onLine) =>

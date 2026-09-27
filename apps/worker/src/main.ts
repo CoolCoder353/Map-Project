@@ -1,6 +1,5 @@
 import {
   GraphHopperClient,
-  JOB_NAMES,
   MetricsAggregator,
   TokenService,
   bossQueue,
@@ -12,7 +11,8 @@ import {
   startBoss,
 } from '@wayfinder/core';
 import { loadConfig } from './config.js';
-import { instrument, jobHandlers } from './jobs.js';
+import { jobHandlers } from './jobs.js';
+import { registerJobs } from './register.js';
 
 const config = loadConfig();
 const log = createLogger('worker', config.LOG_LEVEL);
@@ -50,19 +50,7 @@ const handlers = jobHandlers({
   refreshEnabled: config.OSM_REFRESH_ENABLED,
 });
 
-for (const name of JOB_NAMES) {
-  const handler = instrument(ctx, name, handlers[name]);
-  const concurrency = name === 'process-tracks' ? 4 : 1;
-  await boss.work<Record<string, unknown>>(name, { batchSize: 1, localConcurrency: concurrency }, async (jobs) => {
-    for (const job of jobs) await handler(job.data ?? {});
-  });
-}
-
-await boss.schedule('system-sample', '* * * * *');
-await boss.schedule('metrics-maintenance', '7 * * * *');
-await boss.schedule('purge-deleted', '17 3 * * *');
-if (config.OSM_REFRESH_CRON && config.OSM_REFRESH_ENABLED) await boss.schedule('osm-refresh', config.OSM_REFRESH_CRON);
-else await boss.unschedule('osm-refresh');
+await registerJobs(boss, ctx, handlers, { cron: config.OSM_REFRESH_CRON, enabled: config.OSM_REFRESH_ENABLED });
 
 // Heartbeat immediately so the dashboard shows the worker as up.
 await handlers['system-sample']({}).catch((err) => log.warn({ err }, 'initial system sample failed'));
