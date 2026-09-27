@@ -118,6 +118,8 @@ Results are recorded in [live-stack-results.md](live-stack-results.md).
   the emulator, 2026-09-27: `expo-contacts ~15.0.11` was from an older Expo SDK and needs
   `AnyTypeProvider`, which `expo-modules-core` 57 no longer has, so every launch died with
   `NoClassDefFoundError` before the first screen. Fixed in code (`expo-contacts ~57.0.6`, used
-  through `expo-contacts/legacy`) and checked on the emulator with a build against the dev stack;
-  a release APK for `maps.paulsjones.com` hasn't been built or shared yet. This is likely what
-  the crash reports were.
+  through `expo-contacts/legacy`) and checked on the emulator with a build against the dev stack.
+  App 0.2.0 (versionCode 2), with this fix and the 2026-09-28 feedback fixes, was built for
+  `maps.paulsjones.com` on 2026-09-28: it installs over the old build, opens on the emulator with no
+  crash, and its sign-in screen reaches the server. It hasn't been shared with testers yet. This
+  is likely what the crash reports were.
