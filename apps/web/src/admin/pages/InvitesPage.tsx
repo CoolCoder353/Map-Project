@@ -16,7 +16,8 @@ export function InvitesPage() {
   const invites = useInvites(status || undefined);
   const qc = useQueryClient();
   const toast = useToast();
-  const [count, setCount] = useState(1);
+  // Kept as typed, so the field can be cleared and retyped; clamped when sent.
+  const [count, setCount] = useState('1');
   const [days, setDays] = useState('14');
   const [note, setNote] = useState('');
   const [role, setRole] = useState<Role>('user');
@@ -26,7 +27,7 @@ export function InvitesPage() {
     mutationFn: () =>
       api<{ codes: string[] }>('/api/admin/invites', {
         method: 'POST',
-        body: { count, expiresInDays: days === 'never' ? null : Number(days), note: note.trim() || null, roleOnSignup: role },
+        body: { count: Math.max(1, Math.min(50, Math.round(Number(count)) || 1)), expiresInDays: days === 'never' ? null : Number(days), note: note.trim() || null, roleOnSignup: role },
       }),
     onSuccess: (r) => {
       setCreated(r.codes);
@@ -58,7 +59,7 @@ export function InvitesPage() {
           >
             <label className="field">
               <span className="field-label">How many</span>
-              <input className="input" type="number" min={1} max={50} value={count} onChange={(e) => setCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))} />
+              <input className="input" type="number" min={1} max={50} value={count} onChange={(e) => setCount(e.target.value)} />
             </label>
             <label className="field">
               <span className="field-label">Expires</span>

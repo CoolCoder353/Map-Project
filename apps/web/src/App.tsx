@@ -39,17 +39,22 @@ function Boot() {
 }
 
 function RequireAuth() {
-  const { status } = useAuth();
+  const { status, signedOut } = useAuth();
   const location = useLocation();
   if (status === 'loading') return <Boot />;
-  if (status === 'anonymous') return <Navigate to="/sign-in" replace state={{ from: location.pathname + location.search }} />;
+  // Remember where they were going so signing in returns there, unless they chose to sign out:
+  // the next person on this browser shouldn't land on their trip (the query holds its places).
+  if (status === 'anonymous') return <Navigate to="/sign-in" replace state={signedOut ? null : { from: location.pathname + location.search }} />;
   return <Outlet />;
 }
 
 function RedirectIfAuthed() {
   const { status } = useAuth();
+  const location = useLocation();
   if (status === 'loading') return <Boot />;
-  if (status === 'authenticated') return <Navigate to="/directions" replace />;
+  // Signing in re-renders this guard before the sign-in page can navigate, so this is where a
+  // deep link (passed on by RequireAuth) is honoured.
+  if (status === 'authenticated') return <Navigate to={(location.state as { from?: string } | null)?.from ?? '/directions'} replace />;
   return <Outlet />;
 }
 
