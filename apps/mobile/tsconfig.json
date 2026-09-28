@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["app", "src", "test", "app.config.ts"]
+  "include": ["app", "src", "test", "modules", "index.ts", "app.config.ts"]
 }
