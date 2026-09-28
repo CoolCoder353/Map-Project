@@ -22,6 +22,15 @@ const mockAppend = jest.fn(async (_points: unknown[]) => undefined);
 jest.mock('../src/tracking/sqliteStore', () => ({ sqliteQueueStore: { append: (p: unknown[]) => mockAppend(p) } }));
 const mockSync = jest.fn(async () => null);
 jest.mock('../src/tracking/sync', () => ({ syncQueue: () => mockSync() }));
+jest.mock('../src/nav/navigationLocation', () => ({
+  startNavigationLocation: jest.fn(async () => undefined),
+  stopNavigationLocation: jest.fn(async () => undefined),
+  setNavigationFixHandler: jest.fn(),
+}));
+import * as NavLocation from '../src/nav/navigationLocation';
+
+// Registered once when navigationService loads, before resetFakes() clears mock records.
+const mockFeed = jest.mocked(NavLocation.setNavigationFixHandler).mock.calls[0]![0]!;
 const mockResults: Array<{ state: object; events: object[] }> = [];
 jest.mock('@wayfinder/nav', () => ({
   NavigationSession: class {
@@ -91,4 +100,27 @@ it('ignores fixes once navigation has ended', async () => {
   late(fix(153, -27.4));
   expect(navigation.getSnapshot().position).toBeNull();
   expect(mockAppend).not.toHaveBeenCalled();
+});
+
+it('keeps a location service running for the trip, named after the destination', async () => {
+  navigation.start(route(), { destinationName: 'Mt Coot-tha Lookout' });
+  await waitFor(() => expect(NavLocation.startNavigationLocation).toHaveBeenCalledWith('Mt Coot-tha Lookout'));
+  navigation.stop();
+  expect(NavLocation.stopNavigationLocation).toHaveBeenCalled();
+});
+
+it('still navigates when the location service cannot start', async () => {
+  jest.mocked(NavLocation.startNavigationLocation).mockRejectedValueOnce(new Error('no'));
+  navigation.start(route());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  expect(navigation.getSnapshot().error).toBeNull();
+});
+
+it('follows fixes from the location service, skipping ones the GPS watch already gave', async () => {
+  navigation.start(route());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockOnFix!(fix(153, -27.4, 5000));
+  mockFeed([fix(153, -27.4, 5000) as never, fix(153.01, -27.4, 6000) as never]);
+  expect(mockAppend).toHaveBeenCalledTimes(2);
+  expect(navigation.getSnapshot().position).toEqual([153.01, -27.4]);
 });

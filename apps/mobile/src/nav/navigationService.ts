@@ -7,6 +7,7 @@ import * as Speech from 'expo-speech';
 import { api } from '../lib/api';
 import { sqliteQueueStore } from '../tracking/sqliteStore';
 import { syncQueue } from '../tracking/sync';
+import { setNavigationFixHandler, startNavigationLocation, stopNavigationLocation } from './navigationLocation';
 
 /** How long to wait before asking again for a new route after one couldn't be fetched. */
 export const REROUTE_RETRY_MS = 15_000;
@@ -62,6 +63,7 @@ export function createNavigationService(): NavigationService {
   let pendingReroute: { to: LngLat; via: LngLat[]; at: number } | null = null;
   /** Bumped by every start and stop, so work from an earlier trip that finishes late is dropped. */
   let generation = 0;
+  let lastFixTs = -Infinity;
 
   const set = (patch: Partial<NavSnapshot>) => {
     snap = { ...snap, ...patch };
@@ -110,11 +112,14 @@ export function createNavigationService(): NavigationService {
     }
   }
 
-  function handleFix(loc: Location.LocationObject, _source: 'watch' | 'service' = 'watch') {
+  function handleFix(loc: Location.LocationObject, source: 'watch' | 'service' = 'watch') {
     const nav = session;
     if (!nav) return;
     const { longitude: lon, latitude: lat } = loc.coords;
     if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+    // The location service repeats fixes the GPS watch already delivered.
+    if (source === 'service' && loc.timestamp <= lastFixTs) return;
+    lastFixTs = Math.max(lastFixTs, loc.timestamp);
     const fix = { ts: loc.timestamp, lon, lat, accuracyM: loc.coords.accuracy, speedMps: loc.coords.speed, headingDeg: loc.coords.heading };
     let result: ReturnType<NavigationSession['update']>;
     try {
@@ -150,6 +155,7 @@ export function createNavigationService(): NavigationService {
     generation++;
     watch?.remove();
     watch = null;
+    if (wasActive) void stopNavigationLocation().catch(() => undefined);
     if (uploader) clearInterval(uploader);
     uploader = null;
     session = null;
@@ -171,6 +177,7 @@ export function createNavigationService(): NavigationService {
     }
     session = next;
     sessionId = Crypto.randomUUID();
+    lastFixTs = -Infinity;
     const gen = generation;
     set({ ...IDLE, active: true, route, destinationName: opts.destinationName ?? null });
     void (async () => {
@@ -181,6 +188,8 @@ export function createNavigationService(): NavigationService {
           set({ error: 'Navigation needs location permission.' });
           return;
         }
+        // Failing to start it only matters with the phone locked; the watch below still navigates.
+        void startNavigationLocation(opts.destinationName ?? null).catch(() => undefined);
         const sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 5, timeInterval: 1000 }, (loc) => handleFix(loc));
         // Ended while the phone was asking or starting GPS: stop it straight away.
         if (gen !== generation) sub.remove();
@@ -208,3 +217,4 @@ export function createNavigationService(): NavigationService {
 }
 
 export const navigation = createNavigationService();
+setNavigationFixHandler((locs) => locs.forEach((l) => navigation.handleFix(l, 'service')));

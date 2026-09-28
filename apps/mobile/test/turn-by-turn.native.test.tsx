@@ -24,6 +24,11 @@ const mockAppend = jest.fn(async (_points: unknown[]) => undefined);
 jest.mock('../src/tracking/sqliteStore', () => ({ sqliteQueueStore: { append: (p: unknown[]) => mockAppend(p) } }));
 const mockSync = jest.fn(async () => null);
 jest.mock('../src/tracking/sync', () => ({ syncQueue: () => mockSync() }));
+jest.mock('../src/nav/navigationLocation', () => ({
+  startNavigationLocation: jest.fn(async () => undefined),
+  stopNavigationLocation: jest.fn(async () => undefined),
+  setNavigationFixHandler: jest.fn(),
+}));
 
 // A scripted navigation engine: each fix returns the next queued result.
 const mockResults: Array<{ state: object; events: object[] }> = [];
