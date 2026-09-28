@@ -31,7 +31,7 @@ import * as NavLocation from '../src/nav/navigationLocation';
 
 // Registered once when navigationService loads, before resetFakes() clears mock records.
 const mockFeed = jest.mocked(NavLocation.setNavigationFixHandler).mock.calls[0]![0]!;
-const mockResults: Array<{ state: object; events: object[] }> = [];
+const mockResults: Array<{ state: object; events: object[] } | Error> = [];
 jest.mock('@wayfinder/nav', () => ({
   NavigationSession: class {
     mode: string;
@@ -39,7 +39,9 @@ jest.mock('@wayfinder/nav', () => ({
       this.mode = r.mode;
     }
     update() {
-      return mockResults.shift() ?? { state: { status: 'navigating' }, events: [] };
+      const next = mockResults.shift();
+      if (next instanceof Error) throw next;
+      return next ?? { state: { status: 'navigating' }, events: [] };
     }
     replaceRoute() {}
   },
@@ -134,4 +136,37 @@ it('follows fixes from the location service, skipping ones the GPS watch already
   mockFeed([fix(153, -27.4, 5000) as never, fix(153.01, -27.4, 6000) as never]);
   expect(mockAppend).toHaveBeenCalledTimes(2);
   expect(navigation.getSnapshot().position).toEqual([153.01, -27.4]);
+});
+
+it('keeps the last position but skips recording a fix the route engine could not match', async () => {
+  navigation.start(route());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockResults.push(new Error('off the end of the route'));
+  mockOnFix!(fix(153, -27.4, 5000));
+  expect(navigation.getSnapshot()).toMatchObject({ position: [153, -27.4] });
+  expect(mockAppend).not.toHaveBeenCalled();
+  // The next fix carries on as normal.
+  mockOnFix!(fix(153.01, -27.41, 6000));
+  expect(mockAppend).toHaveBeenCalledTimes(1);
+});
+
+it('keeps the fix even when the local write to disk fails', async () => {
+  navigation.start(route());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockAppend.mockRejectedValueOnce(new Error('disk full'));
+  mockOnFix!(fix(153, -27.4, 5000));
+  await waitFor(() => expect(mockAppend).toHaveBeenCalledTimes(1));
+  expect(navigation.getSnapshot().position).toEqual([153, -27.4]);
+});
+
+it('still finishes stopping when turning off the location service and the last upload both fail', async () => {
+  navigation.start(route());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  jest.mocked(NavLocation.stopNavigationLocation).mockRejectedValueOnce(new Error('no'));
+  mockSync.mockRejectedValueOnce(new Error('offline'));
+  navigation.stop();
+  expect(navigation.getSnapshot()).toMatchObject({ active: false, route: null, state: null });
+  // Let the swallowed rejections settle before the test ends.
+  await Promise.resolve();
+  await Promise.resolve();
 });
