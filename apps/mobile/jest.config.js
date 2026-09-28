@@ -18,7 +18,7 @@ module.exports = {
   collectCoverageFrom: ['app/**/*.tsx', 'src/**/*.{ts,tsx}', '!src/lib/apiClient.ts', '!src/tracking/queue.ts'],
   coverageDirectory: 'coverage',
   coverageReporters: ['text-summary', 'html'],
-  coverageThreshold: { global: { lines: 92, statements: 88, functions: 77, branches: 85 } },
+  coverageThreshold: { global: { lines: 93, statements: 90, functions: 79, branches: 88 } },
   transformIgnorePatterns: [
     // pnpm nests packages under node_modules/.pnpm/<id>/node_modules/<name>; let those through.
     'node_modules/(?!\\.pnpm|(?:jest-)?react-native[^/]*|@react-native[^/]*/|expo[^/]*|@expo[^/]*/|@maplibre/|lucide-react-native|@tanstack/)',
