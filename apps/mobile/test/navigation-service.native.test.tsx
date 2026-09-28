@@ -109,6 +109,17 @@ it('keeps a location service running for the trip, named after the destination',
   expect(NavLocation.stopNavigationLocation).toHaveBeenCalled();
 });
 
+it('stops a location service that only finishes starting after the trip has ended', async () => {
+  let resolveStart: () => void = () => undefined;
+  jest.mocked(NavLocation.startNavigationLocation).mockImplementationOnce(() => new Promise((resolve) => (resolveStart = resolve)));
+  navigation.start(route());
+  await waitFor(() => expect(NavLocation.startNavigationLocation).toHaveBeenCalled());
+  navigation.stop();
+  const callsBefore = jest.mocked(NavLocation.stopNavigationLocation).mock.calls.length;
+  resolveStart();
+  await waitFor(() => expect(jest.mocked(NavLocation.stopNavigationLocation).mock.calls.length).toBeGreaterThan(callsBefore));
+});
+
 it('still navigates when the location service cannot start', async () => {
   jest.mocked(NavLocation.startNavigationLocation).mockRejectedValueOnce(new Error('no'));
   navigation.start(route());

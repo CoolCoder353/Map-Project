@@ -189,7 +189,13 @@ export function createNavigationService(): NavigationService {
           return;
         }
         // Failing to start it only matters with the phone locked; the watch below still navigates.
-        void startNavigationLocation(opts.destinationName ?? null).catch(() => undefined);
+        void startNavigationLocation(opts.destinationName ?? null)
+          .then(() => {
+            // The trip ended while the native call was still in flight: stop() ran too early to
+            // catch this one, so the foreground service would otherwise outlive the trip.
+            if (gen !== generation) void stopNavigationLocation().catch(() => undefined);
+          })
+          .catch(() => undefined);
         const sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 5, timeInterval: 1000 }, (loc) => handleFix(loc));
         // Ended while the phone was asking or starting GPS: stop it straight away.
         if (gen !== generation) sub.remove();
