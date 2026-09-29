@@ -1,0 +1,8 @@
+{
+  "routeId": "r-fast", "destinationName": null, "status": "arrived",
+  "rerouting": false, "muted": true, "error": null,
+  "maneuver": { "type": "destination", "exit": null }, "cue": "Arrive at destination", "road": "",
+  "distanceToManeuverM": null, "next": null,
+  "remainingDistanceM": 0, "remainingDurationS": 0, "arrivalEpochMs": 1790000000000,
+  "position": null, "headingDeg": null
+}

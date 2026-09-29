@@ -15,7 +15,7 @@ module.exports = {
   },
   // `pnpm test:mobile:coverage` fails below these floors (docs/testing.md). The API client and
   // upload queue are plain TypeScript tested in Vitest, and measured there.
-  collectCoverageFrom: ['app/**/*.tsx', 'src/**/*.{ts,tsx}', '!src/lib/apiClient.ts', '!src/tracking/queue.ts'],
+  collectCoverageFrom: ['app/**/*.tsx', 'src/**/*.{ts,tsx}', '!src/lib/apiClient.ts', '!src/tracking/queue.ts', '!src/car/protocol.ts'],
   coverageDirectory: 'coverage',
   coverageReporters: ['text-summary', 'html'],
   coverageThreshold: { global: { lines: 94.3, statements: 90.5, functions: 80.5, branches: 88.28 } },

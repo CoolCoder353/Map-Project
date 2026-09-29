@@ -1,0 +1,9 @@
+{
+  "routeId": "r-fast", "destinationName": "Mt Coot-tha Lookout", "status": "navigating",
+  "rerouting": false, "muted": false, "error": null,
+  "maneuver": { "type": "roundabout", "exit": 2 }, "cue": "At the roundabout, take the 2nd exit onto Sir Samuel Griffith Drive", "road": "Sir Samuel Griffith Drive",
+  "distanceToManeuverM": 350,
+  "next": { "maneuver": { "type": "left", "exit": null }, "cue": "Turn left" },
+  "remainingDistanceM": 4200, "remainingDurationS": 540, "arrivalEpochMs": 1790000000000,
+  "position": [152.99, -27.48], "headingDeg": 270
+}

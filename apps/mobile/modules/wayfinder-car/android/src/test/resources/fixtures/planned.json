@@ -1,0 +1,5 @@
+{
+  "items": [
+    { "id": "pl1", "name": "Sunday drive", "option": { "routeId": "r-sun", "title": "Sunday drive", "detail": "1 h 10 min · 40 km you’ve never been", "durationS": 4200, "distanceM": 81000, "extraDurationS": 0, "geometry": [[153.0, -27.4], [152.9, -27.3]] } }
+  ]
+}

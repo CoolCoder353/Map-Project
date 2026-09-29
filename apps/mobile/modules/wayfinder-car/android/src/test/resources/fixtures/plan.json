@@ -1,0 +1,7 @@
+{
+  "options": [
+    { "routeId": "r-fast", "title": "Fastest", "detail": "25 min · 1.2 km you’ve never been", "durationS": 1500, "distanceM": 18400, "extraDurationS": 0, "geometry": [[153.0251, -27.4698], [152.957, -27.4846]] },
+    { "routeId": "r-exp", "title": "Explore 1", "detail": "32 min (7 min longer) · 9.4 km you’ve never been", "durationS": 1920, "distanceM": 22100, "extraDurationS": 420, "geometry": [[153.0251, -27.4698], [153.0, -27.5], [152.957, -27.4846]] }
+  ],
+  "note": null
+}

@@ -1,0 +1,6 @@
+{
+  "places": [
+    { "id": "p1", "name": "Mt Coot-tha Lookout", "detail": "Lookout · 6.2 km away · 62% unexplored area", "location": [152.957, -27.4846], "distanceM": 6200 },
+    { "id": "p2", "name": "Queen Street Mall", "detail": "Brisbane City QLD 4000", "location": [153.0251, -27.4698], "distanceM": null }
+  ]
+}
