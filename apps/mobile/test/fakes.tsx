@@ -40,6 +40,8 @@ export const fake = {
     routes: {} as Record<string, Handler>,
     calls: [] as Array<{ key: string; init: Init }>,
     unhandled: [] as string[],
+    signedIn: true,
+    savedSession: true,
     /** Declare endpoints as "METHOD path", e.g. "GET api/trips" or "DELETE api/trips/:id". */
     on(routes: Record<string, Handler>) {
       Object.assign(this.routes, routes);
@@ -72,6 +74,8 @@ export function resetFakes() {
   fake.api.routes = {};
   fake.api.calls = [];
   fake.api.unhandled = [];
+  fake.api.signedIn = true;
+  fake.api.savedSession = true;
   fake.user = makeUser(true);
   fake.status = 'authenticated';
   fake.config = { appName: 'Wayfinder', voice: 'plain', feedbackEnabled: false, osmDataDate: null };
@@ -100,7 +104,14 @@ async function request(path: string, init: Init = {}) {
 }
 
 export const apiModule = {
-  api: { request: (path: string, init?: Init) => request(path, init) },
+  api: {
+    request: (path: string, init?: Init) => request(path, init),
+    refresh: jest.fn(async () => (fake.api.signedIn ? { accessToken: 'a', user: fake.user } : null)),
+    get hasAccessToken() {
+      return fake.api.signedIn;
+    },
+  },
+  hasSavedSession: jest.fn(async () => fake.api.savedSession),
   errorMessage: (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong'),
 };
 
@@ -218,3 +229,30 @@ export const discoverItem = (over: Partial<DiscoverItem> = {}): DiscoverItem => 
   score: 0.9,
   ...over,
 });
+
+/** A stand-in for the car app's native side: records what JavaScript tells it, and plays the car. */
+export function fakeCarNative() {
+  const listeners = new Set<(call: { id: string; method: string; params: string }) => void>();
+  let n = 0;
+  return {
+    ready: jest.fn(),
+    resolve: jest.fn(),
+    reject: jest.fn(),
+    setNavigation: jest.fn(),
+    addListener: jest.fn((_event: 'onCall', fn: (call: { id: string; method: string; params: string }) => void) => {
+      listeners.add(fn);
+      return { remove: () => listeners.delete(fn) };
+    }),
+    /** The car asks something; returns the request id. */
+    ask(method: string, params: object = {}) {
+      const id = `c${n++}`;
+      listeners.forEach((l) => l({ id, method, params: JSON.stringify(params) }));
+      return id;
+    },
+    /** What JavaScript answered to request `id`, parsed. */
+    answerTo(id: string): unknown {
+      const call = this.resolve.mock.calls.find((c: unknown[]) => c[0] === id);
+      return call ? JSON.parse(call[1] as string) : undefined;
+    },
+  };
+}

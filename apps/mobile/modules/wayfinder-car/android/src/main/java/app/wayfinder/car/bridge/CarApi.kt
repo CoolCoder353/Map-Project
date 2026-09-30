@@ -1,0 +1,16 @@
+package app.wayfinder.car.bridge
+
+/** Everything the car screens need from the rest of the app. */
+interface CarApi {
+  fun status(done: (Result<CarStatus>) -> Unit)
+  fun search(query: String, done: (Result<List<CarPlace>>) -> Unit)
+  fun discover(done: (Result<List<CarPlace>>) -> Unit)
+  fun plan(to: CarPlace, done: (Result<PlanResult>) -> Unit)
+  fun planned(done: (Result<List<PlannedItem>>) -> Unit)
+  fun routeLine(routeId: String, done: (Result<List<LngLat>>) -> Unit)
+  fun start(routeId: String, destinationName: String, done: (Result<Unit>) -> Unit)
+  fun stop()
+  fun setMuted(muted: Boolean)
+  val navigation: CarNav?
+  fun onNavigation(listener: (CarNav?) -> Unit): () -> Unit
+}
