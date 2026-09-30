@@ -15,10 +15,10 @@ module.exports = {
   },
   // `pnpm test:mobile:coverage` fails below these floors (docs/testing.md). The API client and
   // upload queue are plain TypeScript tested in Vitest, and measured there.
-  collectCoverageFrom: ['app/**/*.tsx', 'src/**/*.{ts,tsx}', '!src/lib/apiClient.ts', '!src/tracking/queue.ts', '!src/car/protocol.ts'],
+  collectCoverageFrom: ['app/**/*.tsx', 'src/**/*.{ts,tsx}', '!src/lib/apiClient.ts', '!src/tracking/queue.ts', '!src/car/protocol.ts', '!src/lib/categories.ts'],
   coverageDirectory: 'coverage',
   coverageReporters: ['text-summary', 'html'],
-  coverageThreshold: { global: { lines: 94.4, statements: 90.7, functions: 81, branches: 88.4 } },
+  coverageThreshold: { global: { lines: 94.6, statements: 91.1, functions: 81.8, branches: 88.8 } },
   transformIgnorePatterns: [
     // pnpm nests packages under node_modules/.pnpm/<id>/node_modules/<name>; let those through.
     'node_modules/(?!\\.pnpm|(?:jest-)?react-native[^/]*|@react-native[^/]*/|expo[^/]*|@expo[^/]*/|@maplibre/|lucide-react-native|@tanstack/)',

@@ -23,4 +23,12 @@ describe('Android Auto module', () => {
     expect(gradle).toContain(`def maplibreVersion = '${phone}'`);
     expect(gradle).toContain(`org.maplibre.gl:android-sdk-${variant}:`);
   });
+
+  it('asks the phone only for things the JavaScript side answers', () => {
+    const kotlin = readFileSync(join(moduleDir, 'src/main/java/app/wayfinder/car/bridge/BridgeCarApi.kt'), 'utf8');
+    const handlers = readFileSync(join(__dirname, '../src/car/handlers.ts'), 'utf8');
+    const sent = [...kotlin.matchAll(/(?:ask|bridge\.call)\("(\w+)"/g)].map((m) => m[1]!);
+    expect(sent.length).toBeGreaterThan(0);
+    for (const method of sent) expect(handlers, method).toMatch(new RegExp(`^  (async )?${method}\\(`, 'm'));
+  });
 });

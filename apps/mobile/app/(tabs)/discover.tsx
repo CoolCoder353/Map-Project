@@ -6,19 +6,13 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../../src/lib/api';
 import { useAppConfig } from '../../src/lib/appConfig';
+import { CATEGORY_LABEL, kindOf } from '../../src/lib/categories';
 import { formatDistanceShort } from '../../src/lib/format';
 import { radius, space, useTheme } from '../../src/lib/theme';
 import { MapCanvas, type MapCanvasHandle } from '../../src/map/MapCanvas';
 import { type ChosenPlace, PlaceSearch } from '../../src/ui/PlaceSearch';
 import { Body, Button, Card, Empty, NewBadge, Notice, Segmented, Small } from '../../src/ui/kit';
 import { useApproxLocation } from '../../src/lib/useApproxLocation';
-
-const LABEL: Record<PoiCategory, string> = {
-  viewpoint: 'Lookouts', peak: 'Peaks', waterfall: 'Waterfalls', park: 'Parks', beach: 'Beaches', attraction: 'Attractions',
-  cafe: 'Cafés', historic: 'Historic', trailhead: 'Trailheads', museum: 'Museums', picnic: 'Picnic spots',
-};
-/** One of a kind, e.g. "Lookout". A newer server may send a category this build doesn't know. */
-const kindOf = (c: string) => LABEL[c as PoiCategory]?.replace(/s$/, '') ?? 'Place';
 
 export default function Discover() {
   const here = useApproxLocation();
@@ -85,7 +79,7 @@ export default function Discover() {
                 onPress={() => setCats((cs) => (on ? cs.filter((x) => x !== c) : [...cs, c]))}
                 style={{ paddingHorizontal: space[3], minHeight: 34, justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: on ? 'transparent' : t.borderStrong, backgroundColor: on ? t.accentSoft : t.surface }}
               >
-                <Text style={{ color: on ? t.accent : t.text2, fontWeight: '600' }}>{LABEL[c]}</Text>
+                <Text style={{ color: on ? t.accent : t.text2, fontWeight: '600' }}>{CATEGORY_LABEL[c]}</Text>
               </Pressable>
             );
           })}

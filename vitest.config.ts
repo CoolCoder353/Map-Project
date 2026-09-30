@@ -8,7 +8,7 @@ export default defineConfig({
     // added; never lower them to make a change pass (docs/testing.md).
     coverage: {
       provider: 'v8',
-      include: ['packages/*/src/**/*.{ts,tsx}', 'apps/api/src/**/*.ts', 'apps/worker/src/**/*.ts', 'apps/web/src/**/*.{ts,tsx}', 'apps/mobile/src/lib/apiClient.ts', 'apps/mobile/src/tracking/queue.ts', 'apps/mobile/src/car/protocol.ts'],
+      include: ['packages/*/src/**/*.{ts,tsx}', 'apps/api/src/**/*.ts', 'apps/worker/src/**/*.ts', 'apps/web/src/**/*.{ts,tsx}', 'apps/mobile/src/lib/apiClient.ts', 'apps/mobile/src/tracking/queue.ts', 'apps/mobile/src/car/protocol.ts', 'apps/mobile/src/lib/categories.ts'],
       exclude: [
         '**/index.ts',
         '**/*.d.ts',
