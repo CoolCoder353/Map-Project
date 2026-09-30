@@ -1,5 +1,7 @@
 import { type CarCall, type CarNative, native } from '../../modules/wayfinder-car';
 import { errorMessage } from '../lib/api';
+import { navigation, type NavigationService } from '../nav/navigationService';
+import { toCarNav } from './navModel';
 
 export type CarHandlers = Record<string, (params: unknown) => Promise<unknown>>;
 
@@ -25,4 +27,19 @@ async function answer(n: CarNative, handlers: CarHandlers, call: CarCall) {
   } catch (e) {
     n.reject(call.id, errorMessage(e));
   }
+}
+
+/** Sends the car every change to the trip (and null when there is none). */
+export function startCarNavigationFeed(
+  n: CarNative | null = native,
+  nav: Pick<NavigationService, 'subscribe' | 'getSnapshot'> = navigation,
+  now: () => number = Date.now,
+): () => void {
+  if (!n) return () => undefined;
+  const push = () => {
+    const model = toCarNav(nav.getSnapshot(), now());
+    n.setNavigation(model ? JSON.stringify(model) : null);
+  };
+  push();
+  return nav.subscribe(push);
 }

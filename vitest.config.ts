@@ -8,7 +8,7 @@ export default defineConfig({
     // added; never lower them to make a change pass (docs/testing.md).
     coverage: {
       provider: 'v8',
-      include: ['packages/*/src/**/*.{ts,tsx}', 'apps/api/src/**/*.ts', 'apps/worker/src/**/*.ts', 'apps/web/src/**/*.{ts,tsx}', 'apps/mobile/src/lib/apiClient.ts', 'apps/mobile/src/tracking/queue.ts', 'apps/mobile/src/car/protocol.ts', 'apps/mobile/src/lib/categories.ts'],
+      include: ['packages/*/src/**/*.{ts,tsx}', 'apps/api/src/**/*.ts', 'apps/worker/src/**/*.ts', 'apps/web/src/**/*.{ts,tsx}', 'apps/mobile/src/lib/apiClient.ts', 'apps/mobile/src/tracking/queue.ts', 'apps/mobile/src/car/protocol.ts', 'apps/mobile/src/car/navModel.ts', 'apps/mobile/src/lib/categories.ts'],
       exclude: [
         '**/index.ts',
         '**/*.d.ts',
@@ -22,7 +22,7 @@ export default defineConfig({
       ],
       reporter: ['text-summary', 'html', 'json-summary'],
       reportsDirectory: 'coverage',
-      thresholds: { lines: 95, statements: 92, functions: 90, branches: 84 },
+      thresholds: { lines: 96, statements: 93, functions: 92, branches: 86 },
     },
     projects: [
       {
