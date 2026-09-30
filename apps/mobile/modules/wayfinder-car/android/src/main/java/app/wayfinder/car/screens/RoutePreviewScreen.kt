@@ -51,7 +51,7 @@ class RoutePreviewScreen(
   }
 
   internal fun select(index: Int) {
-    selected = index
+    selected = index.coerceIn(0, maxOf(0, options.lastIndex))
     showOnMap()
     invalidate()
   }
@@ -63,8 +63,11 @@ class RoutePreviewScreen(
     starting = true
     invalidate()
     api.start(option.routeId, destinationName) { r ->
-      starting = false
-      r.onFailure { CarToast.makeText(carContext, it.message ?: "Couldn’t start. Try again.", CarToast.LENGTH_LONG).show() }
+      // On success the action stays "Starting…" until navigation replaces this screen, so a second tap can't start another trip.
+      r.onFailure {
+        starting = false
+        CarToast.makeText(carContext, it.message ?: "Couldn’t start. Try again.", CarToast.LENGTH_LONG).show()
+      }
       invalidate()
     }
   }
@@ -74,7 +77,7 @@ class RoutePreviewScreen(
     val r = result ?: return b.setLoading(true).build()
     val plan = r.getOrElse { return problem(it.message ?: "Couldn’t plan a route. Try again.") }
     if (plan.options.isEmpty()) return problem("No route found to $destinationName.")
-    val list = ItemList.Builder().setOnSelectedListener { select(it) }.setSelectedIndex(selected.coerceIn(0, plan.options.lastIndex))
+    val list = ItemList.Builder().setOnSelectedListener { select(it) }.setSelectedIndex(selected)
     plan.options.forEachIndexed { i, o ->
       list.addItem(
         Row.Builder().setTitle(o.title).addText(withDuration(o)).apply { if (i == 0 && plan.note != null) addText(plan.note) }.build(),
@@ -87,13 +90,21 @@ class RoutePreviewScreen(
   }
 
   /**
-   * The route preview only accepts rows that carry a duration, so the "25 min" part of the phone's
-   * description (everything before the first "·") is marked as one; the rest reads as written.
+   * The route preview only accepts rows that carry a duration, and hosts show a DurationSpan as their own
+   * formatted duration. So only the leading "25 min" of the phone's description is marked as one, up to the
+   * first " (" or " ·"; the extra time and how much is new read as written. With nothing to mark (an empty
+   * description), the row's text is the duration itself.
    */
   private fun withDuration(o: RouteOption): CarText {
+    val span = DurationSpan.create(o.durationS.toLong())
+    val end = listOf(" (", " ·").map { o.detail.indexOf(it) }.filter { it > 0 }.minOrNull() ?: o.detail.length
+    if (o.detail.isBlank()) {
+      val text = SpannableString("${maxOf(1, Math.round(o.durationS / 60.0))} min")
+      text.setSpan(span, 0, text.length, Spanned.SPAN_INCLUSIVE_EXCLUSIVE)
+      return CarText.create(text)
+    }
     val text = SpannableString(o.detail)
-    val end = o.detail.indexOf('·').let { if (it > 0) o.detail.substring(0, it).trimEnd().length else o.detail.length }
-    if (end > 0) text.setSpan(DurationSpan.create(o.durationS.toLong()), 0, end, Spanned.SPAN_INCLUSIVE_EXCLUSIVE)
+    text.setSpan(span, 0, end, Spanned.SPAN_INCLUSIVE_EXCLUSIVE)
     return CarText.create(text)
   }
 
