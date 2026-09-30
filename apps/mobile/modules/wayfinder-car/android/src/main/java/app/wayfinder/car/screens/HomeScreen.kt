@@ -5,7 +5,6 @@ import androidx.car.app.Screen
 import androidx.car.app.model.Action
 import androidx.car.app.model.ItemList
 import androidx.car.app.model.MessageTemplate
-import androidx.car.app.model.Row
 import androidx.car.app.model.Template
 import androidx.car.app.navigation.model.PlaceListNavigationTemplate
 import app.wayfinder.car.bridge.Account
@@ -57,18 +56,14 @@ class HomeScreen(
         .setHeaderAction(Action.APP_ICON)
         .setItemList(
           ItemList.Builder()
-            .addItem(menuRow("Search") { screenManager.push(SearchScreen(carContext, api, map, s.searchHint)) })
-            .addItem(menuRow("Planned routes") { screenManager.push(PickScreens.planned(carContext, api, map)) })
-            .addItem(menuRow("Discover nearby") { screenManager.push(PickScreens.discover(carContext, api, map)) })
+            .addItem(row("Search", browsable = true) { screenManager.push(SearchScreen(carContext, api, map, s.searchHint)) })
+            .addItem(row("Planned routes", browsable = true) { screenManager.push(PickScreens.planned(carContext, api, map)) })
+            .addItem(row("Discover nearby", browsable = true) { screenManager.push(PickScreens.discover(carContext, api, map)) })
             .build(),
         )
         .build()
     }
   }
-
-  /** Places lists insist a row is either a place with a distance or a browsable menu entry; these are the latter. */
-  private fun menuRow(title: String, onClick: () -> Unit): Row =
-    Row.Builder().setTitle(title).setBrowsable(true).setOnClickListener(onClick).build()
 
   private fun message(text: String): Template =
     MessageTemplate.Builder(text)

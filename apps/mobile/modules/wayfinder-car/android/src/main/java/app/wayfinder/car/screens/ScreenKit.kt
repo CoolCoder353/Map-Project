@@ -12,8 +12,16 @@ const val MAX_ROWS = 6
 fun appName(carContext: CarContext): String =
   carContext.applicationInfo.loadLabel(carContext.packageManager).toString()
 
-fun row(title: String, detail: String?, onClick: () -> Unit): Row =
-  Row.Builder().setTitle(title).apply { if (!detail.isNullOrEmpty()) addText(detail) }.setOnClickListener(onClick).build()
+/**
+ * A tappable row. Places lists (PlaceListNavigationTemplate) insist every row is either a place with a
+ * distance or a browsable one that opens something else, so rows that open another screen pass
+ * `browsable = true`.
+ */
+fun row(title: String, detail: String? = null, browsable: Boolean = false, onClick: () -> Unit): Row =
+  Row.Builder().setTitle(title).apply {
+    if (!detail.isNullOrEmpty()) addText(detail)
+    if (browsable) setBrowsable(true)
+  }.setOnClickListener(onClick).build()
 
 fun Screen.whenCreated(block: () -> Unit) =
   lifecycle.addObserver(object : DefaultLifecycleObserver {
