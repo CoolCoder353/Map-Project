@@ -30,7 +30,7 @@ class WayfinderCarModule : Module() {
 
     OnDestroy {
       CarBridge.shared.disconnect()
-      if (voiceLazy.isInitialized()) voiceLazy.value.stop()
+      if (voiceLazy.isInitialized()) voiceLazy.value.shutdown()
     }
   }
 }
