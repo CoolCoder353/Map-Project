@@ -27,7 +27,7 @@ Add to it when you add a feature.
 pnpm check
 ```
 
-The whole gate, about 3 minutes. The pieces:
+The whole gate, about 5 minutes (Playwright and the Android Auto tests take most of it). The pieces:
 
 | Command | What it runs |
 |---|---|
@@ -152,7 +152,8 @@ file's other constants. Read a mock through a getter, or capture it after the im
 Checked by hand or against a live server, and recorded in [verification.md](verification.md):
 
 - **The car map on a car surface.** `SceneLayoutTest` covers what is drawn and where the camera
-  goes; MapLibre drawing through the virtual display is checked in the Desktop Head Unit
+  goes, and `StyleLoadsTest` that a style which failed to load is tried again; MapLibre drawing
+  through the virtual display (and a surface handed over twice) is checked in the Desktop Head Unit
   ([verification.md](verification.md#android-auto-desktop-head-unit)).
 - **The native Android map on a real device.** Jest covers the screens with the map faked, and
   `map-canvas.native.test.tsx` covers the component around it, but not MapLibre Native itself.

@@ -121,6 +121,8 @@ car"), tick each item as it passes, and record the date. Fix anything that fails
 - [ ] The car map draws through the virtual display: the style loads, and the map follows each screen (places, routes, directions)
 - [ ] Go: directions with icon, distance and arrival; "then" hint on close turns; map follows heading-up
 - [ ] Wrong turn: "Off route", then "Finding a new route…", then new directions and route line
+- [ ] Wrong turn with no signal and the phone locked: "Finding a new route…" gives way within about 20 s to "Couldn’t get a new route…", and a new route comes once there is signal again
+- [ ] Back on the driving screen goes to Home with "Back to directions" first, which returns to the directions; the trip keeps going meanwhile
 - [ ] Roundabout icons turn clockwise (both kinds of roundabout)
 - [ ] Music dips for each spoken direction and comes back after; Mute silences them
 - [ ] Phone locked for the whole drive: directions keep coming
@@ -128,6 +130,9 @@ car"), tick each item as it passes, and record the date. Fix anything that fails
 - [ ] End in the car, End on the phone, and the car's own "End navigation" each end the trip everywhere
 - [ ] Night mode switches the map to the dark style; OSM attribution visible
 - [ ] Cold start from the car: force-stop the phone app, open Wayfinder from the car, and Home appears without opening the phone
+- [ ] Cold start from the car with the phone app never opened since the phone started and the phone locked, then start a trip: the "Navigating to …" notification appears and directions keep coming (Android 12+ limits on starting foreground services from the background; Android 14's "while using the app" location rules)
+- [ ] Swipe the app away mid-trip, then open it again: no "Navigating" notification left over, and GPS isn't left running
+- [ ] Start a trip with no signal at all: the car map is blank at first, then draws once there is signal (the style is tried again)
 
 ## Open / manual
 

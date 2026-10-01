@@ -1,7 +1,8 @@
 #!/bin/sh
 # Run the Android Auto module's Kotlin tests (apps/mobile/modules/wayfinder-car) in the Android
 # build image; no local Android SDK needed. Like build-apk.sh it prebuilds the native project, so
-# it takes over node_modules while it runs and puts them back at the end.
+# it takes over node_modules while it runs and puts them back at the end, whether or not the tests
+# pass.
 set -eu
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 IMAGE="${ANDROID_BUILD_IMAGE:-wayfinder-android-build}"
@@ -11,6 +12,7 @@ if [ -z "${ANDROID_BUILD_IMAGE:-}" ] && ! docker image inspect "$IMAGE" >/dev/nu
   docker build -t "$IMAGE" -f "$ROOT/infra/docker/android.Dockerfile" "$ROOT/infra"
 fi
 
+status=0
 docker run --rm -t \
   -v "$ROOT":/workspace -w /workspace \
   -v wayfinder-apk-pnpm-store:/pnpm-store \
@@ -25,9 +27,10 @@ docker run --rm -t \
     npx expo prebuild --platform android --clean
     cd android
     ./gradlew :wayfinder-car:testDebugUnitTest
-  '
+  ' || status=$?
 
 # The container installed node_modules against its own store; put this machine's back.
 if command -v pnpm >/dev/null 2>&1 && grep -q '"storeDir": "/pnpm-store' "$ROOT/node_modules/.modules.yaml" 2>/dev/null; then
   (cd "$ROOT" && CI=true pnpm install --frozen-lockfile >/dev/null)
 fi
+exit "$status"

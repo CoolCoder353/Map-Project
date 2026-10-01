@@ -152,9 +152,13 @@ request `BridgeCarApi.kt` sends has a handler in `src/car/handlers.ts`.
 
 Navigation is one session for the whole app (`src/nav/navigationService.ts`), followed by the
 phone's Navigate screen and the car alike; a trip started on either shows on both. While it runs,
-a location foreground service keeps directions coming with the phone locked. Spoken directions use
-the module's own `NavVoice`, which plays as navigation guidance and asks other audio to duck, so
-music dips and comes back; where the module isn't there, `expo-speech` speaks instead
+a location foreground service keeps directions coming with the phone locked; its starts and stops
+run one at a time, and one left over from a trip the app never ended (swiped away mid-trip) is
+stopped when the app starts. A request for a new route that hasn't answered within 20 s is given up
+on as the next fix arrives (timers don't run with the phone locked) and asked again later. Back on
+the car's driving screen leaves the trip running, and Home offers "Back to directions". Spoken
+directions use the module's own `NavVoice`, which plays as navigation guidance and asks other audio
+to duck, so music dips and comes back; where the module isn't there, `expo-speech` speaks instead
 (`src/nav/voice.ts`).
 
 If Android Auto opens Wayfinder while the phone app is closed, Kotlin starts React, and the app
