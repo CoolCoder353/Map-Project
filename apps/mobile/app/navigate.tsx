@@ -1,4 +1,5 @@
 import { formatDistanceShort, formatDuration } from '@wayfinder/nav';
+import { useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, ArrowRight, ArrowUp, Flag, RotateCcw, Volume2, VolumeX, X } from 'lucide-react-native';
 import { useMemo } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -40,10 +41,12 @@ function SpeedSign({ kmh }: { kmh: number }) {
 
 export default function Navigate() {
   const t = useTheme();
-  const initial = useMemo(() => takeRouteToNavigate(), []);
+  const { resume } = useLocalSearchParams<{ resume?: string }>();
+  // Resuming follows the trip already running (started in the car, say) instead of starting one.
+  const initial = useMemo(() => (resume === '1' ? null : takeRouteToNavigate()), [resume]);
   const nav = useTurnByTurn(initial);
 
-  if (!initial) {
+  if (!initial && !(resume === '1' && nav.route)) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: t.bg, justifyContent: 'center', padding: space[5] }}>
         <Empty icon={Flag} text="No route selected." />

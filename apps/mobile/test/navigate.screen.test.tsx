@@ -37,6 +37,22 @@ it('says when there is no route to follow', async () => {
   expect(fake.router.back).toHaveBeenCalled();
 });
 
+it('follows a trip already running when opened to resume it', async () => {
+  setRouteToNavigate(null as never);
+  fake.params = { resume: '1' };
+  await renderScreen(<Navigate />);
+  expect(screen.queryByText('No route selected.')).toBeNull();
+  expect(screen.getByRole('button', { name: 'End' })).toBeOnTheScreen();
+});
+
+it('says there is no route when asked to resume but nothing is running', async () => {
+  setRouteToNavigate(null as never);
+  fake.params = { resume: '1' };
+  mockNav.route = null;
+  await renderScreen(<Navigate />);
+  expect(screen.getByText('No route selected.')).toBeOnTheScreen();
+});
+
 it('goes to Plan when there is nothing to go back to', async () => {
   fake.router.canGoBack.mockReturnValueOnce(false);
   await renderScreen(<Navigate />);
