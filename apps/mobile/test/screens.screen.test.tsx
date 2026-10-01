@@ -49,6 +49,36 @@ describe('Coverage', () => {
     expect(fake.api.callsTo('GET api/coverage')[0]!.query).toEqual({ bbox: '152.90000,-27.60000,180.00000,-27.30000', zoom: 12.5, format: 'geojson' });
   });
 
+  it('opens on the roads travelled, and fetches them again on coming back or pulling down', async () => {
+    let roadKm = 412.5;
+    fake.api.on({
+      'GET api/coverage/stats': () => coverageStats({ roadKm, bounds: [153.1, -27.6, 153.3, -27.4] }),
+      'GET api/coverage': () => ({ type: 'FeatureCollection', features: [] }),
+    });
+    await renderScreen(<Coverage />);
+    await screen.findByRole('header', { name: /412.5 km/ });
+    expect(fake.map.fitTo).toHaveBeenCalledWith([[153.1, -27.6], [153.3, -27.4]]);
+    await (fake.map.props.onRegionChange as (b: number[], z: number) => void)([153, -27.7, 153.4, -27.3], 12);
+    await waitFor(() => expect(fake.api.callsTo('GET api/coverage')).toHaveLength(1));
+    expect(fake.api.callsTo('GET api/coverage/stats')).toHaveLength(1);
+
+    // A trip was recorded while on another tab.
+    roadKm = 415;
+    await act(async () => fake.focus());
+    expect(await screen.findByRole('header', { name: /415 km/ })).toBeOnTheScreen();
+    expect(fake.api.callsTo('GET api/coverage')).toHaveLength(2);
+    expect(fake.api.callsTo('GET api/coverage')[1]!.query).toMatchObject({ bbox: '153.00000,-27.70000,153.40000,-27.30000' });
+
+    roadKm = 420;
+    // Pulling the stats down: the scroll view's refresh control.
+    const scroll = screen.getByTestId('coverage-details');
+    await act(async () => (scroll.props as { refreshControl: { props: { onRefresh(): void } } }).refreshControl.props.onRefresh());
+    expect(await screen.findByRole('header', { name: /420 km/ })).toBeOnTheScreen();
+    expect(fake.api.callsTo('GET api/coverage')).toHaveLength(3);
+    // Framed once; after that the map stays where it was put.
+    expect(fake.map.fitTo).toHaveBeenCalledTimes(1);
+  });
+
   it('explains an empty map and tracking being off, in the chosen voice', async () => {
     fake.user = user(false);
     fake.config = { ...fake.config, voice: 'playful' };

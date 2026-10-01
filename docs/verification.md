@@ -153,6 +153,16 @@ car"), tick each item as it passes, and record the date. Fix anything that fails
   `maps.paulsjones.com` on 2026-09-28: it installs over the old build, opens on the emulator with no
   crash, and its sign-in screen reaches the server. It hasn't been shared with testers yet. This
   is likely what the crash reports were.
-- **App 0.3.0 (versionCode 3), with Android Auto, is not built or shared yet.** The version is
-  set; the release APK, its install over 0.2.0, `pnpm verify:mobile` against the live server and the
-  Android Auto checklist above are all still to do.
+- **App 0.3.1 (versionCode 4), with Android Auto and the 2026-10-01 feedback fixes, is not shared
+  yet.** 0.3.0 was never built. Still to do for 0.3.1: its install over 0.2.0, `pnpm verify:mobile`
+  against the live server and the Android Auto checklist above.
+- **2026-10-01 feedback fixes** (reports from 28–29 September). Checked by tests, and on the live
+  server's data where noted: background trips cut into one per upload by a rejected fix (the
+  reporter's 28 Sept trips); parked time kept on trips, so drives averaged walking pace; a navigated
+  drive recorded a second time by background tracking; roads drawn and counted only by their
+  longest stretch (gaps on the coverage map); a U-turn round a roundabout announced as "exit 1"
+  when a detour's stop lay on it (reproduced against the live graph); new routes mid-drive starting
+  backwards; contacts' addresses found in the wrong suburb (reproduced against the live places);
+  coverage not refreshing or framing the roads on Android, nor framing them on the web; trip replay
+  speed. Not reproduced, waiting on detail from the reporter: wrong speed limits (the limits along
+  their navigated route match OSM), traffic lights not recognised.

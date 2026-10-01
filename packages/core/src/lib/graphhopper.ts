@@ -9,6 +9,8 @@ export interface GhInstruction {
   time: number;
   street_name?: string;
   exit_number?: number;
+  /** Roundabouts: false when the path ends (at a stop) before leaving it. */
+  exited?: boolean;
 }
 
 export interface GhPath {
@@ -39,6 +41,8 @@ export interface RouteParams {
   alternatives?: number;
   /** Keep going through via points instead of turning around at them. */
   passThrough?: boolean;
+  /** Which way the traveller is heading at the start, degrees clockwise from north. */
+  heading?: number;
   signal?: AbortSignal;
 }
 
@@ -133,6 +137,12 @@ export class GraphHopperClient {
     if (p.passThrough && p.points.length > 2) {
       body['ch.disable'] = true;
       body.pass_through = true;
+    }
+    if (p.heading !== undefined) {
+      // Start off the way the traveller is already going rather than turning them round (a
+      // penalty, not a ban: a dead end still turns round). Only the flexible algorithms take it.
+      body['ch.disable'] = true;
+      body.headings = [p.heading];
     }
     if (p.customModel) {
       // Per-request custom models need the flexible (LM / A*) algorithms.

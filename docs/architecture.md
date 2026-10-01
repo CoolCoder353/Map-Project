@@ -44,13 +44,20 @@ service. The only outside download is the OpenStreetMap extract, fetched by the 
 
 1. The phone records fixes (`apps/mobile/src/tracking/background.ts`) into a SQLite queue and
    uploads them in batches to `POST /api/tracks/batches`. A batch id makes retries idempotent. A
-   batch the server rejects as invalid is dropped, so it cannot block later ones.
+   batch the server rejects as invalid is dropped, so it cannot block later ones. While a
+   navigated trip runs, background recording leaves that time to it (it records its own fixes).
 2. `trackService.ingestBatch` stores `track_points` and queues `process-tracks`.
 3. `processUserTracks` (`packages/core/src/services/tracks.ts`) splits points into trips (a
-   10-minute gap ends a trip; under 100 m is discarded) and records visited H3 cells. A batch
-   that continues a trip extends it and clears its road match.
+   10-minute gap or a 5-minute stop ends a trip; under 100 m is discarded) and records visited
+   H3 cells. A batch that continues a trip extends it and clears its road match. Batches arrive
+   a minute or so at a time, so a rest of a minute or more at the end of one is held back until
+   the next shows whether it was a red light or the end of the trip; that way a stop spread over
+   several uploads still ends the trip. Fixes the filter rejects (inaccurate, GPS jumps) are
+   deleted at once, and background fixes from the time of a navigated trip are dropped in its
+   favour (navigation groups are processed first).
 4. `roadService.matchTrips` (`roads.ts`) sends each unmatched trip to GraphHopper `/match` with
-   `osm_way_id` details and records the ways in `visited_ways`, the snapped line in
+   `osm_way_id` details and records the ways in `visited_ways` (every stretch travelled of each
+   way, in `pieces`, with each metre counted once in `length_m`), the snapped line in
    `trips.matched_geometry`, and roads new to the person in `trips.new_roads`. Oldest trips go
    first, so a road counts as new for the trip that first travelled it. Trips that can't be
    matched (off-road) keep their raw line and count no road.

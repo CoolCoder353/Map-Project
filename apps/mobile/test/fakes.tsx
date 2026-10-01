@@ -15,7 +15,7 @@ import { copyFor } from '@wayfinder/shared/copy';
 import type { CoverageStats, DiscoverItem, Place, PublicConfig, PublicUser, Route, TripDetail, TripSummary } from '@wayfinder/shared/schemas';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react-native';
-import { type ReactElement, type ReactNode, forwardRef, useImperativeHandle } from 'react';
+import { type ReactElement, type ReactNode, forwardRef, useEffect, useImperativeHandle } from 'react';
 import { Text, View } from 'react-native';
 import { user as makeUser } from './mocks';
 
@@ -66,7 +66,13 @@ export const fake = {
   params: {} as Record<string, string>,
   /** Props the screen last gave the map, and calls made through its handle. */
   map: { props: {} as Record<string, unknown>, fitTo: jest.fn(), flyTo: jest.fn() },
+  /** Come back to the screen (its tab chosen again): runs its focus effects. */
+  focus() {
+    focusEffects.forEach((effect) => effect());
+  },
 };
+
+const focusEffects = new Set<() => void>();
 
 export const apiError = (status: number, message: string) => new HttpError(status, message);
 
@@ -136,6 +142,14 @@ export const mapCanvasModule = {
 export const routerModule = {
   router: fake.router,
   useLocalSearchParams: () => fake.params,
+  /** Runs when the screen mounts, and again on `fake.focus()` (coming back to the tab). */
+  useFocusEffect: (effect: () => void) => {
+    focusEffects.add(effect);
+    useEffect(() => {
+      effect();
+      return () => void focusEffects.delete(effect);
+    }, [effect]);
+  },
   Link: ({ children, href }: { children: ReactNode; href: string }) => <Text accessibilityRole="link" onPress={() => fake.router.push(href)}>{children}</Text>,
   Redirect: ({ href }: { href: string }) => <Text>{`Redirect to ${href}`}</Text>,
 };

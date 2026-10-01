@@ -60,6 +60,7 @@ jest.mock('../src/lib/api', () => ({
 }));
 
 import { BACKGROUND_TASK, reconcileTracking, requestTrackingPermission, startBackgroundTracking, stopBackgroundTracking, trackingPermission } from '../src/tracking/background';
+import { setNavigationRecording } from '../src/tracking/navigationRecording';
 import { sqliteQueueStore } from '../src/tracking/sqliteStore';
 import { syncQueue } from '../src/tracking/sync';
 
@@ -131,6 +132,15 @@ describe('background tracking', () => {
     expect(mockRequest).toHaveBeenCalled();
     await mockTask({ error: new Error('boom') });
     await mockTask({ data: { locations: [] } });
+  });
+
+  it('leaves the time a navigated trip is recording to that trip', async () => {
+    setNavigationRecording(true);
+    await mockTask({ data: { locations: [loc(1000), loc(1001)] } });
+    expect(mockDb.rows).toHaveLength(0);
+    setNavigationRecording(false);
+    await mockTask({ data: { locations: [loc(1002)] } });
+    expect(mockDb.rows).toHaveLength(1);
   });
 
   it('reads and asks for permission: while using first, then all the time', async () => {

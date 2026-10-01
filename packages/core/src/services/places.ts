@@ -10,6 +10,7 @@ import {
   placeContext,
   poiTypeLabel,
   pointToCell,
+  splitAddress,
 } from '@wayfinder/shared';
 import { gridDisk } from 'h3-js';
 import type { DbClient } from '../db/pool.js';
@@ -109,6 +110,45 @@ function sameThing(a: PlaceRow, b: PlaceRow): boolean {
  * of that kind first.
  */
 export async function searchPlaces(db: DbClient, rawQuery: string, near: LngLat | null, limit: number, now = new Date()): Promise<Place[]> {
+  const address = splitAddress(rawQuery);
+  if (!address || (!address.locality && !address.postcode)) return searchNames(db, rawQuery, near, limit, now);
+  // "12 Wellington St, Cleveland QLD 4163": that address in Cleveland, or failing that the street
+  // there, before any other 12 Wellington Street in the country.
+  const [located, named] = await Promise.all([findInLocality(db, address, near), searchNames(db, address.name, near, limit, now)]);
+  const out = located.map((r) => toPlace(r, near, now));
+  for (const p of named) if (!out.some((o) => o.id === p.id)) out.push(p);
+  return out.slice(0, limit);
+}
+
+const HOUSE_NUMBER = /^(?:\S+\/)?(\d+[a-z]?)\s+/i;
+
+/** Places named like the address (or its street) in the suburb or postcode it gives, best first. */
+async function findInLocality(db: DbClient, a: { name: string; locality: string | null; postcode: string | null }, near: LngLat | null): Promise<PlaceRow[]> {
+  const full = expandAbbreviations(a.name).toLowerCase();
+  // "3/12 Smith Street" is unit 3 at number 12; addresses are mapped by the number on the street.
+  const numbered = full.replace(HOUSE_NUMBER, '$1 ');
+  const street = full.replace(HOUSE_NUMBER, '');
+  const names = [...new Set([full, numbered, street])];
+  const rows = (
+    await db.query<PlaceRow>(
+      `SELECT ${COLUMNS}, 1 AS sim FROM places
+       WHERE lower(name) = ANY($1::text[]) AND (lower(suburb) = $2 OR postcode = $3) LIMIT 50`,
+      [names, a.locality, a.postcode],
+    )
+  ).rows;
+  const rank = (r: PlaceRow) =>
+    (lowerName(r) === street && street !== full ? 2 : 0) + (a.locality && r.suburb?.toLowerCase() !== a.locality ? 1 : 0) + (a.postcode && r.postcode !== a.postcode ? 0.5 : 0);
+  const dist = (r: PlaceRow) => (near ? haversineM(near, [r.lon, r.lat]) : 0);
+  const sorted = rows.sort((x, y) => rank(x) - rank(y) || dist(x) - dist(y));
+  // One street, mapped as several pieces, is one suggestion.
+  const kept: PlaceRow[] = [];
+  for (const r of sorted) if (!kept.some((k) => sameThing(k, r) || (r.kind === 'street' && lowerName(k) === lowerName(r) && k.suburb === r.suburb))) kept.push(r);
+  return kept.slice(0, 3);
+}
+
+const lowerName = (r: PlaceRow) => r.name.toLowerCase();
+
+async function searchNames(db: DbClient, rawQuery: string, near: LngLat | null, limit: number, now: Date): Promise<Place[]> {
   const q = expandAbbreviations(rawQuery);
   const lower = q.toLowerCase();
   const escaped = lower.replace(/[%_\\]/g, (m) => `\\${m}`);

@@ -71,15 +71,24 @@ export async function areaUnexplored(db: DbClient, userId: string, areaCells: re
 }
 
 export async function getCoverageStats(db: DbClient, userId: string): Promise<CoverageStats> {
-  const [roads, first, trips] = await Promise.all([
+  const [roads, first, trips, frame] = await Promise.all([
     roadStats(db, userId),
     db.query<{ first: Date | null }>('SELECT min(first_visited_at) AS first FROM visited_ways WHERE user_id = $1', [userId]),
     db.query<{ n: string; d: number | null }>(
       'SELECT count(*) AS n, sum(distance_m) AS d FROM trips WHERE user_id = $1 AND deleted_at IS NULL',
       [userId],
     ),
+    // Where the roads are, leaving out the odd one far away (a trip interstate), so the map can
+    // frame them rather than a whole country.
+    db.query<{ w: number | null; s: number | null; e: number | null; n: number | null }>(
+      `SELECT percentile_cont(0.02) WITHIN GROUP (ORDER BY min_lon) AS w, percentile_cont(0.02) WITHIN GROUP (ORDER BY min_lat) AS s,
+              percentile_cont(0.98) WITHIN GROUP (ORDER BY max_lon) AS e, percentile_cont(0.98) WITHIN GROUP (ORDER BY max_lat) AS n
+       FROM visited_ways WHERE user_id = $1`,
+      [userId],
+    ),
   ]);
   const t = trips.rows[0]!;
+  const f = frame.rows[0];
   const round = (n: number) => Math.round(n * 10) / 10;
   return {
     roadKm: round(roads.km),
@@ -90,6 +99,7 @@ export async function getCoverageStats(db: DbClient, userId: string): Promise<Co
     firstVisitAt: first.rows[0]?.first ? first.rows[0]!.first!.toISOString() : null,
     tripCount: Number(t.n),
     distanceKm: round(Number(t.d ?? 0) / 1000),
+    bounds: f && f.w !== null && f.s !== null && f.e !== null && f.n !== null ? [Number(f.w), Number(f.s), Number(f.e), Number(f.n)] : null,
   };
 }
 

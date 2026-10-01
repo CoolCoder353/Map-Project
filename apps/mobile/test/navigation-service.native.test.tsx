@@ -2,6 +2,7 @@
 import { waitFor } from '@testing-library/react-native';
 import * as Speech from 'expo-speech';
 import { navigation, REROUTE_RETRY_MS, REROUTE_TIMEOUT_MS } from '../src/nav/navigationService';
+import { isNavigationRecording } from '../src/tracking/navigationRecording';
 import { fake, resetFakes, route } from './fakes';
 
 jest.mock('../src/lib/api', () => require('./fakes').apiModule);
@@ -268,4 +269,55 @@ it('gives up quietly on a new route that never comes once you are back on the ol
   } finally {
     now.mockRestore();
   }
+});
+
+it('asks for a new route that starts the way you are driving, not back the way you came', async () => {
+  fake.api.on({ 'POST api/routes/fastest': () => route({ id: 'r-new' }) });
+  navigation.start(route());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  // Driving west at 10 m/s: the phone's heading says so.
+  mockOnFix!({ timestamp: 1000, coords: { longitude: 153.2, latitude: -27.4, accuracy: 5, speed: 10, heading: 270 } });
+  mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.199, -27.4], to: [153.1, -27.5], remainingVia: [] }] });
+  mockOnFix!({ timestamp: 2000, coords: { longitude: 153.199, latitude: -27.4, accuracy: 5, speed: 10, heading: 270 } });
+  await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-new'));
+  expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).toMatchObject({ heading: 270 });
+});
+
+it('works out the direction from movement when the phone gives no heading', async () => {
+  fake.api.on({ 'POST api/routes/fastest': () => route({ id: 'r-new' }) });
+  navigation.start(route());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  const still = (lon: number, lat: number, ts: number) => ({ timestamp: ts, coords: { longitude: lon, latitude: lat, accuracy: 5, speed: null, heading: null } });
+  mockOnFix!(still(153.2, -27.4, 1000));
+  // About 110 m due south.
+  mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2, -27.401], to: [153.1, -27.5], remainingVia: [] }] });
+  mockOnFix!(still(153.2, -27.401, 2000));
+  await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-new'));
+  expect((fake.api.callsTo('POST api/routes/fastest')[0]!.body as { heading: number }).heading).toBeCloseTo(180, 0);
+});
+
+it('sends no direction before it is known, or on foot', async () => {
+  fake.api.on({ 'POST api/routes/fastest': () => route({ id: 'r-new' }) });
+  navigation.start(route());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2, -27.4], to: [153.1, -27.5], remainingVia: [] }] });
+  mockOnFix!({ timestamp: 1000, coords: { longitude: 153.2, latitude: -27.4, accuracy: 5, speed: 0, heading: 0 } });
+  await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-new'));
+  expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).not.toHaveProperty('heading');
+
+  navigation.start(route({ id: 'walk', mode: 'foot' }));
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockOnFix!({ timestamp: 3000, coords: { longitude: 153.2, latitude: -27.4, accuracy: 5, speed: 3, heading: 90 } });
+  mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.201, -27.4], to: [153.1, -27.5], remainingVia: [] }] });
+  mockOnFix!({ timestamp: 4000, coords: { longitude: 153.201, latitude: -27.4, accuracy: 5, speed: 3, heading: 90 } });
+  await waitFor(() => expect(fake.api.callsTo('POST api/routes/fastest')).toHaveLength(2));
+  expect(fake.api.callsTo('POST api/routes/fastest')[1]!.body).not.toHaveProperty('heading');
+});
+
+it('pauses background recording for the length of a navigated trip', async () => {
+  expect(isNavigationRecording()).toBe(false);
+  navigation.start(route());
+  expect(isNavigationRecording()).toBe(true);
+  navigation.stop();
+  expect(isNavigationRecording()).toBe(false);
 });

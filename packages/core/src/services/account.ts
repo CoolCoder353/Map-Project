@@ -36,8 +36,9 @@ export async function exportUserData(db: DbClient, userId: string) {
   }
   // Coverage: the roads travelled, as drawn on the map.
   const roads = (
-    await db.query<{ way_id: string; geometry: [number, number][]; length_m: number; first_visited_at: Date; last_visited_at: Date; modes: number }>(
-      'SELECT way_id, geometry, length_m, first_visited_at, last_visited_at, modes FROM visited_ways WHERE user_id = $1 ORDER BY first_visited_at',
+    await db.query<{ way_id: string; pieces: [number, number][][]; length_m: number; first_visited_at: Date; last_visited_at: Date; modes: number }>(
+      `SELECT way_id, coalesce(pieces, jsonb_build_array(geometry)) AS pieces, length_m, first_visited_at, last_visited_at, modes
+       FROM visited_ways WHERE user_id = $1 ORDER BY first_visited_at`,
       [userId],
     )
   ).rows.map((r) => ({
@@ -49,7 +50,8 @@ export async function exportUserData(db: DbClient, userId: string) {
       lastTravelledAt: r.last_visited_at.toISOString(),
       modes: [r.modes & 1 ? 'car' : null, r.modes & 2 ? 'foot' : null].filter(Boolean),
     },
-    geometry: { type: 'LineString', coordinates: r.geometry },
+    // A road travelled in separate stretches has each of them.
+    geometry: r.pieces.length === 1 ? { type: 'LineString', coordinates: r.pieces[0]! } : { type: 'MultiLineString', coordinates: r.pieces },
   }));
   // The internal index explore steers by (never shown in the app, but it is stored about you).
   const cells = (

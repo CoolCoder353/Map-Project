@@ -97,6 +97,46 @@ export function projectOntoSegment(p: LngLat, a: LngLat, b: LngLat): SegmentProj
   return { point: interpolate(a, b, t), t, distanceM: Math.hypot(cx, cy) };
 }
 
+/** Distance from p to the nearest point of a line (a single point counts as a line). */
+export function distanceToLineM(p: LngLat, line: readonly LngLat[]): number {
+  if (line.length === 1) return haversineM(p, line[0]!);
+  let best = Infinity;
+  for (let i = 1; i < line.length; i++) best = Math.min(best, projectOntoSegment(p, line[i - 1]!, line[i]!).distanceM);
+  return best;
+}
+
+/** How much of `line` lies farther than toleranceM from all of `others`, measured every few metres. */
+export function uncoveredLengthM(line: readonly LngLat[], others: ReadonlyArray<readonly LngLat[]>, toleranceM = 10): number {
+  let total = 0;
+  for (const s of sampleLine(line, 5)) {
+    if (!others.some((o) => o.length > 0 && distanceToLineM(s.point, o) <= toleranceM)) total += s.lengthM;
+  }
+  return total;
+}
+
+/**
+ * Add stretches of one road to those already travelled. A stretch already travelled adds nothing,
+ * and one that takes in an earlier stretch replaces it. Returns the stretches and how many new
+ * metres of the road they add.
+ */
+export function mergeStretches(
+  existing: ReadonlyArray<LngLat[]>,
+  incoming: ReadonlyArray<LngLat[]>,
+  toleranceM = 10,
+): { stretches: LngLat[][]; addedM: number } {
+  let stretches = [...existing];
+  let addedM = 0;
+  for (const line of incoming) {
+    if (line.length < 2) continue;
+    const extra = uncoveredLengthM(line, stretches, toleranceM);
+    if (extra < 1) continue;
+    stretches = stretches.filter((s) => uncoveredLengthM(s, [line], toleranceM) >= 1);
+    stretches.push(line);
+    addedM += extra;
+  }
+  return { stretches, addedM };
+}
+
 /** Is p inside the ellipse with foci a and b whose focal-distance sum is at most maxSumM? */
 export function inEllipse(p: LngLat, a: LngLat, b: LngLat, maxSumM: number): boolean {
   return haversineM(p, a) + haversineM(p, b) <= maxSumM;

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { type LngLat, destination } from '@wayfinder/shared';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { type LngLat, bboxOf, destination, lineLengthM } from '@wayfinder/shared';
 import * as tracks from '../../src/services/tracks.js';
 import * as coverage from '../../src/services/coverage.js';
 import * as roads from '../../src/services/roads.js';
@@ -51,6 +51,21 @@ async function runJobs(userId: string, matcher = fakeMatcher([101, 102])) {
   for (const job of queue.take('rebuild-coverage')) {
     await coverage.loadVisitedCells(t.db, userId).then(() => tracks.rebuildCoverage(t.db, job.data.userId as string));
     await roads.matchTrips(t.db, matcher as never, job.data.userId as string, 500);
+  }
+}
+
+/**
+ * Upload as a phone does while travelling: the clock just after the batch's last fix. (Points
+ * already a trip gap old are settled: nothing more can join them.)
+ */
+async function uploadLive(userId: string, points: ReturnType<typeof drive>, matcher = fakeMatcher([101, 102])) {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  try {
+    vi.setSystemTime(points.at(-1)!.ts + 20_000);
+    await tracks.ingestBatch(t.db, queue, userId, { batchId: randomUUID(), source: 'background', points });
+    await runJobs(userId, matcher);
+  } finally {
+    vi.useRealTimers();
   }
 }
 
@@ -135,6 +150,131 @@ describe('track ingestion and coverage', () => {
       )
     ).rows[0]!;
     expect(row.n).toBe(row.point_count);
+  });
+
+  it('a fix too inaccurate to use does not split the rest of the drive into one trip per upload', async () => {
+    const u = await makeUser(t.db, 'fuzzy@example.com');
+    // Uploaded as it happens, a batch at a time.
+    const leg = drive(base, [148.0, -34.5], 0, 6, 15);
+    leg[10] = { ...leg[10]!, accuracyM: 80 };
+    for (let i = 0; i < leg.length; i += 20) await uploadLive(u.id, leg.slice(i, i + 20));
+    const { items } = await tracks.listTrips(t.db, u.id, 10);
+    expect(items).toHaveLength(1);
+    expect((await tracks.getTrip(t.db, u.id, items[0]!.id)).points).toHaveLength(leg.length - 1);
+  });
+
+  it('a stop spread over several uploads ends the trip, and the parked time is not part of it', async () => {
+    const u = await makeUser(t.db, 'parker@example.com');
+    const first = drive(base, [147.5, -34.0], 0, 3, 15);
+    const end = first.at(-1)!;
+    // Twelve minutes parked: GPS wanders a few metres, a fix every 30 s, uploaded every 3 minutes.
+    const parked = Array.from({ length: 24 }, (_, i) => ({
+      ts: end.ts + (i + 1) * 30_000,
+      lon: end.lon + (i % 3) * 0.00004,
+      lat: end.lat + (i % 2) * 0.00003,
+      accuracyM: 12,
+      speedMps: 0,
+    }));
+    const second = drive(parked.at(-1)!.ts + 5000, [end.lon, end.lat + 0.001], 0, 3, 15);
+    for (const points of [first, ...[0, 6, 12, 18].map((i) => parked.slice(i, i + 6)), second]) await uploadLive(u.id, points);
+    const { items } = await tracks.listTrips(t.db, u.id, 10);
+    expect(items).toHaveLength(2);
+    const earlier = items.at(-1)!;
+    expect(new Date(earlier.endedAt).getTime()).toBe(end.ts);
+    expect(new Date(items[0]!.endedAt).getTime()).toBe(second.at(-1)!.ts);
+  });
+
+  it('a rest held back at the end of the last upload is settled once nothing more comes', async () => {
+    const u = await makeUser(t.db, 'home@example.com');
+    const home = drive(base, [147.2, -34.0], 0, 3, 15);
+    const end = home.at(-1)!;
+    // Home: three minutes of fixes in the driveway, then the phone goes quiet.
+    const driveway = Array.from({ length: 6 }, (_, i) => ({ ts: end.ts + (i + 1) * 30_000, lon: end.lon, lat: end.lat + (i % 2) * 0.00003, accuracyM: 10, speedMps: 0 }));
+    await uploadLive(u.id, [...home, ...driveway]);
+    const unassigned = async () =>
+      (await t.db.query('SELECT count(*)::int AS n FROM track_points WHERE user_id = $1 AND trip_id IS NULL', [u.id])).rows[0].n as number;
+    expect(await unassigned()).toBeGreaterThan(0);
+    // The daily pass over points left unassigned: the trip ends where the car stopped.
+    await tracks.processUserTracks(t.db, u.id);
+    expect(await unassigned()).toBe(0);
+    const { items } = await tracks.listTrips(t.db, u.id, 10);
+    expect(items).toHaveLength(1);
+    expect(new Date(items[0]!.endedAt).getTime()).toBe(end.ts);
+  });
+
+  it('a navigated drive is one trip, even though background recording saw it too', async () => {
+    const u = await makeUser(t.db, 'twice@example.com');
+    const session = randomUUID();
+    const leg = drive(base, [147.0, -33.5], 0, 16, 15);
+    const nav = { source: 'navigation' as const, mode: 'car' as const, navigationSessionId: session };
+    // Both arrive together…
+    await tracks.ingestBatch(t.db, queue, u.id, { batchId: randomUUID(), source: 'background', points: leg.slice(0, 100) });
+    await tracks.ingestBatch(t.db, queue, u.id, { batchId: randomUUID(), ...nav, points: leg.slice(0, 100) });
+    await runJobs(u.id);
+    // …or the background copy arrives after the navigation trip was already made.
+    await tracks.ingestBatch(t.db, queue, u.id, { batchId: randomUUID(), ...nav, points: leg.slice(100, 200) });
+    await runJobs(u.id);
+    await tracks.ingestBatch(t.db, queue, u.id, { batchId: randomUUID(), source: 'background', points: leg.slice(100, 200) });
+    await runJobs(u.id);
+    // Driving on after navigation ended is recorded as usual.
+    const after = drive(leg[199]!.ts + 60_000, [148.5, -33.5], 90, 3, 15);
+    await tracks.ingestBatch(t.db, queue, u.id, { batchId: randomUUID(), source: 'background', points: after });
+    await runJobs(u.id);
+
+    const { items } = await tracks.listTrips(t.db, u.id, 10);
+    expect(items.map((i) => i.source)).toEqual(['background', 'navigation']);
+    expect((await tracks.getTrip(t.db, u.id, items[1]!.id)).points).toHaveLength(200);
+    expect(new Date(items[0]!.startedAt).getTime()).toBeGreaterThan(leg[199]!.ts);
+    const strays = await t.db.query('SELECT count(*)::int AS n FROM track_points WHERE user_id = $1 AND trip_id IS NULL', [u.id]);
+    expect(strays.rows[0].n).toBe(0);
+  });
+
+  it('draws every stretch of a road travelled on different trips, and counts each metre once', async () => {
+    const u = await makeUser(t.db, 'stretches@example.com');
+    const west: LngLat = [146.5, -33.0];
+    const east = destination(west, 90, 4000);
+    const upload = async (points: ReturnType<typeof drive>) => {
+      await tracks.ingestBatch(t.db, queue, u.id, { batchId: randomUUID(), source: 'background', points });
+      await runJobs(u.id, fakeMatcher([301]));
+    };
+    // One long road: its west end one day, its east end later, then the west end again.
+    await upload(drive(base, west, 90, 2, 20));
+    await upload(drive(base + 5 * HOUR, east, 90, 2, 20));
+    await upload(drive(base + 10 * HOUR, west, 90, 2, 20));
+
+    const view = await coverage.getCoverage(t.db, u.id, bboxOf([west, destination(east, 90, 2000)], 500), 15);
+    expect(view.roads.map((r) => r.wayId)).toEqual([301, 301]);
+    const drawn = view.roads.map((r) => lineLengthM(r.geometry));
+    expect(drawn.every((m) => m > 1900)).toBe(true);
+    const stats = await coverage.getCoverageStats(t.db, u.id);
+    expect(stats.roadsTravelled).toBe(1);
+    expect(stats.roadKm).toBeCloseTo(4, 1);
+    // Framing the map around them: the whole road, from the west end to the east.
+    const [w, s, e, n] = stats.bounds!;
+    expect(w).toBeCloseTo(west[0], 3);
+    expect(e).toBeCloseTo(destination(east, 90, 2000)[0], 2);
+    expect(s).toBeLessThanOrEqual(west[1]);
+    expect(n).toBeGreaterThanOrEqual(west[1]);
+    const { items } = await tracks.listTrips(t.db, u.id, 10);
+    expect(items.map((i) => i.newRoads)).toEqual([0, 0, 1]);
+  });
+
+  it('frames the map around where someone has been, leaving out a lone trip far away', async () => {
+    const u = await makeUser(t.db, 'framer@example.com');
+    expect((await coverage.getCoverageStats(t.db, u.id)).bounds).toBeNull();
+    // Sixty roads around Cleveland, and one in Sydney.
+    const roadsAt = [...Array.from({ length: 60 }, (_, i) => [153.2 + (i % 10) * 0.01, -27.5 - Math.floor(i / 10) * 0.01]), [151.2, -33.87]];
+    await t.db.query(
+      `INSERT INTO visited_ways (user_id, way_id, geometry, length_m, first_visited_at, last_visited_at, modes, min_lon, min_lat, max_lon, max_lat)
+       SELECT $1, i, '[]', 100, now(), now(), 1, lon, lat, lon + 0.001, lat + 0.001
+       FROM unnest($2::float8[], $3::float8[]) WITH ORDINALITY AS r(lon, lat, i)`,
+      [u.id, roadsAt.map((p) => p[0]), roadsAt.map((p) => p[1])],
+    );
+    const [w, s, e, n] = (await coverage.getCoverageStats(t.db, u.id)).bounds!;
+    expect(w).toBeGreaterThan(153.19);
+    expect(e).toBeLessThan(153.3);
+    expect(s).toBeGreaterThan(-27.56);
+    expect(n).toBeLessThan(-27.49);
   });
 
   it('navigation sessions become their own trips with the given mode', async () => {

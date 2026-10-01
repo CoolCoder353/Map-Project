@@ -36,5 +36,10 @@ export const CoverageStatsSchema = z.object({
   firstVisitAt: z.string().nullable(),
   tripCount: z.number().int(),
   distanceKm: z.number(),
+  /**
+   * [west, south, east, north] around nearly all the roads travelled (the odd far-off one left
+   * out), for framing the map; null with none yet. Absent from older servers.
+   */
+  bounds: z.tuple([z.number(), z.number(), z.number(), z.number()]).nullable().optional(),
 });
 export type CoverageStats = z.infer<typeof CoverageStatsSchema>;

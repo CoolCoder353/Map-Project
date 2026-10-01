@@ -1,10 +1,11 @@
 import { type NavEvent, NavigationSession, type NavState } from '@wayfinder/nav';
-import type { LngLat } from '@wayfinder/shared/geo';
+import { type LngLat, bearingDeg, haversineM } from '@wayfinder/shared/geo';
 import { type Route, RouteSchema } from '@wayfinder/shared/schemas';
 import * as Crypto from 'expo-crypto';
 import * as Location from 'expo-location';
 import { speak as say, stopSpeaking } from './voice';
 import { api } from '../lib/api';
+import { setNavigationRecording } from '../tracking/navigationRecording';
 import { sqliteQueueStore } from '../tracking/sqliteStore';
 import { syncQueue } from '../tracking/sync';
 import { setNavigationFixHandler, startNavigationLocation, stopNavigationLocation } from './navigationLocation';
@@ -17,6 +18,10 @@ export const REROUTE_RETRY_MS = 15_000;
  * stalls then would otherwise leave "Finding a new route…" up for the rest of the trip.
  */
 export const REROUTE_TIMEOUT_MS = 20_000;
+/** Below this the phone's compass heading is noise; the direction comes from movement instead. */
+const MOVING_MPS = 2;
+/** How far to have moved before the direction of travel is worked out from position alone. */
+const HEADING_FROM_MOVEMENT_M = 20;
 
 export interface NavSnapshot {
   /** A trip is being followed (the phone's Navigate screen, the car, or both). */
@@ -93,6 +98,9 @@ export function createNavigationService(): NavigationService {
   let generation = 0;
   let lastFixTs = -Infinity;
   let lastServiceFixTs = -Infinity;
+  /** Which way the car is going, so a new route starts that way rather than turning it round. */
+  let travelHeading: number | null = null;
+  let movedFrom: LngLat | null = null;
 
   const set = (patch: Partial<NavSnapshot>) => {
     snap = { ...snap, ...patch };
@@ -116,7 +124,9 @@ export function createNavigationService(): NavigationService {
     // Navigation ended, or this attempt was given up on, while waiting.
     const stale = () => session !== current || attempt !== rerouteAttempt;
     try {
-      const next = await api.request('api/routes/fastest', { method: 'POST', body: { from, to, via, mode: current.mode }, schema: RouteSchema });
+      // On foot, turning round is no trouble; in a car it can mean a long way back.
+      const heading = current.mode === 'car' && travelHeading !== null ? { heading: travelHeading } : {};
+      const next = await api.request('api/routes/fastest', { method: 'POST', body: { from, to, via, mode: current.mode, ...heading }, schema: RouteSchema });
       if (stale()) return;
       current.replaceRoute(next);
       pendingReroute = null;
@@ -168,6 +178,7 @@ export function createNavigationService(): NavigationService {
     lastFixTs = Math.max(lastFixTs, loc.timestamp);
     if (source === 'service') lastServiceFixTs = loc.timestamp;
     const fix = { ts: loc.timestamp, lon, lat, accuracyM: loc.coords.accuracy, speedMps: loc.coords.speed, headingDeg: loc.coords.heading };
+    followHeading(fix);
     let result: ReturnType<NavigationSession['update']>;
     try {
       result = nav.update(fix);
@@ -198,6 +209,20 @@ export function createNavigationService(): NavigationService {
       .catch(() => undefined);
   }
 
+  function followHeading(fix: { lon: number; lat: number; speedMps?: number | null; headingDeg?: number | null }) {
+    const here: LngLat = [fix.lon, fix.lat];
+    const h = fix.headingDeg;
+    if ((fix.speedMps ?? 0) >= MOVING_MPS && h != null && Number.isFinite(h) && h >= 0) {
+      travelHeading = h % 360;
+      movedFrom = here;
+    } else if (!movedFrom) {
+      movedFrom = here;
+    } else if (haversineM(movedFrom, here) >= HEADING_FROM_MOVEMENT_M) {
+      travelHeading = bearingDeg(movedFrom, here);
+      movedFrom = here;
+    }
+  }
+
   function stop() {
     const wasActive = session !== null;
     generation++;
@@ -210,6 +235,7 @@ export function createNavigationService(): NavigationService {
     pendingReroute = null;
     reroutingNow = false;
     rerouteAttempt++; // an answer for the trip that ended is ignored
+    setNavigationRecording(false);
     quietly(() => stopSpeaking());
     if (wasActive) void syncQueue().catch(() => undefined);
     if (snap !== IDLE) set(IDLE);
@@ -229,6 +255,10 @@ export function createNavigationService(): NavigationService {
     sessionId = Crypto.randomUUID();
     lastFixTs = -Infinity;
     lastServiceFixTs = -Infinity;
+    travelHeading = null;
+    movedFrom = null;
+    // This trip records its own fixes; background recording leaves it to it until it ends.
+    setNavigationRecording(true);
     const gen = generation;
     set({ ...IDLE, active: true, route, destinationName: opts.destinationName ?? null });
     void (async () => {

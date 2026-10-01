@@ -7,6 +7,7 @@ import {
   haversineM,
   inEllipse,
   lineLengthM,
+  mergeStretches,
   projectOntoSegment,
   sampleLine,
   simplifyLine,
@@ -71,6 +72,39 @@ describe('geo', () => {
     expect(s.length).toBe(2);
     expect(s[0]).toEqual(pts[0]);
     expect(s[1]).toEqual(pts[49]);
+  });
+});
+
+describe('mergeStretches', () => {
+  // One straight 2 km road heading east, as points every 100 m.
+  const road = Array.from({ length: 21 }, (_, i) => destination([153, -27.5], 90, i * 100));
+  const km = (m: number) => Math.round(m / 100) / 10;
+
+  it('keeps separate stretches of one road, and counts each once', () => {
+    const west = road.slice(0, 6);
+    const east = road.slice(14);
+    const first = mergeStretches([], [west]);
+    expect(km(first.addedM)).toBe(0.5);
+    const both = mergeStretches(first.stretches, [east]);
+    expect(both.stretches).toEqual([west, east]);
+    expect(km(both.addedM)).toBe(0.6);
+  });
+
+  it('adds only the new part of an overlapping stretch, and nothing for one already travelled', () => {
+    const middle = mergeStretches([road.slice(0, 11)], [road.slice(5, 16)]);
+    expect(middle.stretches).toHaveLength(2);
+    expect(km(middle.addedM)).toBe(0.5);
+    // GPS-snapped ends differ by a metre or two from trip to trip; still the same stretch.
+    const again = mergeStretches(middle.stretches, [road.slice(2, 9).map(([lon, lat]) => [lon, lat + 0.00001] as LngLat)]);
+    expect(again.stretches).toEqual(middle.stretches);
+    expect(again.addedM).toBe(0);
+  });
+
+  it('replaces stretches that a longer one takes in', () => {
+    const merged = mergeStretches([road.slice(2, 5), road.slice(8, 12)], [road]);
+    expect(merged.stretches).toEqual([road]);
+    expect(km(merged.addedM)).toBe(1.5);
+    expect(mergeStretches([], [[road[0]!]]).stretches).toEqual([]);
   });
 });
 

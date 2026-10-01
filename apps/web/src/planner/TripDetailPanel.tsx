@@ -1,4 +1,4 @@
-import type { LngLat, Mode, TripDetail } from '@wayfinder/shared';
+import { type LngLat, type Mode, type TripDetail, speedAround } from '@wayfinder/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Pause, Play, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -10,6 +10,13 @@ import { useToast } from '../lib/toast';
 import { useMapApi } from '../map/MapProvider';
 import { useOverlayCleanup } from './usePlannerMap';
 
+/** Replay speeds, as multiples of real time. A trip replays as long as it took, sped up. */
+const SPEEDS = [10, 30, 60, 120, 300, 600];
+const DEFAULT_SPEED = 2; // 60×: a minute of travel a second
+
+/** "40 s", or minutes once it's that long. */
+const replayLength = (s: number) => (s < 59.5 ? `${Math.max(1, Math.round(s))} s` : formatDuration(s));
+
 export function TripDetailPanel() {
   const { id = '' } = useParams();
   const map = useMapApi();
@@ -19,6 +26,7 @@ export function TripDetailPanel() {
   const trip = useQuery({ queryKey: ['trip', id], queryFn: () => api<TripDetail>(`/api/trips/${id}`) });
   const [position, setPosition] = useState(1);
   const [playing, setPlaying] = useState(false);
+  const [speedIndex, setSpeedIndex] = useState(DEFAULT_SPEED);
   const [confirmDelete, setConfirmDelete] = useState(false);
   useOverlayCleanup();
 
@@ -54,21 +62,24 @@ export function TripDetailPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip.data?.id]);
 
+  const speed = SPEEDS[speedIndex]!;
+  const tripMs = Math.max(1, t1 - t0);
   // Replay at ~15 updates/s. Per-frame state updates would starve router transitions, so
   // navigating away mid-replay would change the URL without re-rendering.
   useEffect(() => {
     if (!playing) return;
-    const durationMs = 12_000; // whole trip replays in 12 s
     const stepMs = 66;
     const timer = setInterval(() => {
       setPosition((p) => {
-        const next = Math.min(1, p + stepMs / durationMs);
+        const next = Math.min(1, p + (stepMs * speed) / tripMs);
         if (next >= 1) setPlaying(false);
         return next;
       });
     }, stepMs);
     return () => clearInterval(timer);
-  }, [playing]);
+  }, [playing, speed, tripMs]);
+  const mps = speedAround(points, index);
+  const speedNow = mps === null ? '–' : `${Math.round(mps * 3.6)} km/h`;
 
   const updateMode = useMutation({
     mutationFn: (mode: Mode) => api(`/api/trips/${id}`, { method: 'PATCH', body: { mode } }),
@@ -127,7 +138,29 @@ export function TripDetailPanel() {
                 setPosition(Number(e.target.value) / 1000);
               }}
             />
-            <span className="num replay-time">{points[index] ? formatTime(points[index]!.ts) : '–'}</span>
+            <span className="replay-now">
+              <span className="num replay-time">{points[index] ? formatTime(points[index]!.ts) : '–'}</span>
+              <span className="num replay-speed-now" aria-label={`Speed then: ${speedNow}`}>
+                {speedNow}
+              </span>
+            </span>
+          </div>
+          <div className="field replay-rate">
+            <label className="field-label" htmlFor="replay-speed">
+              Replay speed <span className="num">{speed}×</span>
+            </label>
+            <input
+              id="replay-speed"
+              className="range"
+              type="range"
+              min={0}
+              max={SPEEDS.length - 1}
+              step={1}
+              value={speedIndex}
+              aria-valuetext={`${speed} times real time`}
+              onChange={(e) => setSpeedIndex(Number(e.target.value))}
+            />
+            <span className="field-hint num">This trip replays in {replayLength(tripMs / speed / 1000)}.</span>
           </div>
 
           <div className="field">

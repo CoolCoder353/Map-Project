@@ -22,7 +22,7 @@ export default defineConfig({
       ],
       reporter: ['text-summary', 'html', 'json-summary'],
       reportsDirectory: 'coverage',
-      thresholds: { lines: 96, statements: 93, functions: 92, branches: 86 },
+      thresholds: { lines: 96.9, statements: 94.6, functions: 93, branches: 87.1 },
     },
     projects: [
       {

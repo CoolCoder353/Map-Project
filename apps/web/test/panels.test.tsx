@@ -144,6 +144,21 @@ describe('Coverage', () => {
     expect(screen.getByLabelText('Map legend')).toHaveTextContent('Roads you’ve travelled');
   });
 
+  it('frames the map around the roads travelled when it opens, and only then', async () => {
+    const { map } = await renderApp(<CoveragePanel />, { path: '/coverage', api: { 'GET /api/coverage/stats': () => coverageStats() } });
+    await waitFor(() => expect(map.fitTo).toHaveBeenCalledWith([[153.1, -27.6], [153.3, -27.4]], 15));
+    expect(map.fitTo).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the map where it is with nothing travelled yet', async () => {
+    const { map } = await renderApp(<CoveragePanel />, {
+      path: '/coverage',
+      api: { 'GET /api/coverage/stats': () => coverageStats({ roadsTravelled: 0, roadKm: 0, newRoadsWeek: 0, firstVisitAt: null, bounds: null }) },
+    });
+    await screen.findByText(/Nothing recorded yet/);
+    expect(map.fitTo).not.toHaveBeenCalled();
+  });
+
   it('never talks about hexagons, cells or fog', async () => {
     await renderApp(<CoveragePanel />, { path: '/coverage', api: { 'GET /api/coverage/stats': () => coverageStats() } });
     await screen.findByText('412.5');

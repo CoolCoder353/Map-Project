@@ -102,7 +102,8 @@ it('reroutes after going off route, from where you are to what is left', async (
   mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2, -27.4], to: [153.1, -27.5], remainingVia: [] }] });
   await act(async () => mockOnFix!(fix(153.2, -27.4)));
   await waitFor(() => expect(result.current.route?.id).toBe('r-new'));
-  expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).toEqual({ from: [153.2, -27.4], to: [153.1, -27.5], via: [], mode: 'car' });
+  // The fix says the car is heading east at 10 m/s, so the new route starts that way.
+  expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).toEqual({ from: [153.2, -27.4], to: [153.1, -27.5], via: [], mode: 'car', heading: 90 });
   expect(mockReplaced).toEqual([next]);
   expect(result.current.rerouting).toBe(false);
   expect(Speech.speak).toHaveBeenCalledWith('Route updated', expect.anything());

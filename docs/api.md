@@ -60,14 +60,15 @@ exactly what each field is.
 
 | Method | Path | Schema / notes |
 |---|---|---|
-| POST | `/api/routes/fastest` | `FastestRouteRequestSchema` (`from`, `to`, `mode`, `via`) → one `Route` |
+| POST | `/api/routes/fastest` | `FastestRouteRequestSchema` (`from`, `to`, `mode`, `via`, optional `heading`) → one `Route`. The app sends `heading` (compass degrees) with a new route asked for mid-drive, so it starts the way the car is going |
 | POST | `/api/routes/explore` | `ExploreRouteRequestSchema` (`budgetMin` defaults to the person's setting) → `{ fastest, explore: Route[] }` |
 | POST | `/api/routes/roundtrip` | `RoundTripRequestSchema` (`start`, `mode`, `targetMin`) → `{ routes }` |
 | GET | `/api/discover` | `DiscoverQuerySchema` (`lon`, `lat`, `mode`, `maxMinutes`, `categories`) → `{ items }`. The slow one: several seconds on a small server |
 
 `mode` is `car` or `foot`. Each `Route` carries its geometry, turn instructions, `novelty`
 (new kilometres of road for this person) and `speedLimits`: `{ from, to, kmh }` runs of geometry
-point indices, missing where no limit is mapped. Older servers leave `speedLimits` out.
+point indices, missing where no limit is mapped. Older servers leave `speedLimits` out. A roundabout
+is always one instruction with the exit actually taken, even where a stop on a detour lies on it.
 
 ## Travel
 
@@ -78,8 +79,8 @@ point indices, missing where no limit is mapped. Older servers leave `speedLimit
 | GET | `/api/trips/:id` | `TripDetailSchema`, with the recorded points |
 | PATCH | `/api/trips/:id` | `{ mode }`, which re-runs coverage |
 | DELETE | `/api/trips/:id` | Soft delete; an admin can restore it for 7 days |
-| GET | `/api/coverage` | `CoverageQuerySchema`: `bbox`, `zoom`, `format` (`roads` or `geojson`) → travelled roads in view |
-| GET | `/api/coverage/stats` | `CoverageStatsSchema`: km of road, roads travelled, new this week/month, by mode |
+| GET | `/api/coverage` | `CoverageQuerySchema`: `bbox`, `zoom`, `format` (`roads` or `geojson`) → travelled roads in view. A road travelled in separate stretches comes as one entry per stretch, with the same `wayId` |
+| GET | `/api/coverage/stats` | `CoverageStatsSchema`: km of road, roads travelled, new this week/month, by mode, and `bounds` (`[w, s, e, n]` around nearly all of them, for framing the map; null with none, absent from older servers) |
 
 ## Feedback
 

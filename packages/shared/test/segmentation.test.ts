@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { destination } from '../src/geo.js';
-import { type TrackPoint, filterPoints, inferMode, segmentTrips } from '../src/segmentation.js';
+import { type TrackPoint, filterPoints, inferMode, segmentTrips, speedAround } from '../src/segmentation.js';
 
 const T0 = Date.UTC(2026, 0, 1, 8);
 
@@ -73,6 +73,38 @@ describe('segmentTrips', () => {
     // At most a couple of stop fixes survive (the anchor lags by < stationary radius)
     expect(trips[0]!.length).toBeLessThanOrEqual(43);
     expect(segmentTrips(track(T0, 5, 1))).toHaveLength(0);
+  });
+
+  it('can hold back a rest at the end that is too short to call a stop yet', () => {
+    const a = track(T0, 30, 15);
+    const end = a[a.length - 1]!;
+    const rest = stationary(end.ts + 5000, 2, [end.lon, end.lat]);
+    // By default two minutes parked stays on the trip: it may be a red light.
+    expect(segmentTrips([...a, ...rest])[0]).toHaveLength(a.length + rest.length);
+    // Held back, the trip ends where the car came to rest; the next upload decides the rest.
+    const held = segmentTrips([...a, ...rest], { holdRestAfterMs: 60_000 });
+    expect(held).toHaveLength(1);
+    expect(held[0]!.at(-1)).toBe(end);
+    // Still moving at the end, or only just slowed down: nothing to hold back.
+    expect(segmentTrips(a, { holdRestAfterMs: 60_000 })[0]).toHaveLength(a.length);
+    expect(segmentTrips([...a, ...rest.slice(0, 2)], { holdRestAfterMs: 60_000 })[0]).toHaveLength(a.length + 2);
+  });
+});
+
+describe('speedAround', () => {
+  it('measures speed across the fixes either side of a moment', () => {
+    const drive = track(T0, 20, 15); // 54 km/h, a fix every 5 s
+    expect(speedAround(drive, 10)).toBeCloseTo(15, 1);
+    expect(speedAround(drive, 0)).toBeCloseTo(15, 1);
+    const parked = stationary(T0, 2, [149.1, -35.28]);
+    expect(speedAround(parked, 1)!).toBeLessThan(0.5);
+  });
+
+  it('uses the neighbours when fixes are far apart, and gives up with nothing to measure', () => {
+    const sparse = track(T0, 5, 10, 60); // a fix a minute
+    expect(speedAround(sparse, 2)).toBeCloseTo(10, 1);
+    expect(speedAround(sparse.slice(0, 1), 0)).toBeNull();
+    expect(speedAround(sparse, 9)).toBeNull();
   });
 });
 

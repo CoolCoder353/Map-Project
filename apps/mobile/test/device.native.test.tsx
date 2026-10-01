@@ -136,6 +136,15 @@ describe('contacts search', () => {
     ]);
   });
 
+  it('puts an address kept over several lines on one line', async () => {
+    mockStore.set('wf.contactsSearch', 'on');
+    jest.mocked(Contacts.getPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    jest.mocked(Contacts.getContactsAsync).mockResolvedValue({
+      data: [contact('Gran', [{ street: '12 Wellington St\nCleveland QLD 4163\n', label: 'home' }])],
+    } as never);
+    expect(await findContacts('gran')).toEqual([{ id: 'Gran:0', name: 'Gran', address: '12 Wellington St, Cleveland QLD 4163', label: 'home' }]);
+  });
+
   it('treats a failure to read contacts as no matches', async () => {
     mockStore.set('wf.contactsSearch', 'on');
     jest.mocked(Contacts.getPermissionsAsync).mockRejectedValue(new Error('no'));
