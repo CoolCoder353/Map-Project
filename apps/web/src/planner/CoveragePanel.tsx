@@ -1,7 +1,7 @@
 import type { CoverageStats } from '@wayfinder/shared';
 import { useQuery } from '@tanstack/react-query';
 import { Info, Layers } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useAppConfig } from '../lib/config';
@@ -19,6 +19,15 @@ export function CoveragePanel() {
     return () => map.setCoverageEnabled(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Open on the roads travelled, once: after that the map is the person's to move.
+  const framed = useRef(false);
+  const bounds = stats.data?.bounds;
+  useEffect(() => {
+    if (!bounds || framed.current) return;
+    framed.current = true;
+    map.fitTo([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], 15);
+  }, [bounds, map]);
 
   const s = stats.data;
   return (

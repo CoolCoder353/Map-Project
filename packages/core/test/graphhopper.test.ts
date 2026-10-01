@@ -71,6 +71,13 @@ describe('GraphHopper requests', () => {
     expect(gh.body(2)).not.toHaveProperty('ch.disable');
   });
 
+  it('starts the route the way you are travelling when told, which needs the flexible graph', async () => {
+    const gh = recording(() => json({ paths: [path] }));
+    await gh.client.route({ points: [[153, -27], [153.05, -27.05], [153.1, -27.1]], profile: 'car', heading: 271.4 });
+    // One heading: for the start only; the stop and destination can be reached from either side.
+    expect(gh.body()).toMatchObject({ 'ch.disable': true, headings: [271.4] });
+  });
+
   it('reports an unreachable or failing engine as unavailable (503)', async () => {
     const down = new GraphHopperClient('http://gh', (async () => {
       throw new TypeError('fetch failed');

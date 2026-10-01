@@ -44,13 +44,20 @@ service. The only outside download is the OpenStreetMap extract, fetched by the 
 
 1. The phone records fixes (`apps/mobile/src/tracking/background.ts`) into a SQLite queue and
    uploads them in batches to `POST /api/tracks/batches`. A batch id makes retries idempotent. A
-   batch the server rejects as invalid is dropped, so it cannot block later ones.
+   batch the server rejects as invalid is dropped, so it cannot block later ones. While a
+   navigated trip runs, background recording leaves that time to it (it records its own fixes).
 2. `trackService.ingestBatch` stores `track_points` and queues `process-tracks`.
 3. `processUserTracks` (`packages/core/src/services/tracks.ts`) splits points into trips (a
-   10-minute gap ends a trip; under 100 m is discarded) and records visited H3 cells. A batch
-   that continues a trip extends it and clears its road match.
+   10-minute gap or a 5-minute stop ends a trip; under 100 m is discarded) and records visited
+   H3 cells. A batch that continues a trip extends it and clears its road match. Batches arrive
+   a minute or so at a time, so a rest of a minute or more at the end of one is held back until
+   the next shows whether it was a red light or the end of the trip; that way a stop spread over
+   several uploads still ends the trip. Fixes the filter rejects (inaccurate, GPS jumps) are
+   deleted at once, and background fixes from the time of a navigated trip are dropped in its
+   favour (navigation groups are processed first).
 4. `roadService.matchTrips` (`roads.ts`) sends each unmatched trip to GraphHopper `/match` with
-   `osm_way_id` details and records the ways in `visited_ways`, the snapped line in
+   `osm_way_id` details and records the ways in `visited_ways` (every stretch travelled of each
+   way, in `pieces`, with each metre counted once in `length_m`), the snapped line in
    `trips.matched_geometry`, and roads new to the person in `trips.new_roads`. Oldest trips go
    first, so a road counts as new for the trip that first travelled it. Trips that can't be
    matched (off-road) keep their raw line and count no road.
@@ -133,3 +140,41 @@ The Android app keeps its refresh token in secure storage and restores the sessi
 the server can't be reached then, it says so with a Try again button rather than asking someone
 who is still signed in to sign in again. Cached server data (trips, coverage, planned routes) is
 dropped whenever the signed-in account changes, so the next person on a phone never sees it.
+
+## Android Auto
+
+The car app is a local Expo module, `apps/mobile/modules/wayfinder-car` (Kotlin; `android/` is
+generated, so nothing native lives there). Android Auto binds `WayfinderCarAppService`; its screens
+are Car App Library templates, and it draws its own map (MapLibre, the phone map's engine) onto
+the car's surface through a virtual display, using the server's `/map/style.json`. A screen puts
+a scene on the car map only while it is on top (`Screen.show` in `screens/ScreenKit.kt`), so a
+late answer never repaints the map under the screen that took over.
+
+The car screens hold no data of their own. They ask the JavaScript side through a small bridge
+(`CarBridge` in Kotlin, `src/car/controller.ts` in JS): `status`, `search`, `discover`, `plan`,
+`planned`, `routeLine`, `start`, `stop` and `mute`, and JS pushes every navigation change back
+(`src/car/navModel.ts`). The messages are defined in `src/car/protocol.ts` and `bridge/Protocol.kt`,
+pinned by fixtures both test suites read. Another test (`carModule.test.ts`) checks that every
+request `BridgeCarApi.kt` sends has a handler in `src/car/handlers.ts`.
+
+Navigation is one session for the whole app (`src/nav/navigationService.ts`), followed by the
+phone's Navigate screen and the car alike; a trip started on either shows on both. While it runs,
+a location foreground service keeps directions coming with the phone locked; its starts and stops
+run one at a time, and one left over from a trip the app never ended (swiped away mid-trip) is
+stopped when the app starts. A request for a new route that hasn't answered within 20 s is given up
+on as the next fix arrives (timers don't run with the phone locked) and asked again later. Back on
+the car's driving screen leaves the trip running, and Home offers "Back to directions". Spoken
+directions use the module's own `NavVoice`, which plays as navigation guidance and asks other audio
+to duck, so music dips and comes back; where the module isn't there, `expo-speech` speaks instead
+(`src/nav/voice.ts`).
+
+If Android Auto opens Wayfinder while the phone app is closed, Kotlin starts React, and the app
+entry (`apps/mobile/index.ts`) starts the car controller without any screen.
+
+Manoeuvre icons are Material Symbols (Apache 2.0, credited in the module's `NOTICE`); both kinds of
+roundabout use the clockwise icon, `wf_roundabout_cw`. A release build only answers Google's own
+Android Auto hosts (the `HostValidator` allowlist in `WayfinderCarAppService`); a debug build
+answers any host.
+
+Templates are the ones every Android Auto version has (`minCarApiLevel` 1). Not yet: panning the
+car map, a speed-limit sign in the car, cars with Android built in (Android Automotive).

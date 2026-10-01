@@ -68,6 +68,19 @@ it('lists each of a contact’s addresses as its own choice', async () => {
   await waitFor(() => expect(onChange).toHaveBeenCalledWith({ name: 'Mum', description: '1 William St, Brisbane', location: [153.03, -27.47] }));
 });
 
+it('looks the address up near where you are, when that is known', async () => {
+  mockFind.mockResolvedValue([{ id: 'c1', name: 'Gran', address: '12 Wellington St, Cleveland QLD 4163', label: null }]);
+  mockRequest.mockResolvedValue({ results: [{ id: 'p1', name: '12 Wellington Street', kind: 'address', description: '', location: [153.26, -27.52] }] });
+  await render(<PlaceSearch label="Destination" placeholder="Where to?" value={null} onChange={jest.fn()} near={[153.2, -27.5]} />);
+  const box = screen.getByLabelText('Destination');
+  await fireEvent(box, 'focus');
+  await fireEvent.changeText(box, 'gran');
+  await fireEvent.press(await screen.findByText('Gran'));
+  await waitFor(() =>
+    expect(mockRequest).toHaveBeenCalledWith('api/search', { query: { q: '12 Wellington St, Cleveland QLD 4163', lon: 153.2, lat: -27.5, limit: 1 } }),
+  );
+});
+
 it('says so when the contact’s address cannot be found on the map', async () => {
   mockFind.mockResolvedValue([{ id: 'c1', name: 'Dad', address: 'Nowhere Road', label: null }]);
   await render(<PlaceSearch label="Destination" placeholder="Where to?" value={null} onChange={jest.fn()} />);

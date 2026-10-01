@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import { isNavigationRecording } from './navigationRecording';
 import { sqliteQueueStore } from './sqliteStore';
 import { syncQueue } from './sync';
 
@@ -8,6 +9,8 @@ export const BACKGROUND_TASK = 'wayfinder-background-location';
 // Must be defined at module scope and imported from the root layout so Android can wake it.
 TaskManager.defineTask<{ locations: Location.LocationObject[] }>(BACKGROUND_TASK, async ({ data, error }) => {
   if (error || !data?.locations?.length) return;
+  // A navigated trip is recording these same moments itself.
+  if (isNavigationRecording()) return;
   try {
     await sqliteQueueStore.append(
       data.locations

@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { TripDetailPanel } from '../src/planner/TripDetailPanel';
 import { type Routes, apiError } from './fakeApi';
 import { tripDetail } from './fixtures';
@@ -49,6 +49,32 @@ describe('Trip detail', () => {
     const at = (slider as HTMLInputElement).value;
     await act(() => new Promise((r) => setTimeout(r, 150)));
     expect((slider as HTMLInputElement).value).toBe(at);
+  });
+
+  it('replays at a chosen multiple of real time, showing the speed at each moment', async () => {
+    await open();
+    // The 30-minute trip at the usual 60 times real time.
+    expect(await screen.findByText('This trip replays in 30 s.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Speed then: 30 km/h')).toBeInTheDocument();
+    const rate = screen.getByRole('slider', { name: /Replay speed/ });
+    fireEvent.change(rate, { target: { value: '5' } });
+    expect(rate).toHaveAttribute('aria-valuetext', '600 times real time');
+    expect(screen.getByText('This trip replays in 3 s.')).toBeInTheDocument();
+    fireEvent.change(rate, { target: { value: '0' } });
+    expect(screen.getByText('This trip replays in 3 min.')).toBeInTheDocument();
+    fireEvent.change(rate, { target: { value: '5' } });
+
+    const position = screen.getByRole('slider', { name: 'Replay position' }) as HTMLInputElement;
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Play replay' }));
+      // Half of the 3 seconds: half of the trip.
+      act(() => vi.advanceTimersByTime(1500));
+      expect(Number(position.value)).toBeGreaterThan(450);
+      expect(Number(position.value)).toBeLessThan(550);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('corrects the recorded mode', async () => {

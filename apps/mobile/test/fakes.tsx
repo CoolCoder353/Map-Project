@@ -15,7 +15,7 @@ import { copyFor } from '@wayfinder/shared/copy';
 import type { CoverageStats, DiscoverItem, Place, PublicConfig, PublicUser, Route, TripDetail, TripSummary } from '@wayfinder/shared/schemas';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react-native';
-import { type ReactElement, type ReactNode, forwardRef, useImperativeHandle } from 'react';
+import { type ReactElement, type ReactNode, forwardRef, useEffect, useImperativeHandle } from 'react';
 import { Text, View } from 'react-native';
 import { user as makeUser } from './mocks';
 
@@ -40,6 +40,8 @@ export const fake = {
     routes: {} as Record<string, Handler>,
     calls: [] as Array<{ key: string; init: Init }>,
     unhandled: [] as string[],
+    signedIn: true,
+    savedSession: true,
     /** Declare endpoints as "METHOD path", e.g. "GET api/trips" or "DELETE api/trips/:id". */
     on(routes: Record<string, Handler>) {
       Object.assign(this.routes, routes);
@@ -64,7 +66,13 @@ export const fake = {
   params: {} as Record<string, string>,
   /** Props the screen last gave the map, and calls made through its handle. */
   map: { props: {} as Record<string, unknown>, fitTo: jest.fn(), flyTo: jest.fn() },
+  /** Come back to the screen (its tab chosen again): runs its focus effects. */
+  focus() {
+    focusEffects.forEach((effect) => effect());
+  },
 };
+
+const focusEffects = new Set<() => void>();
 
 export const apiError = (status: number, message: string) => new HttpError(status, message);
 
@@ -72,6 +80,8 @@ export function resetFakes() {
   fake.api.routes = {};
   fake.api.calls = [];
   fake.api.unhandled = [];
+  fake.api.signedIn = true;
+  fake.api.savedSession = true;
   fake.user = makeUser(true);
   fake.status = 'authenticated';
   fake.config = { appName: 'Wayfinder', voice: 'plain', feedbackEnabled: false, osmDataDate: null };
@@ -100,7 +110,14 @@ async function request(path: string, init: Init = {}) {
 }
 
 export const apiModule = {
-  api: { request: (path: string, init?: Init) => request(path, init) },
+  api: {
+    request: (path: string, init?: Init) => request(path, init),
+    refresh: jest.fn(async () => (fake.api.signedIn ? { accessToken: 'a', user: fake.user } : null)),
+    get hasAccessToken() {
+      return fake.api.signedIn;
+    },
+  },
+  hasSavedSession: jest.fn(async () => fake.api.savedSession),
   errorMessage: (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong'),
 };
 
@@ -125,6 +142,14 @@ export const mapCanvasModule = {
 export const routerModule = {
   router: fake.router,
   useLocalSearchParams: () => fake.params,
+  /** Runs when the screen mounts, and again on `fake.focus()` (coming back to the tab). */
+  useFocusEffect: (effect: () => void) => {
+    focusEffects.add(effect);
+    useEffect(() => {
+      effect();
+      return () => void focusEffects.delete(effect);
+    }, [effect]);
+  },
   Link: ({ children, href }: { children: ReactNode; href: string }) => <Text accessibilityRole="link" onPress={() => fake.router.push(href)}>{children}</Text>,
   Redirect: ({ href }: { href: string }) => <Text>{`Redirect to ${href}`}</Text>,
 };
@@ -218,3 +243,32 @@ export const discoverItem = (over: Partial<DiscoverItem> = {}): DiscoverItem => 
   score: 0.9,
   ...over,
 });
+
+/** A stand-in for the car app's native side: records what JavaScript tells it, and plays the car. */
+export function fakeCarNative() {
+  const listeners = new Set<(call: { id: string; method: string; params: string }) => void>();
+  let n = 0;
+  return {
+    ready: jest.fn(),
+    resolve: jest.fn(),
+    reject: jest.fn(),
+    setNavigation: jest.fn(),
+    speak: jest.fn(),
+    stopSpeaking: jest.fn(),
+    addListener: jest.fn((_event: 'onCall', fn: (call: { id: string; method: string; params: string }) => void) => {
+      listeners.add(fn);
+      return { remove: () => listeners.delete(fn) };
+    }),
+    /** The car asks something; returns the request id. */
+    ask(method: string, params: object = {}) {
+      const id = `c${n++}`;
+      listeners.forEach((l) => l({ id, method, params: JSON.stringify(params) }));
+      return id;
+    },
+    /** What JavaScript answered to request `id`, parsed. */
+    answerTo(id: string): unknown {
+      const call = this.resolve.mock.calls.find((c: unknown[]) => c[0] === id);
+      return call ? JSON.parse(call[1] as string) : undefined;
+    },
+  };
+}

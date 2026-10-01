@@ -20,8 +20,10 @@ beforeAll(async () => {
 });
 afterAll(() => ta?.close());
 
+let tripsRecorded = 0;
+/** A new trip each time, hours apart: the same moments uploaded again would be the same trip. */
 async function recordTrip() {
-  const start = Date.now() - 3 * 3600_000;
+  const start = Date.now() - (3 + 2 * tripsRecorded++) * 3600_000;
   const points = Array.from({ length: 200 }, (_, i) => {
     const [lon, lat] = destination([153.1, -27.5], 0, i * 7);
     return { ts: start + i * 5000, lon, lat, accuracyM: 6 };

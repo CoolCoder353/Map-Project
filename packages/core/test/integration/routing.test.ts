@@ -62,6 +62,51 @@ describe('routing service (fake GraphHopper)', () => {
     expect(routing.toRoute(straightPath([from, to], SPEED), { kind: 'fastest', mode: 'car', novelty: { totalKm: 8, newKm: 8, noveltyPct: 100 } as never, extraDurationS: 0, viaPoints: [] }).speedLimits).toEqual([]);
   });
 
+  it('a new route asked for on the move starts the way you are travelling', async () => {
+    const u = await makeUser(t.db, 'reroute@example.com');
+    await routing.fastestRoute(deps(), u.id, { from, to, mode: 'car', via: [], heading: 180 });
+    expect(calls.at(-1)).toMatchObject({ heading: 180 });
+    await routing.fastestRoute(deps(), u.id, { from, to, mode: 'car', via: [] });
+    expect(calls.at(-1)!.heading).toBeUndefined();
+  });
+
+  it('gives a roundabout one exit number even when a hidden stop on the detour lies on it', async () => {
+    // GraphHopper splits the roundabout at the stop: "Enter roundabout" with the exits passed so
+    // far, then "take exit 1" counted again from the stop. Going round to come back is exit 4.
+    const path = straightPath([from, to], SPEED);
+    const ins = (sign: number, text: string, interval: [number, number], extra: object = {}) => ({ sign, text, interval, distance: 10, time: 1000, street_name: '', ...extra });
+    path.instructions = [
+      ins(0, 'Continue onto Waterloo Street', [0, 3], { street_name: 'Waterloo Street' }),
+      ins(6, 'Enter roundabout', [3, 5], { exit_number: 3, exited: false }),
+      ins(5, 'Waypoint 1', [5, 5]),
+      ins(6, 'At roundabout, take exit 1 onto Waterloo Street', [5, 9], { exit_number: 1, exited: true, street_name: 'Waterloo Street' }),
+      ins(4, 'Arrive at destination', [9, 9]),
+    ];
+    const route = routing.toRoute(path, { kind: 'explore', mode: 'car', novelty: { totalKm: 8, newKm: 8, noveltyPct: 100 } as never, extraDurationS: 0, viaPoints: [] });
+    expect(route.instructions.map((i) => [i.sign, i.text, i.exitNumber])).toEqual([
+      [0, 'Continue onto Waterloo Street', undefined],
+      [6, 'At roundabout, take exit 4 onto Waterloo Street', 4],
+      [4, 'Arrive at destination', undefined],
+    ]);
+    expect(route.instructions[1]).toMatchObject({ interval: [3, 9], distanceM: 30, durationS: 3, streetName: 'Waterloo Street' });
+
+    // The stop exactly where you leave the roundabout: the exit is the one counted on the way in.
+    path.instructions = [
+      ins(0, 'Continue onto Waterloo Street', [0, 3]),
+      ins(6, 'Enter roundabout', [3, 5], { exit_number: 4, exited: false }),
+      ins(5, 'Waypoint 1', [5, 5]),
+      ins(0, 'Continue onto Waterloo Street', [5, 9], { street_name: 'Waterloo Street' }),
+      ins(4, 'Arrive at destination', [9, 9]),
+    ];
+    const atExit = routing.toRoute(path, { kind: 'explore', mode: 'car', novelty: { totalKm: 8, newKm: 8, noveltyPct: 100 } as never, extraDurationS: 0, viaPoints: [] });
+    expect(atExit.instructions.map((i) => [i.sign, i.text, i.exitNumber])).toEqual([
+      [0, 'Continue onto Waterloo Street', undefined],
+      [6, 'At roundabout, take exit 4 onto Waterloo Street', 4],
+      [0, 'Continue onto Waterloo Street', undefined],
+      [4, 'Arrive at destination', undefined],
+    ]);
+  });
+
   it('fastest route reports novelty against the user history', async () => {
     const u = await makeUser(t.db, 'fast@example.com');
     const fresh = await routing.fastestRoute(deps(), u.id, { from, to, mode: 'car', via: [] });

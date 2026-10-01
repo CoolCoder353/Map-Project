@@ -1,0 +1,37 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'app.wayfinder.car'
+version = '0.1.0'
+
+// The car library and its test harness must be the same version.
+def carAppVersion = '1.7.0'
+// Must equal org.maplibre.reactnative.nativeVersion in @maplibre/maplibre-react-native
+// (apps/mobile/test/carModule.test.ts checks), so the phone and car maps share one engine.
+def maplibreVersion = '13.2.0'
+
+android {
+  namespace 'app.wayfinder.car'
+  defaultConfig {
+    versionCode 1
+    versionName '0.1.0'
+  }
+  testOptions {
+    unitTests {
+      includeAndroidResources = true
+    }
+  }
+}
+
+dependencies {
+  implementation 'com.facebook.react:react-android'
+  implementation "androidx.car.app:app:$carAppVersion"
+  implementation "org.maplibre.gl:android-sdk-opengl:$maplibreVersion"
+
+  testImplementation "androidx.car.app:app-testing:$carAppVersion"
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.robolectric:robolectric:4.14.1'
+  testImplementation 'androidx.test:core:1.6.1'
+}

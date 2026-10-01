@@ -134,6 +134,7 @@ export const coverageStats = (over: Partial<CoverageStats> = {}): CoverageStats 
     firstVisitAt: '2026-08-01T00:00:00.000Z',
     tripCount: 42,
     distanceKm: 980,
+    bounds: [153.1, -27.6, 153.3, -27.4],
     ...over,
   });
 

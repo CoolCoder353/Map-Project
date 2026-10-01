@@ -53,6 +53,12 @@ export interface SegmentOptions {
   stationaryMs?: number;
   stationaryRadiusM?: number;
   minTripDistanceM?: number;
+  /**
+   * End the last trip where the device came to rest once it has been there this long, short of
+   * a stop. For tracks that arrive in pieces: the points after it wait for the next piece, which
+   * shows whether the device moved on (a red light) or stayed (the end of the trip).
+   */
+  holdRestAfterMs?: number;
 }
 
 /**
@@ -102,10 +108,34 @@ export function segmentTrips<T extends TrackPoint>(points: readonly T[], opts: S
   const tail = current[current.length - 1];
   if (tail && current.length > 1) {
     const anchorPt = current[anchor]!;
-    if (tail.ts - anchorPt.ts >= stationaryMs) current = current.slice(0, anchor + 1);
+    if (tail.ts - anchorPt.ts >= Math.min(stationaryMs, opts.holdRestAfterMs ?? Infinity)) current = current.slice(0, anchor + 1);
   }
   flush();
   return trips;
+}
+
+/**
+ * How fast the traveller was going at point i of a time-ordered track, in m/s: distance over time
+ * across the fixes within windowMs either side, so one jumpy fix doesn't spike it. Null where
+ * there is nothing to measure across.
+ */
+export function speedAround(points: ReadonlyArray<Pick<TrackPoint, 'ts' | 'lon' | 'lat'>>, i: number, windowMs = 10_000): number | null {
+  const at = points[i];
+  if (!at) return null;
+  let lo = i;
+  let hi = i;
+  while (lo > 0 && at.ts - points[lo - 1]!.ts <= windowMs) lo--;
+  while (hi < points.length - 1 && points[hi + 1]!.ts - at.ts <= windowMs) hi++;
+  // Fixes further apart than the window (a sparse background track): use the neighbours.
+  if (lo === hi) {
+    lo = Math.max(0, i - 1);
+    hi = Math.min(points.length - 1, i + 1);
+  }
+  const dt = (points[hi]!.ts - points[lo]!.ts) / 1000;
+  if (dt <= 0) return null;
+  let m = 0;
+  for (let k = lo + 1; k <= hi; k++) m += haversineM(toLngLat(points[k - 1]!), toLngLat(points[k]!));
+  return m / dt;
 }
 
 /** Walking vs driving from typical moving speed (median above 25 km/h means car). */

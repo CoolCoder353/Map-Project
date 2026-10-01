@@ -24,6 +24,11 @@ const mockAppend = jest.fn(async (_points: unknown[]) => undefined);
 jest.mock('../src/tracking/sqliteStore', () => ({ sqliteQueueStore: { append: (p: unknown[]) => mockAppend(p) } }));
 const mockSync = jest.fn(async () => null);
 jest.mock('../src/tracking/sync', () => ({ syncQueue: () => mockSync() }));
+jest.mock('../src/nav/navigationLocation', () => ({
+  startNavigationLocation: jest.fn(async () => undefined),
+  stopNavigationLocation: jest.fn(async () => undefined),
+  setNavigationFixHandler: jest.fn(),
+}));
 
 // A scripted navigation engine: each fix returns the next queued result.
 const mockResults: Array<{ state: object; events: object[] }> = [];
@@ -97,7 +102,8 @@ it('reroutes after going off route, from where you are to what is left', async (
   mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2, -27.4], to: [153.1, -27.5], remainingVia: [] }] });
   await act(async () => mockOnFix!(fix(153.2, -27.4)));
   await waitFor(() => expect(result.current.route?.id).toBe('r-new'));
-  expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).toEqual({ from: [153.2, -27.4], to: [153.1, -27.5], via: [], mode: 'car' });
+  // The fix says the car is heading east at 10 m/s, so the new route starts that way.
+  expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).toEqual({ from: [153.2, -27.4], to: [153.1, -27.5], via: [], mode: 'car', heading: 90 });
   expect(mockReplaced).toEqual([next]);
   expect(result.current.rerouting).toBe(false);
   expect(Speech.speak).toHaveBeenCalledWith('Route updated', expect.anything());
@@ -203,4 +209,17 @@ it('ignores a fix without a usable position', async () => {
   await act(async () => mockOnFix!(fix(Number.NaN, -27.4)));
   expect(result.current.position).toBeNull();
   expect(mockAppend).not.toHaveBeenCalled();
+});
+
+it('doesn’t turn the whole route into text on every GPS fix', async () => {
+  const r = route();
+  await renderHook(() => useTurnByTurn(r));
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  const stringify = jest.spyOn(JSON, 'stringify');
+  try {
+    await act(async () => mockOnFix!(fix(153, -27.4)));
+    expect(stringify.mock.calls.some(([value]) => value === r)).toBe(false);
+  } finally {
+    stringify.mockRestore();
+  }
 });

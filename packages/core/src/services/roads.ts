@@ -1,11 +1,11 @@
-import { type BBox, type LngLat, bboxOf, lineLengthM } from '@wayfinder/shared';
-import type { Db, DbClient } from '../db/pool.js';
+import { type BBox, type LngLat, bboxOf, lineLengthM, mergeStretches } from '@wayfinder/shared';
+import { type Db, type DbClient, withTransaction } from '../db/pool.js';
 import type { GhPath, GraphHopperClient } from '../lib/graphhopper.js';
 
-/** One stretch of one OSM way that somebody travelled. */
+/** The stretches of one OSM way that a trip travelled. */
 export interface TravelledWay {
   wayId: number;
-  geometry: LngLat[];
+  pieces: LngLat[][];
   lengthM: number;
 }
 
@@ -23,60 +23,79 @@ export function waysOfPath(path: GhPath): TravelledWay[] {
     if (piece.length < 2) continue;
     byWay.set(wayId, [...(byWay.get(wayId) ?? []), piece]);
   }
+  // A way can be entered more than once on one trip: different stretches each count, the same
+  // stretch twice (there and back) once.
   return [...byWay].map(([wayId, pieces]) => {
-    // A way can be entered more than once on one trip; keep the longest run of it.
-    const longest = pieces.reduce((best, p) => (lineLengthM(p) > lineLengthM(best) ? p : best));
-    return { wayId, geometry: longest, lengthM: lineLengthM(longest) };
+    const { stretches, addedM } = mergeStretches([], pieces);
+    return { wayId, pieces: stretches, lengthM: addedM };
   });
 }
 
 const MODE_BIT = { car: 1, foot: 2 } as const;
 
+const longest = (pieces: LngLat[][]) => pieces.reduce((best, p) => (lineLengthM(p) > lineLengthM(best) ? p : best));
+
 /**
- * Record the ways a trip covered. Longer stretches of a way replace shorter ones. Returns how
- * many of them the person had never been on, which is what a trip reports as new.
+ * Record the ways a trip covered. Each new stretch of a way is kept alongside the ones already
+ * travelled, and the way's length counts each metre once. Returns how many of the ways the person
+ * had never been on, which is what a trip reports as new.
  */
 export async function recordTravelledWays(
-  db: DbClient,
+  db: Db,
   userId: string,
   ways: readonly TravelledWay[],
   mode: 'car' | 'foot',
   when: Date,
 ): Promise<number> {
   if (ways.length === 0) return 0;
-  const boxes = ways.map((w) => bboxOf(w.geometry));
-  const r = await db.query<{ inserted: boolean }>(
-    `INSERT INTO visited_ways (user_id, way_id, geometry, length_m, first_visited_at, last_visited_at, modes,
-                               min_lon, min_lat, max_lon, max_lat)
-     SELECT $1, w, g::jsonb, l, $5, $5, $6, b1, b2, b3, b4
-     FROM unnest($2::bigint[], $3::text[], $4::float8[], $7::float8[], $8::float8[], $9::float8[], $10::float8[])
-       AS t(w, g, l, b1, b2, b3, b4)
-     ON CONFLICT (user_id, way_id) DO UPDATE SET
-       last_visited_at = GREATEST(visited_ways.last_visited_at, EXCLUDED.last_visited_at),
-       first_visited_at = LEAST(visited_ways.first_visited_at, EXCLUDED.first_visited_at),
-       modes = visited_ways.modes | EXCLUDED.modes,
-       geometry = CASE WHEN EXCLUDED.length_m > visited_ways.length_m THEN EXCLUDED.geometry ELSE visited_ways.geometry END,
-       length_m = GREATEST(visited_ways.length_m, EXCLUDED.length_m),
-       min_lon = LEAST(visited_ways.min_lon, EXCLUDED.min_lon),
-       min_lat = LEAST(visited_ways.min_lat, EXCLUDED.min_lat),
-       max_lon = GREATEST(visited_ways.max_lon, EXCLUDED.max_lon),
-       max_lat = GREATEST(visited_ways.max_lat, EXCLUDED.max_lat)
-     -- xmax is zero on a row this statement inserted, so this says which roads are new.
-     RETURNING (xmax = 0) AS inserted`,
-    [
-      userId,
-      ways.map((w) => String(w.wayId)),
-      ways.map((w) => JSON.stringify(w.geometry)),
-      ways.map((w) => w.lengthM),
-      when,
-      MODE_BIT[mode],
-      boxes.map((b) => b[0]),
-      boxes.map((b) => b[1]),
-      boxes.map((b) => b[2]),
-      boxes.map((b) => b[3]),
-    ],
-  );
-  return r.rows.filter((x) => x.inserted).length;
+  return withTransaction(db, async (tx) => {
+    const known = new Map(
+      (
+        await tx.query<{ way_id: string; pieces: LngLat[][]; length_m: number }>(
+          `SELECT way_id::text, coalesce(pieces, jsonb_build_array(geometry)) AS pieces, length_m FROM visited_ways
+           WHERE user_id = $1 AND way_id = ANY($2::bigint[]) FOR UPDATE`,
+          [userId, ways.map((w) => String(w.wayId))],
+        )
+      ).rows.map((r) => [Number(r.way_id), r]),
+    );
+    const rows = ways.map((w) => {
+      const before = known.get(w.wayId);
+      const { stretches, addedM } = mergeStretches(before?.pieces ?? [], w.pieces);
+      return { wayId: w.wayId, pieces: stretches, lengthM: (before?.length_m ?? 0) + addedM, box: bboxOf(stretches.flat()) };
+    });
+    await tx.query(
+      `INSERT INTO visited_ways (user_id, way_id, geometry, pieces, length_m, first_visited_at, last_visited_at, modes,
+                                 min_lon, min_lat, max_lon, max_lat)
+       SELECT $1, w, g::jsonb, p::jsonb, l, $6, $6, $7, b1, b2, b3, b4
+       FROM unnest($2::bigint[], $3::text[], $4::text[], $5::float8[], $8::float8[], $9::float8[], $10::float8[], $11::float8[])
+         AS t(w, g, p, l, b1, b2, b3, b4)
+       ON CONFLICT (user_id, way_id) DO UPDATE SET
+         last_visited_at = GREATEST(visited_ways.last_visited_at, EXCLUDED.last_visited_at),
+         first_visited_at = LEAST(visited_ways.first_visited_at, EXCLUDED.first_visited_at),
+         modes = visited_ways.modes | EXCLUDED.modes,
+         geometry = EXCLUDED.geometry,
+         pieces = EXCLUDED.pieces,
+         length_m = EXCLUDED.length_m,
+         min_lon = EXCLUDED.min_lon,
+         min_lat = EXCLUDED.min_lat,
+         max_lon = EXCLUDED.max_lon,
+         max_lat = EXCLUDED.max_lat`,
+      [
+        userId,
+        rows.map((r) => String(r.wayId)),
+        rows.map((r) => JSON.stringify(longest(r.pieces))),
+        rows.map((r) => JSON.stringify(r.pieces)),
+        rows.map((r) => r.lengthM),
+        when,
+        MODE_BIT[mode],
+        rows.map((r) => r.box[0]),
+        rows.map((r) => r.box[1]),
+        rows.map((r) => r.box[2]),
+        rows.map((r) => r.box[3]),
+      ],
+    );
+    return ways.filter((w) => !known.has(w.wayId)).length;
+  });
 }
 
 export interface CoveredRoad {
@@ -89,15 +108,16 @@ export interface CoveredRoad {
 
 /** The roads a person has travelled inside the map view. */
 export async function roadsInView(db: DbClient, userId: string, bbox: BBox, limit = 4000): Promise<CoveredRoad[]> {
-  const r = await db.query<{ way_id: string; geometry: LngLat[]; recent: boolean; modes: number }>(
-    `SELECT way_id::text, geometry, first_visited_at > now() - interval '7 days' AS recent, modes
+  const r = await db.query<{ way_id: string; pieces: LngLat[][]; recent: boolean; modes: number }>(
+    `SELECT way_id::text, coalesce(pieces, jsonb_build_array(geometry)) AS pieces, first_visited_at > now() - interval '7 days' AS recent, modes
      FROM visited_ways
      WHERE user_id = $1 AND box(point(min_lon, min_lat), point(max_lon, max_lat)) && box(point($2, $3), point($4, $5))
      ORDER BY length_m DESC
      LIMIT $6`,
     [userId, bbox[0], bbox[1], bbox[2], bbox[3], limit],
   );
-  return r.rows.map((x) => ({ wayId: Number(x.way_id), geometry: x.geometry, recent: x.recent, modes: x.modes }));
+  // A road travelled in separate stretches is drawn as each of them.
+  return r.rows.flatMap((x) => x.pieces.map((geometry) => ({ wayId: Number(x.way_id), geometry, recent: x.recent, modes: x.modes })));
 }
 
 /** The way ids a person has travelled, for scoring how new a route is. */

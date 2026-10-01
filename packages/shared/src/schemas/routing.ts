@@ -47,6 +47,11 @@ export const FastestRouteRequestSchema = z.object({
   to: LngLatSchema,
   mode: ModeSchema,
   via: z.array(LngLatSchema).max(5).default([]),
+  /**
+   * Which way the traveller is heading, degrees clockwise from north. Sent with a new route asked
+   * for mid-trip, so it starts the way they are going instead of turning them round.
+   */
+  heading: z.number().min(0).max(360).optional(),
 });
 export type FastestRouteRequest = z.input<typeof FastestRouteRequestSchema>;
 

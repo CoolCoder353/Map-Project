@@ -133,8 +133,9 @@ pnpm check
 ```
 
 That's lint, types, every Vitest project (unit, integration on PGlite, web components) and the
-Android tests with their coverage floors, then Playwright. While working, `pnpm test`,
-`pnpm test:mobile` and `pnpm test:e2e` run the pieces.
+Android tests with their coverage floors, then Playwright, then the Android Auto module's Kotlin
+tests. While working, `pnpm test`, `pnpm test:mobile` and `pnpm test:e2e` run the pieces, and
+`CI=true pnpm test:android` the Kotlin ones.
 
 ## Making common changes
 
@@ -194,6 +195,25 @@ For the Queensland server, rebuild into its build database and ship with
 the client; scoring is `packages/shared/src/novelty.ts`. GraphHopper settings, including which
 encoded values exist, are in `infra/graphhopper/config.yml`; changing encoded values needs a
 graph rebuild. `pnpm bench:explore 50000 20` checks explore stays under its targets.
+
+### Changing the car app
+
+The Android Auto app is Kotlin in `apps/mobile/modules/wayfinder-car` ([architecture.md](architecture.md#android-auto)
+says how it fits together). Don't put native code in `apps/mobile/android/`: it is generated.
+
+- **A new thing the car asks the phone for** (a bridge request) needs all of these: a schema in
+  `apps/mobile/src/car/protocol.ts`, a parser in `bridge/Protocol.kt`, a fixture in
+  `modules/wayfinder-car/android/src/test/resources/fixtures` that both `carProtocol.test.ts` and
+  `ProtocolTest.kt` read, a handler in `src/car/handlers.ts`, and a method on `CarApi` (with
+  `BridgeCarApi.kt` sending it and `FakeCarApi` in the Kotlin tests answering it). `carModule.test.ts`
+  fails if `BridgeCarApi.kt` sends a request `handlers.ts` doesn't answer.
+- **A screen** puts its map scene up with `Screen.show(map, scene)` (`screens/ScreenKit.kt`), which
+  only draws while the screen is on top. Test it with the helpers in `modules/wayfinder-car/android/src/test/java/app/wayfinder/car`.
+- Run the Kotlin tests with `CI=true pnpm test:android` (it takes over `node_modules` while it
+  runs, so run nothing else then), and the JavaScript side with `pnpm test:mobile` and `pnpm test`.
+- Try it in the Desktop Head Unit: [build-android.md](build-android.md#trying-it-in-a-car). The
+  checklist in [verification.md](verification.md#android-auto-desktop-head-unit) lists what only
+  the head unit shows, such as the map drawing on the car surface.
 
 ## Releasing
 

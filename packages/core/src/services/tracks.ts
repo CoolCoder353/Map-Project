@@ -24,6 +24,13 @@ import type { JobQueue } from './context.js';
 
 const TRIP_GAP_MS = 10 * 60_000;
 const MIN_TRIP_M = 100;
+/**
+ * A rest this long at the end of what has arrived ends the trip there for now. While more can
+ * still arrive, its points are kept for the next upload, which shows whether it was a red light
+ * (the trip carries on through it) or the end; so a stop that spans uploads still ends the trip.
+ * Shorter, and it stays on the trip: a slow walk keeps within the stop radius for half a minute.
+ */
+const HOLD_REST_MS = 60_000;
 const MODE_BIT: Record<Mode, number> = { car: 1, foot: 2 };
 
 export async function ingestBatch(
@@ -155,6 +162,11 @@ export async function processUserTracks(db: Db, userId: string): Promise<{ trips
       )
     ).rows;
     if (rows.length === 0) return { tripsTouched: 0, newCells: 0 };
+    // Recent is measured from the newest point, not the clock, so a phone that uploads late is
+    // treated the same. Once nothing has been recorded for a trip gap, no later point can join
+    // these, and what was held back is settled for good.
+    const newest = rows.reduce((m, r) => Math.max(m, r.ts.getTime()), -Infinity);
+    const settled = Date.now() - newest > TRIP_GAP_MS;
 
     const groups = new Map<string, PointRow[]>();
     for (const r of rows) {
@@ -162,14 +174,21 @@ export async function processUserTracks(db: Db, userId: string): Promise<{ trips
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(r);
     }
+    // Navigation first: background recording carries on during a navigated trip, and those
+    // points are dropped in favour of the navigation trip rather than becoming a second one.
+    const ordered = [...groups].sort(([, a], [, b]) => Number(b[0]!.navigation_session_id !== null) - Number(a[0]!.navigation_session_id !== null));
 
     let tripsTouched = 0;
     let newCells = 0;
     const assigned = new Set<string>();
+    /** Points that will never belong to a trip, however recent: deleted at the end. */
+    const discard = new Set<string>();
 
-    for (const [key, groupRows] of groups) {
+    for (const [key, allRows] of ordered) {
+      const isNav = allRows[0]!.navigation_session_id !== null;
+      const groupRows = isNav ? allRows : await outsideNavigatedTrips(tx, userId, allRows, discard);
+      if (groupRows.length === 0) continue;
       const first = groupRows[0]!;
-      const isNav = first.navigation_session_id !== null;
       const existing = isNav
         ? (
             await tx.query<TripRow>(
@@ -182,7 +201,7 @@ export async function processUserTracks(db: Db, userId: string): Promise<{ trips
             await tx.query<TripRow>(
               `SELECT id, mode, ended_at, geometry, distance_m FROM trips
                WHERE user_id = $1 AND source = 'background' AND navigation_session_id IS NULL
-                 AND deleted_at IS NULL AND ended_at >= $2 AND ended_at <= $3
+                 AND deleted_at IS NULL AND ended_at >= $2 AND started_at <= $3
                ORDER BY ended_at DESC LIMIT 1`,
               [userId, new Date(first.ts.getTime() - TRIP_GAP_MS), first.ts],
             )
@@ -198,8 +217,18 @@ export async function processUserTracks(db: Db, userId: string): Promise<{ trips
             }
           : null;
 
-      const filtered = filterPoints([...(context ? [context] : []), ...groupRows.map(toPoint)]);
-      const segments = isNav ? (filtered.length ? [filtered] : []) : segmentTrips(filtered, { minTripDistanceM: 0 });
+      // A point from within the trip it continues arrived late; the trip already covers that time.
+      const fresh = groupRows.filter((r) => {
+        const late = context !== null && r.ts.getTime() <= context.ts;
+        if (late) discard.add(r.id);
+        return !late;
+      });
+      const filtered = filterPoints([...(context ? [context] : []), ...fresh.map(toPoint)]);
+      // Inaccurate fixes and GPS jumps never become usable. Kept, one inside a trip would make the
+      // next upload look as if it started before that trip ended, and so start a trip of its own.
+      const usable = new Set(filtered.map((p) => p.id));
+      for (const r of fresh) if (!usable.has(r.id)) discard.add(r.id);
+      const segments = isNav ? (filtered.length ? [filtered] : []) : segmentTrips(filtered, { minTripDistanceM: 0, holdRestAfterMs: HOLD_REST_MS });
 
       for (const seg of segments) {
         const continues = context !== null && seg[0] === context;
@@ -255,14 +284,32 @@ export async function processUserTracks(db: Db, userId: string): Promise<{ trips
     // Drop points that were filtered out or belonged to stops/too-short movements.
     const leftover = rows.map((r) => r.id).filter((id) => !assigned.has(id));
     if (leftover.length) {
-      // Keep the tail of an in-progress background trip: points from the last few minutes may
-      // still be joined by the next batch.
-      const cutoff = Date.now() - TRIP_GAP_MS;
-      const recent = new Set(rows.filter((r) => r.ts.getTime() > cutoff && !r.navigation_session_id).map((r) => r.id));
+      // Keep the tail of an in-progress background trip (a rest that may be a red light, or a
+      // movement still too short to count): the next batch may join it.
+      const recent = new Set(
+        settled ? [] : rows.filter((r) => r.ts.getTime() > newest - TRIP_GAP_MS && !r.navigation_session_id && !discard.has(r.id)).map((r) => r.id),
+      );
       const toDelete = leftover.filter((id) => !recent.has(id));
       if (toDelete.length) await tx.query('DELETE FROM track_points WHERE id = ANY($1::bigint[])', [toDelete]);
     }
     return { tripsTouched, newCells };
+  });
+}
+
+/** Background points recorded during a navigated trip, which already covers that time, are discarded. */
+async function outsideNavigatedTrips(tx: DbClient, userId: string, rows: PointRow[], discard: Set<string>): Promise<PointRow[]> {
+  const spans = (
+    await tx.query<{ started_at: Date; ended_at: Date }>(
+      `SELECT started_at, ended_at FROM trips
+       WHERE user_id = $1 AND source = 'navigation' AND deleted_at IS NULL AND started_at <= $3 AND ended_at >= $2`,
+      [userId, rows[0]!.ts, rows[rows.length - 1]!.ts],
+    )
+  ).rows;
+  if (spans.length === 0) return rows;
+  return rows.filter((r) => {
+    const during = spans.some((s) => r.ts >= s.started_at && r.ts <= s.ended_at);
+    if (during) discard.add(r.id);
+    return !during;
   });
 }
 

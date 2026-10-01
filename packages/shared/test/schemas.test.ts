@@ -5,6 +5,7 @@ import {
   CreateInvitesSchema,
   DiscoverQuerySchema,
   ExploreRouteRequestSchema,
+  FastestRouteRequestSchema,
   RegisterRequestSchema,
   TrackBatchRequestSchema,
 } from '../src/schemas/index.js';
@@ -26,6 +27,10 @@ describe('schemas', () => {
     expect(ExploreRouteRequestSchema.safeParse({ from: [149, -35], to: [149.1, -35.1], mode: 'car' }).success).toBe(true);
     expect(ExploreRouteRequestSchema.safeParse({ from: [200, -35], to: [149.1, -35.1], mode: 'car' }).success).toBe(false);
     expect(ExploreRouteRequestSchema.safeParse({ from: [149, -35], to: [149.1, -35.1], mode: 'bike' }).success).toBe(false);
+    // A new route mid-trip says which way the traveller is heading, in compass degrees.
+    expect(FastestRouteRequestSchema.parse({ from: [149, -35], to: [149.1, -35.1], mode: 'car', heading: 271.5 }).heading).toBe(271.5);
+    expect(FastestRouteRequestSchema.safeParse({ from: [149, -35], to: [149.1, -35.1], mode: 'car', heading: -1 }).success).toBe(false);
+    expect(FastestRouteRequestSchema.safeParse({ from: [149, -35], to: [149.1, -35.1], mode: 'car', heading: 361 }).success).toBe(false);
   });
 
   it('parses discover categories', () => {

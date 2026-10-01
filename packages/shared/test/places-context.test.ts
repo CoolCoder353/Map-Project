@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryTypes, expandAbbreviations, placeContext, placeDetail, poiTypeLabel, pointInPolygon, stateAbbreviation, stateTimeZone } from '../src/index.js';
+import { categoryTypes, expandAbbreviations, splitAddress, placeContext, placeDetail, poiTypeLabel, pointInPolygon, stateAbbreviation, stateTimeZone } from '../src/index.js';
 
 describe('place context line', () => {
   it('gives suburb, state and postcode for things inside a suburb', () => {
@@ -69,5 +69,23 @@ describe('expandAbbreviations', () => {
     expect(expandAbbreviations('Mt. Ainslie Dr')).toBe('mount Ainslie drive');
     expect(expandAbbreviations('St Kilda Rd')).toBe('St Kilda road');
     expect(expandAbbreviations('Woolworths')).toBe('Woolworths');
+  });
+});
+
+describe('splitAddress', () => {
+  it('reads a postal address as the place and where it is', () => {
+    expect(splitAddress('12 Wellington St, Cleveland, QLD, 4163')).toEqual({ name: '12 Wellington St', locality: 'cleveland', postcode: '4163' });
+    expect(splitAddress('12 Wellington St, Cleveland QLD 4163')).toEqual({ name: '12 Wellington St', locality: 'cleveland', postcode: '4163' });
+    expect(splitAddress('5 Shore St West\nCleveland Queensland 4163\nAustralia')).toEqual({ name: '5 Shore St West', locality: 'cleveland', postcode: '4163' });
+    expect(splitAddress('1 Panorama Dr, Thornlands')).toEqual({ name: '1 Panorama Dr', locality: 'thornlands', postcode: null });
+    expect(splitAddress('8 Smith Street Mount Cotton New South Wales 2165')).toEqual({ name: '8 Smith Street', locality: 'mount cotton', postcode: '2165' });
+    expect(splitAddress('20 Boundary Rd QLD')).toEqual({ name: '20 Boundary Rd', locality: null, postcode: null });
+  });
+
+  it('leaves ordinary searches alone', () => {
+    expect(splitAddress('Main Street')).toBeNull();
+    expect(splitAddress('Woolworths Cleveland')).toBeNull();
+    expect(splitAddress('12 Lonsdale St')).toBeNull();
+    expect(splitAddress(' , ')).toBeNull();
   });
 });

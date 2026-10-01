@@ -27,7 +27,7 @@ Add to it when you add a feature.
 pnpm check
 ```
 
-The whole gate, about 3 minutes. The pieces:
+The whole gate, about 5 minutes (Playwright and the Android Auto tests take most of it). The pieces:
 
 | Command | What it runs |
 |---|---|
@@ -39,7 +39,12 @@ The whole gate, about 3 minutes. The pieces:
 | `pnpm test:coverage` | All Vitest projects, failing below the coverage floors |
 | `pnpm test:mobile` | Android screens and device code in Jest: `apps/mobile/test/*.{screen,native}.test.tsx` |
 | `pnpm test:mobile:coverage` | The same, failing below the Android floors |
+| `pnpm test:android` | The Android Auto module's Kotlin tests (Robolectric), in the Android build image; takes over node_modules while it runs |
 | `pnpm test:e2e` | Playwright against a real stack it starts itself: `apps/web/e2e` |
+
+Run the Kotlin tests as `CI=true pnpm test:android`: without `CI=true`, pnpm stops at a
+node_modules prompt after the first run. Don't run Jest, Vitest or pnpm while it runs, because it
+swaps node_modules and the other runs fail for no reason. `pnpm check` runs it last.
 
 Run one file: `npx vitest run apps/web/test/directions.test.tsx`, or
 `cd apps/mobile && npx jest test/plan.screen.test.tsx`. Filter by name with `-t "…"`.
@@ -74,6 +79,8 @@ Options:
 | The web map layer (`MapProvider`) | `apps/web/test/map-provider.test.tsx` | A fake MapLibre that records sources, layers and camera moves |
 | A flow across pages, or anything the real map or browser does | `apps/web/e2e/*.spec.ts` | Playwright on PGlite, the demo seed and the fake routing engine |
 | An Android screen | `apps/mobile/test/*.screen.test.tsx` | `apps/mobile/test/fakes.tsx` (see below) |
+| Android Auto screens, bridge, map scenes | `apps/mobile/modules/wayfinder-car/android/src/test` | `FakeCarApi`, `Samples`, `TestKit` (`TestCarContext`) |
+| The car ↔ app messages | `carProtocol.test.ts` + `ProtocolTest.kt`, over the fixtures in `modules/wayfinder-car/android/src/test/resources/fixtures` | — |
 | Android device code (tracking, navigation, contacts, storage) | `apps/mobile/test/*.native.test.tsx` | Jest mocks of the Expo modules |
 | Android logic with no React Native imports | `apps/mobile/test/*.test.ts` | Plain Vitest (the upload queue, the API client) |
 | A migration | An integration test of the service that uses it | Every test database runs every migration |
@@ -144,6 +151,10 @@ file's other constants. Read a mock through a getter, or capture it after the im
 
 Checked by hand or against a live server, and recorded in [verification.md](verification.md):
 
+- **The car map on a car surface.** `SceneLayoutTest` covers what is drawn and where the camera
+  goes, and `StyleLoadsTest` that a style which failed to load is tried again; MapLibre drawing
+  through the virtual display (and a surface handed over twice) is checked in the Desktop Head Unit
+  ([verification.md](verification.md#android-auto-desktop-head-unit)).
 - **The native Android map on a real device.** Jest covers the screens with the map faked, and
   `map-canvas.native.test.tsx` covers the component around it, but not MapLibre Native itself.
 - **Routing on a real graph.** The fake engine draws curves. Set `GRAPHHOPPER_LIVE_URL` for the
@@ -160,18 +171,19 @@ Each feature a person can use, and where its tests are. Paths are relative to th
 | Feature | Unit / integration | Web components | Android | End to end |
 |---|---|---|---|---|
 | Sign in, register with an invite, reset a password, sign out | `packages/core/test/integration/auth.test.ts`, `apps/api/test/integration/auth-api.test.ts` | `auth-pages.test.tsx`, `app.test.tsx` (guards, deep links, sign-out) | `sign-in.screen.test.tsx`, `screens.screen.test.tsx` (Register, start-up), `device.native.test.tsx` (session) | `account.spec.ts`, `admin.spec.ts` |
-| Fastest and explore routes, including no U-turns on driving detours | `routing.test.ts`, `novelty.test.ts`, `graphhopper.test.ts`, `app-api.test.ts`, `trips-places-api.test.ts` | `directions.test.tsx` | `plan.screen.test.tsx`, `route-card.screen.test.tsx` | `planner.spec.ts` |
+| Fastest and explore routes, including no U-turns on driving detours and one exit number per roundabout | `routing.test.ts`, `novelty.test.ts`, `graphhopper.test.ts`, `app-api.test.ts`, `trips-places-api.test.ts` | `directions.test.tsx` | `plan.screen.test.tsx`, `route-card.screen.test.tsx` | `planner.spec.ts` |
 | Round trips | `routing.test.ts`, `novelty.test.ts`, `app-api.test.ts` | `panels.test.tsx` | `plan.screen.test.tsx` | `planner.spec.ts` |
 | Discover | `routing.test.ts`, `app-api.test.ts` | `panels.test.tsx` | `screens.screen.test.tsx` | `planner.spec.ts` |
-| Place search and reverse lookup | `search.test.ts`, `places-context.test.ts`, `hours.test.ts`, `osm-places.test.ts`, `boundaries.test.ts`, `trips-places-api.test.ts` | `search-field.test.tsx`, `map-shell.test.tsx` | `contacts.screen.test.tsx` | `feedback.spec.ts` (suggestions) |
+| Place search (including postal addresses, "12 Smith St, Suburb QLD 4000") and reverse lookup | `search.test.ts`, `places-context.test.ts`, `hours.test.ts`, `osm-places.test.ts`, `boundaries.test.ts`, `trips-places-api.test.ts` | `search-field.test.tsx`, `map-shell.test.tsx` | `contacts.screen.test.tsx` | `feedback.spec.ts` (suggestions) |
 | Contacts search (Android) | — | — | `contacts.screen.test.tsx`, `device.native.test.tsx`, `settings.screen.test.tsx` | — |
 | Start from your location | — | `directions.test.tsx` | `plan.screen.test.tsx`, `device.native.test.tsx` | `planner.spec.ts` |
 | Send a route to the phone; planned routes | `app-api.test.ts`, `trips-places-api.test.ts` | `directions.test.tsx`, `panels.test.tsx`, `settings.test.tsx` | `settings.screen.test.tsx` | `planner.spec.ts` |
-| Turn-by-turn navigation (following you zoomed in) | `packages/nav/test/*` | — | `turn-by-turn.native.test.tsx`, `navigate.screen.test.tsx`, `map-canvas.native.test.tsx` | — |
+| Turn-by-turn navigation (following you zoomed in; new routes start the way you're driving) | `packages/nav/test/*`, `graphhopper.test.ts`, `routing.test.ts` | — | `turn-by-turn.native.test.tsx`, `navigation-service.native.test.tsx`, `navigation-location.native.test.tsx`, `navigate.screen.test.tsx`, `map-canvas.native.test.tsx` | — |
+| Android Auto: search, Discover, planned routes, route choice, directions, map | `carProtocol.test.ts`, `carNavModel.test.ts`, `carModule.test.ts`, `categories.test.ts` | — | `car-controller.native.test.tsx`, `car-handlers.native.test.tsx`, `navigation-service.native.test.tsx`, `navigation-location.native.test.tsx`, `voice.native.test.tsx`, `navigating-banner.screen.test.tsx`, Kotlin tests in `modules/wayfinder-car` | — |
 | Speed limit while navigating | `geo.test.ts` (`speedLimitRuns`), `routing.test.ts`, `graphhopper.test.ts`, `packages/nav/test/engine.test.ts` | — | `navigate.screen.test.tsx` | — |
-| Recording trips (background and navigation) | `segmentation.test.ts`, `tracks.test.ts`, `queue.test.ts` (mobile), `apiClient.test.ts`, `androidManifest.test.ts` (the permissions background recording needs) | — | `tracking.native.test.tsx`, `settings.screen.test.tsx` | — |
-| Coverage: roads travelled, stats, the map layer | `tracks.test.ts` (road matching, new roads), `app-api.test.ts`, `copy.test.ts` (no hexagon words) | `panels.test.tsx`, `map-provider.test.tsx`, `map-shell.test.tsx` | `screens.screen.test.tsx`, `map-canvas.native.test.tsx` | `planner.spec.ts` |
-| Trips: list, replay, correct mode, delete | `tracks.test.ts`, `trips-places-api.test.ts` | `trips.test.tsx`, `trip-detail.test.tsx` | `screens.screen.test.tsx` | `planner.spec.ts` |
+| Recording trips (background and navigation; stops across uploads; one trip per navigated drive) | `segmentation.test.ts`, `tracks.test.ts`, `queue.test.ts` (mobile), `apiClient.test.ts`, `androidManifest.test.ts` (the permissions background recording needs) | — | `tracking.native.test.tsx`, `navigation-service.native.test.tsx`, `settings.screen.test.tsx` | — |
+| Coverage: roads travelled (every stretch), stats, framing the map, refreshing, the map layer | `tracks.test.ts` (road matching, new roads, stretches, bounds), `geo.test.ts` (`mergeStretches`), `app-api.test.ts`, `copy.test.ts` (no hexagon words) | `panels.test.tsx`, `map-provider.test.tsx`, `map-shell.test.tsx` | `screens.screen.test.tsx`, `map-canvas.native.test.tsx` | `planner.spec.ts` |
+| Trips: list, replay (at a multiple of real time, with the speed then), correct mode, delete | `tracks.test.ts`, `trips-places-api.test.ts`, `segmentation.test.ts` (`speedAround`) | `trips.test.tsx`, `trip-detail.test.tsx` | `screens.screen.test.tsx` | `planner.spec.ts` |
 | Settings, download my data, delete account | `account.test.ts`, `auth-api.test.ts` | `settings.test.tsx` | `settings.screen.test.tsx` | `account.spec.ts` |
 | Feedback | `feedback-api.test.ts` | `account-feedback.test.tsx`, `admin-management.test.tsx` | `feedback.screen.test.tsx` | `feedback.spec.ts` |
 | App name and voice | `copy.test.ts`, `admin-api.test.ts` | `auth-pages.test.tsx`, `admin-management.test.tsx` | `app-shell.native.test.tsx`, `screens.screen.test.tsx` | `admin.spec.ts` |

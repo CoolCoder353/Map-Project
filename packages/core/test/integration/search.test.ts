@@ -35,6 +35,12 @@ beforeAll(async () => {
     near('dup1', 'Braddon Bakery', 45, 700, { poiType: 'shop=bakery', suburb: 'Braddon', state: 'ACT' }),
     near('dup2', 'Braddon Bakery', 45, 760, { poiType: 'shop=bakery', suburb: 'Braddon', state: 'ACT' }),
     { id: 'ms2', name: 'Main Street', kind: 'street', category: null, description: '', lon: 148.9, lat: -35.0, importance: 0, suburb: 'Yass', state: 'NSW', postcode: '2582' },
+    // The same address in two suburbs of one city, and a street with no numbers mapped.
+    { id: 'wl-lut', name: '12 Wellington Street', kind: 'address', category: null, description: '', lon: 153.03, lat: -27.42, importance: 0, suburb: 'Lutwyche', state: 'QLD', postcode: '4030' },
+    { id: 'wl-cle', name: '12 Wellington Street', kind: 'address', category: null, description: '', lon: 153.2557, lat: -27.525, importance: 0, suburb: 'Cleveland', state: 'QLD', postcode: '4163' },
+    { id: 'ssw-orm', name: 'Shore Street West', kind: 'street', category: null, description: '', lon: 153.26, lat: -27.51, importance: 0, suburb: 'Ormiston', state: 'QLD', postcode: '4160' },
+    { id: 'ssw-cle', name: 'Shore Street West', kind: 'street', category: null, description: '', lon: 153.255, lat: -27.524, importance: 0, suburb: 'Cleveland', state: 'QLD', postcode: '4163' },
+    { id: 'ssw-cle2', name: 'Shore Street West', kind: 'street', category: null, description: '', lon: 153.252, lat: -27.524, importance: 0, suburb: 'Cleveland', state: 'QLD', postcode: '4163' },
   ] as places.PlaceInput[]);
 }, 120_000);
 afterAll(() => t?.close());
@@ -82,6 +88,23 @@ describe('place search', () => {
   it('matches brands as well as names', async () => {
     const r = await places.searchPlaces(t.db, 'Ampol', braddon, 5, friday);
     expect(r.map((p) => p.id)).toEqual(expect.arrayContaining(['f1', 'f2']));
+  });
+
+  it('finds a contact’s address in the suburb it names, not the same address elsewhere', async () => {
+    const lutwyche: LngLat = [153.03, -27.421];
+    for (const near of [null, lutwyche]) {
+      const r = await places.searchPlaces(t.db, '12 Wellington St, Cleveland, QLD, 4163', near, 1, friday);
+      expect(r.map((p) => p.id)).toEqual(['wl-cle']);
+    }
+    // As a phone keeps it, over several lines, and without commas.
+    expect((await places.searchPlaces(t.db, '12 Wellington St\nCleveland QLD 4163', null, 1, friday))[0]!.id).toBe('wl-cle');
+    expect((await places.searchPlaces(t.db, '12 Wellington Street Cleveland QLD', null, 1, friday))[0]!.id).toBe('wl-cle');
+    // A unit at that number.
+    expect((await places.searchPlaces(t.db, '3/12 Wellington St, Cleveland', lutwyche, 1, friday))[0]!.id).toBe('wl-cle');
+    // No such number mapped: the street in that suburb, once, and the other one after it.
+    const street = await places.searchPlaces(t.db, '5 Shore St West, Cleveland QLD 4163', null, 3, friday);
+    expect(street[0]).toMatchObject({ id: expect.stringMatching(/^ssw-cle/), context: 'Cleveland QLD 4163' });
+    expect(street.filter((p) => p.id.startsWith('ssw-cle'))).toHaveLength(1);
   });
 
   it('works without an origin (no distances)', async () => {

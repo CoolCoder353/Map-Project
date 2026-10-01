@@ -5,7 +5,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/node_modules/**', 'apps/mobile/android/**', '**/.expo/**', 'infra/**', 'coverage/**', '**/dist-check/**', '**/test-results/**'],
+    ignores: ['**/dist/**', '**/node_modules/**', 'apps/mobile/android/**', 'apps/mobile/modules/*/android/build/**', '**/.expo/**', 'infra/**', 'coverage/**', '**/dist-check/**', '**/test-results/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

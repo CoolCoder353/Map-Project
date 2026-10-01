@@ -34,7 +34,7 @@ import {
 import { gridDisk } from 'h3-js';
 import type { DbClient } from '../db/pool.js';
 import { AppError } from '../lib/errors.js';
-import type { CustomModel, GhPath, GraphHopperClient } from '../lib/graphhopper.js';
+import type { CustomModel, GhInstruction, GhPath, GraphHopperClient } from '../lib/graphhopper.js';
 import type { MetricsAggregator } from '../lib/metrics.js';
 import { areaUnexplored, loadVisitedCells } from './coverage.js';
 import { visitedWayIds } from './roads.js';
@@ -59,7 +59,7 @@ export function toRoute(
     durationS: path.time / 1000,
     extraDurationS: Math.max(0, opts.extraDurationS),
     geometry: path.points.coordinates.map(([lon, lat]) => [lon, lat] as LngLat),
-    instructions: path.instructions.map((i) => ({
+    instructions: joinSplitRoundabouts(path.instructions).map((i) => ({
       sign: i.sign,
       text: i.text,
       streetName: i.street_name ?? '',
@@ -76,6 +76,46 @@ export function toRoute(
       noveltyPct: Math.round(opts.novelty.noveltyPct * 10) / 10,
     },
   };
+}
+
+const ROUNDABOUT = 6;
+const VIA_REACHED = 5;
+const roundaboutText = (exit: number, street: string | undefined) => `At roundabout, take exit ${exit}${street ? ` onto ${street}` : ''}`;
+
+/**
+ * A stop on a detour or loop can land on a roundabout. GraphHopper then splits it in two: "Enter
+ * roundabout" with the exits passed before the stop, then "take exit N" counted again from the
+ * stop, so going round to come back is announced as the first exit (a left turn). Put the two
+ * halves back together as the one exit the driver takes.
+ */
+export function joinSplitRoundabouts(instructions: readonly GhInstruction[]): GhInstruction[] {
+  const out: GhInstruction[] = [];
+  for (let i = 0; i < instructions.length; i++) {
+    const enter = instructions[i]!;
+    const via = instructions[i + 1];
+    const after = instructions[i + 2];
+    const split = enter.sign === ROUNDABOUT && enter.exited === false && via?.sign === VIA_REACHED && after !== undefined;
+    if (!split) {
+      out.push(enter);
+      continue;
+    }
+    const sameRoundabout = after.sign === ROUNDABOUT;
+    // The stop where the roundabout is left: the exit counted on the way in is the one taken.
+    const exit = (enter.exit_number ?? 0) + (sameRoundabout ? (after.exit_number ?? 0) : 0);
+    const parts = sameRoundabout ? [enter, via, after] : [enter, via];
+    out.push({
+      ...enter,
+      text: roundaboutText(exit, after.street_name || undefined),
+      exit_number: exit,
+      exited: true,
+      ...(after.street_name ? { street_name: after.street_name } : {}),
+      distance: parts.reduce((s, p) => s + p.distance, 0),
+      time: parts.reduce((s, p) => s + p.time, 0),
+      interval: [enter.interval[0], parts.at(-1)!.interval[1]],
+    });
+    i += parts.length - 1;
+  }
+  return out;
 }
 
 /**
@@ -204,11 +244,11 @@ async function tryRoutes(deps: RoutingDeps, requests: readonly RouteRequest[], l
 export async function fastestRoute(
   deps: RoutingDeps,
   userId: string,
-  req: { from: LngLat; to: LngLat; mode: Mode; via: LngLat[] },
+  req: { from: LngLat; to: LngLat; mode: Mode; via: LngLat[]; heading?: number | undefined },
 ): Promise<Route> {
   const points = [req.from, ...req.via, req.to];
   const [path] = await deps.metrics.time('graphhopper.route', 'fastest', () =>
-    deps.graphhopper.route({ points, profile: profileFor(req.mode) }),
+    deps.graphhopper.route({ points, profile: profileFor(req.mode), ...(req.heading !== undefined ? { heading: req.heading } : {}) }),
   );
   if (!path) throw new AppError(422, 'no_route', 'No route found');
   const { set, ways } = await visitedSetFor(deps.db, userId, path.points.coordinates, 500);

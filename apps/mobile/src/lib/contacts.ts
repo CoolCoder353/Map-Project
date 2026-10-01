@@ -33,8 +33,12 @@ export interface ContactMatch {
   label: string | null;
 }
 
+// A street typed over two lines ("Unit 3\n12 Queen St") reads as one line, parts split by commas.
 const addressText = (a: Contacts.Address): string =>
-  [a.street, a.city, a.region, a.postalCode].map((s) => s?.trim()).filter(Boolean).join(', ');
+  [a.street, a.city, a.region, a.postalCode]
+    .map((s) => s?.trim().replace(/\s*[\r\n]+\s*/g, ', '))
+    .filter(Boolean)
+    .join(', ');
 
 /**
  * Contacts whose name matches and who have an address. Reading happens on the phone; only the

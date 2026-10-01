@@ -147,8 +147,9 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
               onPress={async () => {
                 setError(null);
                 try {
-                  // Only the address text goes to the server, to be turned into a location.
-                  const r = await api.request<{ results: Place[] }>('api/search', { query: { q: c.address, limit: 1 } });
+                  // Only the address text goes to the server, to be turned into a location. Where you
+                  // are breaks a tie between two places the address could be.
+                  const r = await api.request<{ results: Place[] }>('api/search', { query: { q: c.address, lon: near?.[0], lat: near?.[1], limit: 1 } });
                   const place = r.results[0];
                   if (!place) return setError(`Couldn’t find ${c.name}’s address on the map.`);
                   choose({ name: c.name, description: c.address, location: place.location });

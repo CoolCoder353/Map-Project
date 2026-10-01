@@ -1,0 +1,6 @@
+{
+  "account": "signedIn",
+  "styleUrl": { "light": "https://maps.example.test/map/style.json?theme=light", "dark": "https://maps.example.test/map/style.json?theme=dark" },
+  "searchHint": "Search places and addresses",
+  "here": [153.0251, -27.4698]
+}

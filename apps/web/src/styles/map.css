@@ -485,11 +485,18 @@ a.trip-row:hover,
   background: var(--accent-hover);
   color: var(--on-accent);
 }
-.replay-time {
+.replay-now {
+  display: grid;
+  justify-items: end;
   min-width: 64px;
-  text-align: right;
+}
+.replay-time {
   font-size: var(--text-sm);
   color: var(--text-2);
+}
+.replay-speed-now {
+  font-size: var(--text-xs);
+  color: var(--text-3);
 }
 
 .legend {
