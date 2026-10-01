@@ -22,6 +22,8 @@ class ManeuversTest {
   @Test fun roundaboutsGoClockwiseAsQueenslandDrivesOnTheLeft() {
     assertEquals(Maneuver.TYPE_ROUNDABOUT_ENTER_AND_EXIT_CW, Maneuvers.typeOf(CarManeuver("roundabout", 2)))
     assertEquals(Maneuver.TYPE_ROUNDABOUT_ENTER_CW, Maneuvers.typeOf(CarManeuver("roundabout", null)))
+    assertEquals(Maneuver.TYPE_ROUNDABOUT_ENTER_CW, Maneuvers.typeOf(CarManeuver("roundabout", 0)))
+    assertEquals(Maneuver.TYPE_ROUNDABOUT_ENTER_CW, Maneuvers.typeOf(CarManeuver("roundabout", -1)))
     assertEquals(Maneuver.TYPE_ROUNDABOUT_EXIT_CW, Maneuvers.typeOf(CarManeuver("roundaboutExit", null)))
   }
 

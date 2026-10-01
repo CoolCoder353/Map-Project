@@ -18,8 +18,9 @@ class ManeuverIcons(private val context: Context) {
       "keepRight" -> R.drawable.wf_keep_right
       "uTurnLeft" -> R.drawable.wf_u_turn_left
       "uTurnRight" -> R.drawable.wf_u_turn_right
-      "roundabout" -> R.drawable.wf_roundabout
-      "roundaboutExit" -> R.drawable.wf_roundabout_exit
+      // Queensland drives on the left, so roundabouts run clockwise: one clockwise glyph serves
+      // both entering and leaving (Material's "roundabout_right"; its "roundabout_left" is anticlockwise).
+      "roundabout", "roundaboutExit" -> R.drawable.wf_roundabout_cw
       "waypoint", "destination" -> R.drawable.wf_destination
       else -> R.drawable.wf_straight
     }

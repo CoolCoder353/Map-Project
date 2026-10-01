@@ -44,7 +44,7 @@ object NavTemplates {
     .apply {
       if (nav.road.isNotEmpty()) setCurrentRoad(nav.road)
       val m = nav.maneuver
-      if (m != null && nav.status == NavStatus.NAVIGATING) addStep(step(m, nav.cue, nav.road, icons), estimate(nav))
+      if (m != null && nav.status == NavStatus.NAVIGATING) addStep(step(m, nav.cue, nav.road, icons), estimate(nav, nav.distanceToManeuverM ?: 0.0))
       else setLoading(nav.status == NavStatus.STARTING)
     }
     .build()
@@ -66,8 +66,9 @@ object NavTemplates {
       .apply { if (road.isNotEmpty()) setRoad(road) }
       .build()
 
-  private fun estimate(nav: CarNav): TravelEstimate =
-    TravelEstimate.Builder(distanceOf(nav.remainingDistanceM), DateTimeWithZone.create(nav.arrivalEpochMs, TimeZone.getDefault()))
+  /** Arrival time and time left are for the whole trip; [meters] is how far the estimate's subject is (default: the destination). */
+  private fun estimate(nav: CarNav, meters: Double = nav.remainingDistanceM): TravelEstimate =
+    TravelEstimate.Builder(distanceOf(meters), DateTimeWithZone.create(nav.arrivalEpochMs, TimeZone.getDefault()))
       .setRemainingTimeSeconds(nav.remainingDurationS.roundToLong())
       .build()
 }

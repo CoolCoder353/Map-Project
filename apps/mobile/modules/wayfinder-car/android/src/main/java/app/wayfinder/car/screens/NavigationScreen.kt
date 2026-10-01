@@ -4,6 +4,7 @@ import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Template
 import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import app.wayfinder.car.bridge.CarApi
 import app.wayfinder.car.bridge.CarNav
@@ -38,11 +39,15 @@ class NavigationScreen(
   }
 
   private fun update(n: CarNav?) {
+    // The coordinator pops this screen when the trip ends; a late update must not repaint the map
+    // over the screen that took its place.
+    if (lifecycle.currentState == Lifecycle.State.DESTROYED) return
     nav = n
     // The route changes on a reroute; fetch its line once per route, not on every fix.
     if (n != null && n.routeId != lineFor) {
       val id = n.routeId
       lineFor = id
+      line = emptyList() // not the old route's line on the new route
       api.routeLine(id) { r ->
         if (lineFor == id) {
           line = r.getOrDefault(emptyList())

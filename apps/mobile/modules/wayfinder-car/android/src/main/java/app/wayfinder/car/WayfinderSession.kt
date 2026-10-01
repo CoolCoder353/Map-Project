@@ -6,6 +6,7 @@ import android.os.Looper
 import androidx.car.app.Screen
 import androidx.car.app.Session
 import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import app.wayfinder.car.bridge.BridgeCarApi
 import app.wayfinder.car.bridge.CarApi
@@ -23,6 +24,7 @@ class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared))
     val coordinator = NavigationCoordinator(carContext, api, map, ManeuverIcons(carContext))
     // After Home is on the stack, so a trip already running goes on top of it.
     Handler(Looper.getMainLooper()).post {
+      if (lifecycle.currentState == Lifecycle.State.DESTROYED) return@post // ended before this ran: nothing to detach later
       val detach = coordinator.attach()
       lifecycle.addObserver(object : DefaultLifecycleObserver {
         override fun onDestroy(owner: LifecycleOwner) = detach()
