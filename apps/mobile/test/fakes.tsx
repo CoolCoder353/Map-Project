@@ -239,6 +239,8 @@ export function fakeCarNative() {
     resolve: jest.fn(),
     reject: jest.fn(),
     setNavigation: jest.fn(),
+    speak: jest.fn(),
+    stopSpeaking: jest.fn(),
     addListener: jest.fn((_event: 'onCall', fn: (call: { id: string; method: string; params: string }) => void) => {
       listeners.add(fn);
       return { remove: () => listeners.delete(fn) };

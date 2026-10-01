@@ -3,7 +3,7 @@ import type { LngLat } from '@wayfinder/shared/geo';
 import { type Route, RouteSchema } from '@wayfinder/shared/schemas';
 import * as Crypto from 'expo-crypto';
 import * as Location from 'expo-location';
-import * as Speech from 'expo-speech';
+import { speak as say, stopSpeaking } from './voice';
 import { api } from '../lib/api';
 import { sqliteQueueStore } from '../tracking/sqliteStore';
 import { syncQueue } from '../tracking/sync';
@@ -72,8 +72,8 @@ export function createNavigationService(): NavigationService {
 
   const speak = (text: string) => {
     if (snap.muted) return;
-    quietly(() => Speech.stop());
-    quietly(() => Speech.speak(text, { language: 'en-AU', rate: 1.0 }));
+    quietly(() => stopSpeaking());
+    quietly(() => say(text));
   };
 
   async function reroute(from: LngLat, to: LngLat, via: LngLat[]) {
@@ -160,7 +160,7 @@ export function createNavigationService(): NavigationService {
     uploader = null;
     session = null;
     pendingReroute = null;
-    quietly(() => Speech.stop());
+    quietly(() => stopSpeaking());
     if (wasActive) void syncQueue().catch(() => undefined);
     if (snap !== IDLE) set(IDLE);
   }
