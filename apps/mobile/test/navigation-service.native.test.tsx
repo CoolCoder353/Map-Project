@@ -1,8 +1,8 @@
 /// <reference types="jest" />
 import { waitFor } from '@testing-library/react-native';
 import * as Speech from 'expo-speech';
-import { navigation } from '../src/nav/navigationService';
-import { resetFakes, route } from './fakes';
+import { navigation, REROUTE_RETRY_MS, REROUTE_TIMEOUT_MS } from '../src/nav/navigationService';
+import { fake, resetFakes, route } from './fakes';
 
 jest.mock('../src/lib/api', () => require('./fakes').apiModule);
 let mockUuid = 0;
@@ -31,6 +31,7 @@ import * as NavLocation from '../src/nav/navigationLocation';
 
 // Registered once when navigationService loads, before resetFakes() clears mock records.
 const mockFeed = jest.mocked(NavLocation.setNavigationFixHandler).mock.calls[0]![0]!;
+const stopsAtLoad = jest.mocked(NavLocation.stopNavigationLocation).mock.calls.length;
 const mockResults: Array<{ state: object; events: object[] } | Error> = [];
 jest.mock('@wayfinder/nav', () => ({
   NavigationSession: class {
@@ -169,4 +170,102 @@ it('still finishes stopping when turning off the location service and the last u
   // Let the swallowed rejections settle before the test ends.
   await Promise.resolve();
   await Promise.resolve();
+});
+
+it('switches off a location service left running by a trip the app never got to end', () => {
+  // Android restarts a registered location task when the app next starts (after being swiped
+  // away mid-trip, say), but no trip can be running when the app's code has only just loaded.
+  expect(stopsAtLoad).toBe(1);
+});
+
+it('keeps the newer trip’s location service running when a second trip starts while the first one’s is starting', async () => {
+  const started: Array<() => void> = [];
+  jest.mocked(NavLocation.startNavigationLocation).mockImplementation(() => new Promise<void>((resolve) => started.push(resolve)));
+  try {
+    navigation.start(route({ id: 'a' }), { destinationName: 'A' });
+    await waitFor(() => expect(NavLocation.startNavigationLocation).toHaveBeenCalledWith('A'));
+    navigation.start(route({ id: 'b' }), { destinationName: 'B' });
+    started[0]!();
+    await waitFor(() => expect(NavLocation.startNavigationLocation).toHaveBeenCalledWith('B'));
+    started[1]!();
+    await new Promise((resolve) => setImmediate(resolve));
+    const lastStart = jest.mocked(NavLocation.startNavigationLocation).mock.invocationCallOrder.at(-1)!;
+    expect(jest.mocked(NavLocation.stopNavigationLocation).mock.invocationCallOrder.filter((order) => order > lastStart)).toEqual([]);
+    expect(navigation.getSnapshot().route?.id).toBe('b');
+  } finally {
+    jest.mocked(NavLocation.startNavigationLocation).mockImplementation(async () => undefined);
+  }
+});
+
+it('gives up on a new route that never comes (the phone locked mid-request), says so, and asks again later', async () => {
+  let lateAnswer: (r: unknown) => void = () => undefined;
+  let asked = 0;
+  fake.api.on({
+    'POST api/routes/fastest': () => (++asked === 1 ? new Promise((resolve) => (lateAnswer = resolve)) : route({ id: 'r-new' })),
+  });
+  // Shift the clock rather than freeze it: waitFor keeps time with Date.now too.
+  const realNow = Date.now.bind(Date);
+  let ahead = 0;
+  const now = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + ahead);
+  try {
+    navigation.start(route());
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2, -27.4], to: [153.1, -27.5], remainingVia: [] }] });
+    mockOnFix!(fix(153.2, -27.4, 1000));
+    expect(navigation.getSnapshot().rerouting).toBe(true);
+    // No timer fires while the phone is locked; the next fix is what notices.
+    ahead = REROUTE_TIMEOUT_MS;
+    mockResults.push({ state: { status: 'offRoute' }, events: [] });
+    mockOnFix!(fix(153.21, -27.4, 2000));
+    expect(navigation.getSnapshot()).toMatchObject({ rerouting: false, error: expect.stringMatching(/Couldn’t get a new route/) });
+    // The abandoned request answering after all changes nothing.
+    lateAnswer(route({ id: 'r-late' }));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(navigation.getSnapshot()).toMatchObject({ route: { id: 'r-fast' }, rerouting: false });
+    // Not straight away...
+    mockResults.push({ state: { status: 'offRoute' }, events: [] });
+    mockOnFix!(fix(153.215, -27.4, 2500));
+    expect(asked).toBe(1);
+    // ...but a little later, from where you are then.
+    ahead = REROUTE_TIMEOUT_MS + REROUTE_RETRY_MS;
+    mockResults.push({ state: { status: 'offRoute' }, events: [] });
+    mockOnFix!(fix(153.22, -27.4, 3000));
+    await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-new'));
+    expect(fake.api.callsTo('POST api/routes/fastest')[1]!.body).toMatchObject({ from: [153.22, -27.4], to: [153.1, -27.5] });
+    expect(navigation.getSnapshot().error).toBeNull();
+  } finally {
+    now.mockRestore();
+  }
+});
+
+it('drops a GPS watch fix the location service already gave', async () => {
+  navigation.start(route());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockFeed([fix(153, -27.4, 5000) as never]);
+  mockOnFix!(fix(153, -27.4, 5000));
+  expect(mockAppend).toHaveBeenCalledTimes(1);
+  // A newer one from the watch is followed as usual.
+  mockOnFix!(fix(153.01, -27.4, 6000));
+  expect(mockAppend).toHaveBeenCalledTimes(2);
+});
+
+it('gives up quietly on a new route that never comes once you are back on the old one', async () => {
+  fake.api.on({ 'POST api/routes/fastest': () => new Promise(() => undefined) });
+  const realNow = Date.now.bind(Date);
+  let ahead = 0;
+  const now = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + ahead);
+  try {
+    navigation.start(route());
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2, -27.4], to: [153.1, -27.5], remainingVia: [] }] });
+    mockOnFix!(fix(153.2, -27.4, 1000));
+    mockResults.push({ state: { status: 'navigating' }, events: [{ type: 'backOnRoute' }] });
+    mockOnFix!(fix(153.05, -27.45, 2000));
+    expect(navigation.getSnapshot().rerouting).toBe(true);
+    ahead = REROUTE_TIMEOUT_MS;
+    mockOnFix!(fix(153.06, -27.45, 3000));
+    expect(navigation.getSnapshot()).toMatchObject({ rerouting: false, error: null });
+  } finally {
+    now.mockRestore();
+  }
 });

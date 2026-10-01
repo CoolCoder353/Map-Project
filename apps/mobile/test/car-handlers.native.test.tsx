@@ -13,7 +13,7 @@ jest.mock('expo-location', () => ({
   getLastKnownPositionAsync: jest.fn(async () => ({ coords: { longitude: 153.02, latitude: -27.47 } })),
   getCurrentPositionAsync: jest.fn(async () => ({ coords: { longitude: 153.03, latitude: -27.48 } })),
 }));
-const mockNavigation = { start: jest.fn(), stop: jest.fn(), setMuted: jest.fn(), getSnapshot: jest.fn(() => ({ route: null })) };
+const mockNavigation = { start: jest.fn(), stop: jest.fn(), setMuted: jest.fn(), getSnapshot: jest.fn(() => ({ route: null, active: true, error: null as string | null })) };
 // Read lazily: the handlers import this before the const above is initialised.
 jest.mock('../src/nav/navigationService', () => ({ get navigation() { return mockNavigation; } }));
 
@@ -120,6 +120,15 @@ describe('plan and start', () => {
     await carHandlers.plan!({ to: [152.957, -27.4846] });
     await carHandlers.start!({ routeId: 'r-exp', destinationName: 'Mt Coot-tha Lookout' });
     expect(mockNavigation.start).toHaveBeenCalledWith(expect.objectContaining({ id: 'r-exp' }), { destinationName: 'Mt Coot-tha Lookout' });
+  });
+
+  it('says why, rather than leaving the car on “Starting…”, when navigation can’t follow the route', async () => {
+    fake.api.on({ 'POST api/routes/explore': () => ({ fastest, explore: [] }) });
+    await carHandlers.plan!({ to: [152.957, -27.4846] });
+    mockNavigation.getSnapshot.mockReturnValueOnce({ route: null, active: false, error: 'This route can’t be followed. Plan it again, then start the new one.' });
+    await expect(carHandlers.start!({ routeId: 'r-fast', destinationName: 'x' })).rejects.toThrow('This route can’t be followed. Plan it again, then start the new one.');
+    mockNavigation.getSnapshot.mockReturnValueOnce({ route: null, active: false, error: null });
+    await expect(carHandlers.start!({ routeId: 'r-fast', destinationName: 'x' })).rejects.toThrow(/Couldn’t start that route/);
   });
 
   it('won’t start a route it doesn’t have', async () => {

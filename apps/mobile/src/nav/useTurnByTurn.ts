@@ -36,9 +36,10 @@ function quietly(run: () => unknown) {
 export function useTurnByTurn(initial: Route | null): TurnByTurn {
   const snap = useSyncExternalStore(navigation.subscribe, navigation.getSnapshot);
   // A screen showing this hook re-renders on every navigation update (position, speech, ...), and
-  // some callers rebuild `initial` fresh each render; compare by content, not reference, so that
-  // doesn't look like a new route and restart the trip.
-  const key = initial ? JSON.stringify(initial) : null;
+  // some callers rebuild `initial` fresh each render; compare by the route's id, not reference, so
+  // that doesn't look like a new route and restart the trip. (Not by content: that would turn the
+  // whole route into text on every GPS fix.)
+  const key = initial?.id ?? null;
   useEffect(() => {
     if (initial) navigation.start(initial);
     quietly(() => activateKeepAwakeAsync(KEEP_AWAKE_TAG));
@@ -46,7 +47,7 @@ export function useTurnByTurn(initial: Route | null): TurnByTurn {
       if (initial) navigation.stop();
       quietly(() => deactivateKeepAwake(KEEP_AWAKE_TAG));
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately keyed on content (`key`), not `initial`'s reference; see above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately keyed on the route id (`key`), not `initial`'s reference; see above.
   }, [key]);
   return {
     route: snap.route,

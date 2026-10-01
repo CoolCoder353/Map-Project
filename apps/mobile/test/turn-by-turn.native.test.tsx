@@ -209,3 +209,16 @@ it('ignores a fix without a usable position', async () => {
   expect(result.current.position).toBeNull();
   expect(mockAppend).not.toHaveBeenCalled();
 });
+
+it('doesn’t turn the whole route into text on every GPS fix', async () => {
+  const r = route();
+  await renderHook(() => useTurnByTurn(r));
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  const stringify = jest.spyOn(JSON, 'stringify');
+  try {
+    await act(async () => mockOnFix!(fix(153, -27.4)));
+    expect(stringify.mock.calls.some(([value]) => value === r)).toBe(false);
+  } finally {
+    stringify.mockRestore();
+  }
+});

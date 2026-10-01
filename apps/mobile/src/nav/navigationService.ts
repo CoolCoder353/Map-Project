@@ -11,6 +11,12 @@ import { setNavigationFixHandler, startNavigationLocation, stopNavigationLocatio
 
 /** How long to wait before asking again for a new route after one couldn't be fetched. */
 export const REROUTE_RETRY_MS = 15_000;
+/**
+ * How long a request for a new route may run before it's given up on. Checked as fixes arrive,
+ * not with a timer: with the phone locked React Native pauses its timers, and a request that
+ * stalls then would otherwise leave "Finding a new route…" up for the rest of the trip.
+ */
+export const REROUTE_TIMEOUT_MS = 20_000;
 
 export interface NavSnapshot {
   /** A trip is being followed (the phone's Navigate screen, the car, or both). */
@@ -35,7 +41,26 @@ export interface NavigationService {
   subscribe(listener: () => void): () => void;
 }
 
+const REROUTE_FAILED = 'Couldn’t get a new route. Keep heading to the destination; trying again shortly.';
+
 const IDLE: NavSnapshot = { active: false, route: null, destinationName: null, state: null, rerouting: false, error: null, muted: false, position: null, headingDeg: null };
+
+/**
+ * Starts and stops of the location service, run one at a time in order: every trip uses the same
+ * task, so an earlier trip's start or stop finishing late would otherwise undo a newer trip's.
+ * It begins by stopping one left running: Android restarts a registered location task when the app
+ * next starts (after it was swiped away mid-trip, say), and no trip can exist before this loads.
+ */
+let locationOps: Promise<unknown> = Promise.resolve();
+let locationOpsWaiting = 0;
+function inTurn(run: () => Promise<unknown>): Promise<unknown> {
+  // With nothing in flight it runs at once, so a stop takes effect straight away.
+  const op = locationOpsWaiting === 0 ? new Promise((resolve) => resolve(run())) : locationOps.then(run);
+  locationOpsWaiting++;
+  locationOps = op.catch(() => undefined).finally(() => locationOpsWaiting--);
+  return op;
+}
+void inTurn(stopNavigationLocation).catch(() => undefined);
 
 /** Run a phone service call whose failure shouldn't stop navigation (it may throw or reject). */
 function quietly(run: () => unknown) {
@@ -59,11 +84,15 @@ export function createNavigationService(): NavigationService {
   let watch: Location.LocationSubscription | null = null;
   let uploader: ReturnType<typeof setInterval> | null = null;
   let reroutingNow = false;
+  /** When the request for a new route in flight was made, and its number: one given up on is ignored. */
+  let reroutingSince = 0;
+  let rerouteAttempt = 0;
   /** Set while off route without a new route yet, so a failed attempt is retried. */
   let pendingReroute: { to: LngLat; via: LngLat[]; at: number } | null = null;
   /** Bumped by every start and stop, so work from an earlier trip that finishes late is dropped. */
   let generation = 0;
   let lastFixTs = -Infinity;
+  let lastServiceFixTs = -Infinity;
 
   const set = (patch: Partial<NavSnapshot>) => {
     snap = { ...snap, ...patch };
@@ -79,22 +108,38 @@ export function createNavigationService(): NavigationService {
   async function reroute(from: LngLat, to: LngLat, via: LngLat[]) {
     const current = session;
     if (!current || reroutingNow) return;
+    const attempt = ++rerouteAttempt;
     reroutingNow = true;
-    pendingReroute = { to, via, at: Date.now() };
+    reroutingSince = Date.now();
+    pendingReroute = { to, via, at: reroutingSince };
     set({ rerouting: true });
+    // Navigation ended, or this attempt was given up on, while waiting.
+    const stale = () => session !== current || attempt !== rerouteAttempt;
     try {
       const next = await api.request('api/routes/fastest', { method: 'POST', body: { from, to, via, mode: current.mode }, schema: RouteSchema });
-      if (session !== current) return; // navigation ended while waiting
+      if (stale()) return;
       current.replaceRoute(next);
       pendingReroute = null;
       set({ route: next, error: null });
       speak('Route updated');
     } catch {
-      if (session === current) set({ error: 'Couldn’t get a new route. Keep heading to the destination; trying again shortly.' });
+      if (!stale()) set({ error: REROUTE_FAILED });
     } finally {
-      reroutingNow = false;
-      if (session === current) set({ rerouting: false });
+      if (!stale()) {
+        reroutingNow = false;
+        set({ rerouting: false });
+      }
     }
+  }
+
+  /** Stop waiting for a new route that hasn't come; ask again a little later if still off route. */
+  function abandonReroute() {
+    rerouteAttempt++;
+    reroutingNow = false;
+    if (pendingReroute) {
+      pendingReroute = { ...pendingReroute, at: Date.now() };
+      set({ rerouting: false, error: REROUTE_FAILED });
+    } else set({ rerouting: false });
   }
 
   function handleEvents(events: NavEvent[]) {
@@ -117,9 +162,11 @@ export function createNavigationService(): NavigationService {
     if (!nav) return;
     const { longitude: lon, latitude: lat } = loc.coords;
     if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
-    // The location service repeats fixes the GPS watch already delivered.
-    if (source === 'service' && loc.timestamp <= lastFixTs) return;
+    // The location service and the GPS watch deliver the same fixes; follow each once. Only the
+    // service's are compared with every fix so far: the watch alone may repeat a timestamp.
+    if (loc.timestamp <= (source === 'service' ? lastFixTs : lastServiceFixTs)) return;
     lastFixTs = Math.max(lastFixTs, loc.timestamp);
+    if (source === 'service') lastServiceFixTs = loc.timestamp;
     const fix = { ts: loc.timestamp, lon, lat, accuracyM: loc.coords.accuracy, speedMps: loc.coords.speed, headingDeg: loc.coords.heading };
     let result: ReturnType<NavigationSession['update']>;
     try {
@@ -130,6 +177,7 @@ export function createNavigationService(): NavigationService {
     }
     set({ position: [lon, lat], headingDeg: fix.headingDeg ?? snap.headingDeg, state: result.state });
     handleEvents(result.events);
+    if (reroutingNow && Date.now() - reroutingSince >= REROUTE_TIMEOUT_MS) abandonReroute();
     // Still off route after a failed attempt: ask again from here, now and then.
     const pending = pendingReroute;
     if (result.state.status === 'offRoute' && pending && !reroutingNow && Date.now() - pending.at >= REROUTE_RETRY_MS) {
@@ -155,11 +203,13 @@ export function createNavigationService(): NavigationService {
     generation++;
     watch?.remove();
     watch = null;
-    if (wasActive) void stopNavigationLocation().catch(() => undefined);
+    if (wasActive) void inTurn(stopNavigationLocation).catch(() => undefined);
     if (uploader) clearInterval(uploader);
     uploader = null;
     session = null;
     pendingReroute = null;
+    reroutingNow = false;
+    rerouteAttempt++; // an answer for the trip that ended is ignored
     quietly(() => stopSpeaking());
     if (wasActive) void syncQueue().catch(() => undefined);
     if (snap !== IDLE) set(IDLE);
@@ -178,6 +228,7 @@ export function createNavigationService(): NavigationService {
     session = next;
     sessionId = Crypto.randomUUID();
     lastFixTs = -Infinity;
+    lastServiceFixTs = -Infinity;
     const gen = generation;
     set({ ...IDLE, active: true, route, destinationName: opts.destinationName ?? null });
     void (async () => {
@@ -189,13 +240,13 @@ export function createNavigationService(): NavigationService {
           return;
         }
         // Failing to start it only matters with the phone locked; the watch below still navigates.
-        void startNavigationLocation(opts.destinationName ?? null)
-          .then(() => {
-            // The trip ended while the native call was still in flight: stop() ran too early to
-            // catch this one, so the foreground service would otherwise outlive the trip.
-            if (gen !== generation) void stopNavigationLocation().catch(() => undefined);
-          })
-          .catch(() => undefined);
+        void inTurn(async () => {
+          if (gen !== generation) return; // this trip ended before its turn came
+          await startNavigationLocation(opts.destinationName ?? null);
+          // No trip left by the time it started: the foreground service mustn't outlive it. (A
+          // newer trip's service is left alone; its own stop comes after this in turn.)
+          if (session === null) await stopNavigationLocation();
+        }).catch(() => undefined);
         const sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 5, timeInterval: 1000 }, (loc) => handleFix(loc));
         // Ended while the phone was asking or starting GPS: stop it straight away.
         if (gen !== generation) sub.remove();

@@ -133,6 +133,10 @@ export const carHandlers: CarHandlers = {
     const r = offered.get(routeId);
     if (!r) throw new Error('That route has expired. Plan it again.');
     navigation.start(r, { destinationName });
+    // A route navigation can't follow leaves it idle with the reason; say so rather than leave the
+    // car waiting on "Starting…".
+    const now = navigation.getSnapshot();
+    if (!now.active) throw new Error(now.error ?? 'Couldn’t start that route. Plan it again.');
     return {};
   },
 
