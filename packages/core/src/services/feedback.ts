@@ -10,7 +10,7 @@ import type { DbClient } from '../db/pool.js';
 import { AppError, badRequest, notFound } from '../lib/errors.js';
 import { getAppSettings } from './app-settings.js';
 
-export const REPORTS_PER_HOUR = 999999;
+export const REPORTS_PER_HOUR = 5;
 
 interface FeedbackRow {
   id: string;
