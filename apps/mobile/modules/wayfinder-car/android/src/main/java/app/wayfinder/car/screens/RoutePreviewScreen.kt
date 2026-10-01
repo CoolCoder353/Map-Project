@@ -47,7 +47,7 @@ class RoutePreviewScreen(
   private val options: List<RouteOption> get() = result?.getOrNull()?.options.orEmpty()
 
   private fun showOnMap() {
-    if (options.isNotEmpty()) map.show(MapScene.Routes(options, selected))
+    if (options.isNotEmpty()) show(map, MapScene.Routes(options, selected))
   }
 
   internal fun select(index: Int) {

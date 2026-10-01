@@ -35,7 +35,7 @@ class SearchScreen(
   }
 
   init {
-    whenStarted { if (results.isNotEmpty()) map.show(MapScene.Places(results)) }
+    whenStarted { if (results.isNotEmpty()) show(map, MapScene.Places(results)) }
   }
 
   private fun search(q: String) {
@@ -48,7 +48,7 @@ class SearchScreen(
       loading = false
       r.onSuccess {
         results = it.take(MAX_ROWS)
-        map.show(MapScene.Places(results))
+        show(map, MapScene.Places(results))
       }.onFailure {
         results = emptyList()
         error = it.message ?: "Search didn’t work. Try again."

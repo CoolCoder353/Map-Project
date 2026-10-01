@@ -4,7 +4,10 @@ import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Row
 import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
+import app.wayfinder.car.map.MapScene
+import app.wayfinder.car.map.MapScenes
 
 /** Android Auto shows at most about six rows while driving; lists never offer more. */
 const val MAX_ROWS = 6
@@ -33,3 +36,12 @@ fun Screen.whenStarted(block: () -> Unit) =
   lifecycle.addObserver(object : DefaultLifecycleObserver {
     override fun onStart(owner: LifecycleOwner) = block()
   })
+
+/**
+ * Puts [scene] on the car map, but only while this screen is on top. An answer that arrives after the
+ * driver has moved on (a late search, plan or status) must not repaint the map under the screen that
+ * took over; the screen shows it again when it is back on top (see [whenStarted]).
+ */
+fun Screen.show(map: MapScenes, scene: MapScene) {
+  if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) map.show(scene)
+}

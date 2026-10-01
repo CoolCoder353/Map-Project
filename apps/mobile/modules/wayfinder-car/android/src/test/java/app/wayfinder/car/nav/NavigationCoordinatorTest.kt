@@ -33,8 +33,8 @@ class NavigationCoordinatorTest {
     assertEquals(2, nav.tripsSent.size)
   }
 
-  /** The screen as the car runs it: created once it is on the stack. */
-  private fun driveScreen() = ScreenController(screens.screensPushed.last { it is NavigationScreen }).also { it.moveToState(Lifecycle.State.CREATED) }
+  /** The screen as the car runs it: on top, so it draws the map. */
+  private fun driveScreen() = ScreenController(screens.screensPushed.last { it is NavigationScreen }).also { it.moveToState(Lifecycle.State.STARTED) }
 
   @Test fun aFinishedDriveDoesNotRepaintTheMap() {
     val scenes = RecordingScenes()

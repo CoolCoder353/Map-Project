@@ -32,7 +32,7 @@ class HomeScreen(
       status = r
       r.getOrNull()?.let {
         onStatus(it)
-        map.show(MapScene.Overview(it.here))
+        show(map, MapScene.Overview(it.here))
       }
       invalidate()
     }

@@ -35,7 +35,7 @@ class PickScreen<T>(
   }
 
   private fun showOnMap() {
-    items?.getOrNull()?.let { map.show(scene(it.take(MAX_ROWS))) }
+    items?.getOrNull()?.let { show(map, scene(it.take(MAX_ROWS))) }
   }
 
   override fun onGetTemplate(): Template {

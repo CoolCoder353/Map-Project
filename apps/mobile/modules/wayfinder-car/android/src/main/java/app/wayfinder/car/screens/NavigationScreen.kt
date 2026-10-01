@@ -36,6 +36,7 @@ class NavigationScreen(
         off?.invoke()
       }
     })
+    whenStarted { showMap() }
   }
 
   private fun update(n: CarNav?) {
@@ -59,7 +60,7 @@ class NavigationScreen(
     invalidate()
   }
 
-  private fun showMap() = map.show(MapScene.Following(line, nav?.position, nav?.headingDeg))
+  private fun showMap() = show(map, MapScene.Following(line, nav?.position, nav?.headingDeg))
 
   override fun onGetTemplate(): Template =
     NavTemplates.navigation(nav, icons, onEnd = { api.stop() }, onMute = { api.setMuted(!(nav?.muted ?: false)) })
