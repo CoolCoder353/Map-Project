@@ -229,6 +229,23 @@ describe('track ingestion and coverage', () => {
     expect(strays.rows[0].n).toBe(0);
   });
 
+  it('skips a road the matcher touched for no distance at all', async () => {
+    const u = await makeUser(t.db, 'touch@example.com');
+    const start: LngLat = [146.0, -33.0];
+    // Way 402 is only a single repeated point where the trip brushed past it.
+    const matcher = {
+      async match(points: ReadonlyArray<{ lon: number; lat: number }>) {
+        const coordinates = points.map((p) => [p.lon, p.lat] as LngLat);
+        coordinates.splice(1, 0, coordinates[1]!);
+        const last = coordinates.length - 1;
+        return { distance: 0, time: 0, points: { type: 'LineString' as const, coordinates }, instructions: [], details: { osm_way_id: [[0, 1, 401], [1, 2, 402], [2, last, 401]] as [number, number, number][] } };
+      },
+    };
+    await uploadLive(u.id, drive(base, start, 90, 2, 20), matcher as never);
+    expect([...(await roads.visitedWayIds(t.db, u.id))]).toEqual([401]);
+    expect((await tracks.listTrips(t.db, u.id, 10)).items[0]!.newRoads).toBe(1);
+  });
+
   it('draws every stretch of a road travelled on different trips, and counts each metre once', async () => {
     const u = await makeUser(t.db, 'stretches@example.com');
     const west: LngLat = [146.5, -33.0];

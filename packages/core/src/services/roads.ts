@@ -25,9 +25,10 @@ export function waysOfPath(path: GhPath): TravelledWay[] {
   }
   // A way can be entered more than once on one trip: different stretches each count, the same
   // stretch twice (there and back) once.
-  return [...byWay].map(([wayId, pieces]) => {
+  // A way only brushed past (a repeated point, no distance along it) wasn't travelled.
+  return [...byWay].flatMap(([wayId, pieces]) => {
     const { stretches, addedM } = mergeStretches([], pieces);
-    return { wayId, pieces: stretches, lengthM: addedM };
+    return stretches.length > 0 ? [{ wayId, pieces: stretches, lengthM: addedM }] : [];
   });
 }
 
@@ -47,6 +48,7 @@ export async function recordTravelledWays(
   mode: 'car' | 'foot',
   when: Date,
 ): Promise<number> {
+  ways = ways.filter((w) => w.pieces.length > 0);
   if (ways.length === 0) return 0;
   return withTransaction(db, async (tx) => {
     const known = new Map(
