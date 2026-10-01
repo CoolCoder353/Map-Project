@@ -21,6 +21,16 @@ class BridgeCarApi(private val bridge: CarBridge) : CarApi {
 
   private fun readNav(json: JSONObject): CarNav? = runCatching { Protocol.nav(json) }.getOrNull()
 
+  /**
+   * An answer that can't be read means the phone app and the car app are out of step (one was
+   * updated, the other not); the driver gets told what to do rather than the parser's words.
+   */
   private fun <T> ask(method: String, params: JSONObject, read: (JSONObject) -> T, done: (Result<T>) -> Unit) =
-    bridge.call(method, params) { r -> done(r.mapCatching(read)) }
+    bridge.call(method, params) { r ->
+      done(r.mapCatching(read).recoverCatching { e -> throw if (e is CarBridgeError || e is CarBridgeTimeout) e else CarBridgeError(OUT_OF_STEP) })
+    }
+
+  private companion object {
+    const val OUT_OF_STEP = "Update Wayfinder on your phone, then try again."
+  }
 }

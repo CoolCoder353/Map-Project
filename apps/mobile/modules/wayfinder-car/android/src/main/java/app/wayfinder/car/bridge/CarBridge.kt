@@ -32,9 +32,11 @@ class CarBridge(
     while (waiting.isNotEmpty()) waiting.removeFirst().let { (id, method, params) -> emit(id, method, params) }
   }
 
+  /** JavaScript went away: nothing is navigating any more, so the car mustn't keep showing directions. */
   @Synchronized
   fun disconnect() {
     emit = null
+    setNavigation(null)
   }
 
   fun call(method: String, params: JSONObject, done: (Result<JSONObject>) -> Unit) {

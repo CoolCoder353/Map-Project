@@ -62,4 +62,42 @@ class HomeScreenTest {
     api.fail("status", "Wayfinder on your phone isn’t answering. Open it on your phone, then try again.")
     assertEquals("Wayfinder on your phone isn’t answering. Open it on your phone, then try again.", (screen.onGetTemplate() as MessageTemplate).message.text())
   }
+
+  private fun titles(t: Any?) = (t as PlaceListNavigationTemplate).itemList!!.items.map { (it as Row).title.text() }
+
+  @Test fun offersAWayBackToDirectionsDuringATrip() {
+    api.navigation = Samples.nav()
+    open()
+    api.answer("status", Samples.status())
+    assertEquals(listOf("Back to directions", "Search", "Planned routes", "Discover nearby"), titles(screen.onGetTemplate()))
+  }
+
+  @Test fun showsTheWayBackOnlyWhileATripIsRunning() {
+    val controller = ScreenController(screen).also { it.moveToState(Lifecycle.State.STARTED) }
+    api.answer("status", Samples.status())
+    api.pushNav(Samples.nav())
+    assertEquals("Back to directions", titles(controller.templatesReturned.last()).first())
+    val shown = controller.templatesReturned.size
+    api.pushNav(Samples.nav().copy(remainingDistanceM = 3000.0))
+    assertEquals("not redrawn on every fix", shown, controller.templatesReturned.size)
+    api.pushNav(null)
+    assertEquals(listOf("Search", "Planned routes", "Discover nearby"), titles(controller.templatesReturned.last()))
+  }
+
+  @Test fun offersTheWayBackEvenWhenTheServerCantBeReached() {
+    api.navigation = Samples.nav()
+    open()
+    api.answer("status", Samples.status(Account.OFFLINE))
+    assertEquals(listOf("Try again", "Back to directions"), (screen.onGetTemplate() as MessageTemplate).actions.map { it.title.text() })
+  }
+
+  @Test fun theWayBackReturnsToTheDrive() {
+    var drives = 0
+    val home = HomeScreen(carContext, api, scenes, onDrive = { drives++ }) { }
+    api.navigation = Samples.nav()
+    ScreenController(home).moveToState(Lifecycle.State.STARTED)
+    api.answer("status", Samples.status())
+    ((home.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.items[0] as Row).click()
+    assertEquals(1, drives)
+  }
 }

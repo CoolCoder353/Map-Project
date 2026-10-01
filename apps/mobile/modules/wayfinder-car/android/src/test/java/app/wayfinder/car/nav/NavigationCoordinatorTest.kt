@@ -7,6 +7,7 @@ import androidx.car.app.testing.navigation.TestNavigationManager
 import app.wayfinder.car.*
 import app.wayfinder.car.bridge.LngLat
 import app.wayfinder.car.map.MapScene
+import app.wayfinder.car.screens.HomeScreen
 import app.wayfinder.car.screens.NavigationScreen
 import org.junit.Assert.*
 import org.junit.Test
@@ -90,5 +91,26 @@ class NavigationCoordinatorTest {
     assertEquals(1, nav.navigationEndedCount)
     api.pushNav(null)
     assertEquals("no second end after detaching", 1, nav.navigationEndedCount)
+  }
+
+  @Test fun backFromTheDriveCanReturnToIt() {
+    ScreenController(HomeScreen(carContext, api, RecordingScenes()) { }).moveToState(Lifecycle.State.CREATED)
+    coordinator.attach()
+    api.pushNav(Samples.nav())
+    driveScreen()
+    screens.pop() // the driver pressed Back
+    assertFalse(screens.top is NavigationScreen)
+    coordinator.showDrive()
+    assertTrue(screens.top is NavigationScreen)
+    coordinator.showDrive()
+    assertEquals("not stacked twice", 2, screens.screensPushed.count { it is NavigationScreen })
+  }
+
+  @Test fun noDriveToReturnToOnceTheTripHasEnded() {
+    coordinator.attach()
+    api.pushNav(Samples.nav())
+    api.pushNav(null)
+    coordinator.showDrive()
+    assertEquals(1, screens.screensPushed.count { it is NavigationScreen })
   }
 }

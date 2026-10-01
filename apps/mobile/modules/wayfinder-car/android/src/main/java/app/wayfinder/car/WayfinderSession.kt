@@ -39,7 +39,7 @@ class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared))
         override fun onDestroy(owner: LifecycleOwner) = detach()
       })
     }
-    return HomeScreen(carContext, api, map) { status -> map.setStyles(status.styleLight, status.styleDark) }
+    return HomeScreen(carContext, api, map, onDrive = coordinator::showDrive) { status -> map.setStyles(status.styleLight, status.styleDark) }
   }
 
   /** The car switching between day and night changes which of the server's styles to draw. */

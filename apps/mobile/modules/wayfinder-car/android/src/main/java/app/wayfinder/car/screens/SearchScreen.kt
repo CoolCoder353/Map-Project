@@ -48,6 +48,7 @@ class SearchScreen(
       loading = false
       r.onSuccess {
         results = it.take(MAX_ROWS)
+        if (results.isEmpty()) error = "Nothing found. Try another name or address."
         show(map, MapScene.Places(results))
       }.onFailure {
         results = emptyList()

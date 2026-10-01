@@ -36,33 +36,38 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
   private var mapView: MapView? = null
   private var map: MapLibreMap? = null
   private var styles: Pair<String?, String?> = null to null
-  private var loadedStyle: String? = null
+  private val styleLoads = StyleLoads()
   private var scene: MapScene = MapScene.Overview(null)
   private var surfaceSize = Rect()
   private var visible = Rect()
 
   override fun onSurfaceAvailable(container: SurfaceContainer) {
+    // A new surface replaces any earlier one; drop that map rather than leak it.
+    release()
     val surface = container.surface ?: return
     MapLibre.getInstance(carContext)
+    // No display means no map, but must not crash: the phone's navigation runs in this process.
     val vd = carContext.getSystemService(DisplayManager::class.java).createVirtualDisplay(
       "wayfinder-car-map", container.width, container.height, container.dpi, surface, DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY,
-    )
+    ) ?: return
     val p = Presentation(carContext, vd.display)
     val view = MapView(p.context)
     view.onCreate(null)
+    view.addOnDidFailLoadingMapListener { styleLoads.failed() }
     p.setContentView(view)
     p.show()
     view.onStart()
     view.onResume()
-    view.getMapAsync { m ->
-      map = m
-      m.uiSettings.isLogoEnabled = false // OSM attribution stays on
-      loadedStyle = null
-      refreshStyle()
-    }
     display = vd
     presentation = p
     mapView = view
+    view.getMapAsync { m ->
+      if (mapView !== view) return@getMapAsync // released before it was ready
+      map = m
+      m.uiSettings.isLogoEnabled = false // OSM attribution stays on
+      styleLoads.reset()
+      refreshStyle()
+    }
     surfaceSize = Rect(0, 0, container.width, container.height)
     if (visible.isEmpty) visible = Rect(surfaceSize)
   }
@@ -81,12 +86,10 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
     refreshStyle()
   }
 
-  /** Also called when the car switches between day and night. */
+  /** Also called when the car switches between day and night, and to retry a style that failed. */
   fun refreshStyle() {
     val m = map ?: return
-    val url = (if (carContext.isDarkMode) styles.second else styles.first) ?: return
-    if (url == loadedStyle) return
-    loadedStyle = url
+    val url = styleLoads.next(if (carContext.isDarkMode) styles.second else styles.first) ?: return
     m.setStyle(Style.Builder().fromUri(url)) { style ->
       addLayers(style)
       applyScene()
@@ -95,6 +98,7 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
 
   override fun show(scene: MapScene) {
     this.scene = scene
+    refreshStyle() // loads the style if an earlier try failed; otherwise nothing to do
     applyScene()
   }
 
@@ -106,7 +110,7 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
     presentation = null
     display = null
     map = null
-    loadedStyle = null
+    styleLoads.reset()
   }
 
   private fun addLayers(style: Style) {

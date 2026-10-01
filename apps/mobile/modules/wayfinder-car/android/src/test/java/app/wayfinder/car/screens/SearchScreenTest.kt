@@ -53,4 +53,10 @@ class SearchScreenTest {
     api.fail("search", "Can’t reach your server.")
     assertEquals("Can’t reach your server.", (screen.onGetTemplate() as SearchTemplate).itemList!!.noItemsMessage.text())
   }
+
+  @Test fun saysWhenNothingIsFound() {
+    screen.callback.onSearchSubmitted("zzzz")
+    api.answer("search", emptyList<Any>())
+    assertEquals("Nothing found. Try another name or address.", (screen.onGetTemplate() as SearchTemplate).itemList!!.noItemsMessage.text())
+  }
 }

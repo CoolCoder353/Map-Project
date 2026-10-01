@@ -60,4 +60,14 @@ class CarBridgeTest {
     bridge.setNavigation("not json")
     assertNull(bridge.navigation)
   }
+
+  @Test fun forgetsTheTripWhenJavaScriptGoesAway() {
+    val seen = mutableListOf<String?>()
+    bridge.onNavigation { seen += it?.getString("routeId") }
+    bridge.connect { _, _, _ -> }
+    bridge.setNavigation("""{"routeId":"r1"}""")
+    bridge.disconnect()
+    assertNull("no stale directions in the car", bridge.navigation)
+    assertEquals(listOf("r1", null), seen)
+  }
 }
