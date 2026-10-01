@@ -1,8 +1,10 @@
 package app.wayfinder.car
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.os.Handler
 import android.os.Looper
+import androidx.car.app.AppManager
 import androidx.car.app.Screen
 import androidx.car.app.Session
 import androidx.lifecycle.DefaultLifecycleObserver
@@ -12,15 +14,22 @@ import app.wayfinder.car.bridge.BridgeCarApi
 import app.wayfinder.car.bridge.CarApi
 import app.wayfinder.car.bridge.CarBridge
 import app.wayfinder.car.bridge.ReactBoot
-import app.wayfinder.car.map.MapScenes
+import app.wayfinder.car.map.CarMapRenderer
 import app.wayfinder.car.nav.ManeuverIcons
 import app.wayfinder.car.nav.NavigationCoordinator
 import app.wayfinder.car.screens.HomeScreen
 
 class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared)) : Session() {
+  private var renderer: CarMapRenderer? = null
+
   override fun onCreateScreen(intent: Intent): Screen {
     ReactBoot.ensureStarted(carContext)
-    val map = MapScenes { } // the car map arrives in Task 12
+    val map = CarMapRenderer(carContext)
+    carContext.getCarService(AppManager::class.java).setSurfaceCallback(map)
+    lifecycle.addObserver(object : DefaultLifecycleObserver {
+      override fun onDestroy(owner: LifecycleOwner) = map.release()
+    })
+    renderer = map
     val coordinator = NavigationCoordinator(carContext, api, map, ManeuverIcons(carContext))
     // After Home is on the stack, so a trip already running goes on top of it.
     Handler(Looper.getMainLooper()).post {
@@ -30,6 +39,11 @@ class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared))
         override fun onDestroy(owner: LifecycleOwner) = detach()
       })
     }
-    return HomeScreen(carContext, api, map) { }
+    return HomeScreen(carContext, api, map) { status -> map.setStyles(status.styleLight, status.styleDark) }
+  }
+
+  /** The car switching between day and night changes which of the server's styles to draw. */
+  override fun onCarConfigurationChanged(newConfiguration: Configuration) {
+    renderer?.refreshStyle()
   }
 }
