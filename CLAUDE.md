@@ -23,9 +23,10 @@ self-hosted routing, tiles and search. pnpm monorepo, TypeScript throughout. Thi
 ## Layout
 
 `apps/api` (Fastify API, tiles, admin CLI) · `apps/worker` (jobs, OSM refresh pipeline) ·
-`apps/web` (React web app + `/admin`) · `apps/mobile` (Expo Android app) · `packages/core`
-(server services: `src/services/*.ts`, migrations in `src/db/migrations`) · `packages/shared`
-(Zod schemas, geo, novelty scoring, copy) · `packages/nav` (turn-by-turn) · `infra` (compose,
+`apps/web` (React web app + `/admin`) · `apps/mobile` (Expo Android app; `modules/wayfinder-car`
+is the Android Auto car app) · `packages/core` (server services: `src/services/*.ts`, migrations
+in `src/db/migrations`) · `packages/shared` (Zod schemas, geo, novelty scoring, copy) ·
+`packages/nav` (turn-by-turn) · `infra` (compose,
 Dockerfiles, Caddy, GraphHopper config, deploy/build scripts) · `scripts` (dev DB, seed, fake
 routing engine, live checks).
 
@@ -52,7 +53,9 @@ pnpm check    # lint, types, every suite with coverage floors, Playwright: befor
 ```
 
 While working: `pnpm test` (all Vitest: unit, integration on PGlite, web components),
-`pnpm test:mobile` (Jest: Android screens and device code), `pnpm test:e2e` (Playwright, starts
+`pnpm test:mobile` (Jest: Android screens and device code), `CI=true pnpm test:android` (Kotlin
+tests for the Android Auto module, in Docker, and part of `pnpm check`; it takes over
+`node_modules` while it runs), `pnpm test:e2e` (Playwright, starts
 its own stack). Run one file with `npx vitest run <path>` or, in `apps/mobile`, `npx jest <path>`.
 Tests go where [docs/testing.md](docs/testing.md#which-layer-a-test-belongs-in) says; web tests
 use `renderApp()` from `apps/web/test/harness.tsx`, Android ones the fakes in

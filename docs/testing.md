@@ -39,7 +39,12 @@ The whole gate, about 3 minutes. The pieces:
 | `pnpm test:coverage` | All Vitest projects, failing below the coverage floors |
 | `pnpm test:mobile` | Android screens and device code in Jest: `apps/mobile/test/*.{screen,native}.test.tsx` |
 | `pnpm test:mobile:coverage` | The same, failing below the Android floors |
+| `pnpm test:android` | The Android Auto module's Kotlin tests (Robolectric), in the Android build image; takes over node_modules while it runs |
 | `pnpm test:e2e` | Playwright against a real stack it starts itself: `apps/web/e2e` |
+
+Run the Kotlin tests as `CI=true pnpm test:android`: without `CI=true`, pnpm stops at a
+node_modules prompt after the first run. Don't run Jest, Vitest or pnpm while it runs, because it
+swaps node_modules and the other runs fail for no reason. `pnpm check` runs it last.
 
 Run one file: `npx vitest run apps/web/test/directions.test.tsx`, or
 `cd apps/mobile && npx jest test/plan.screen.test.tsx`. Filter by name with `-t "…"`.
@@ -74,6 +79,8 @@ Options:
 | The web map layer (`MapProvider`) | `apps/web/test/map-provider.test.tsx` | A fake MapLibre that records sources, layers and camera moves |
 | A flow across pages, or anything the real map or browser does | `apps/web/e2e/*.spec.ts` | Playwright on PGlite, the demo seed and the fake routing engine |
 | An Android screen | `apps/mobile/test/*.screen.test.tsx` | `apps/mobile/test/fakes.tsx` (see below) |
+| Android Auto screens, bridge, map scenes | `apps/mobile/modules/wayfinder-car/android/src/test` | `FakeCarApi`, `Samples`, `TestKit` (`TestCarContext`) |
+| The car ↔ app messages | `carProtocol.test.ts` + `ProtocolTest.kt`, over the fixtures in `modules/wayfinder-car/android/src/test/resources/fixtures` | — |
 | Android device code (tracking, navigation, contacts, storage) | `apps/mobile/test/*.native.test.tsx` | Jest mocks of the Expo modules |
 | Android logic with no React Native imports | `apps/mobile/test/*.test.ts` | Plain Vitest (the upload queue, the API client) |
 | A migration | An integration test of the service that uses it | Every test database runs every migration |
@@ -144,6 +151,9 @@ file's other constants. Read a mock through a getter, or capture it after the im
 
 Checked by hand or against a live server, and recorded in [verification.md](verification.md):
 
+- **The car map on a car surface.** `SceneLayoutTest` covers what is drawn and where the camera
+  goes; MapLibre drawing through the virtual display is checked in the Desktop Head Unit
+  ([verification.md](verification.md#android-auto-desktop-head-unit)).
 - **The native Android map on a real device.** Jest covers the screens with the map faked, and
   `map-canvas.native.test.tsx` covers the component around it, but not MapLibre Native itself.
 - **Routing on a real graph.** The fake engine draws curves. Set `GRAPHHOPPER_LIVE_URL` for the
@@ -167,7 +177,8 @@ Each feature a person can use, and where its tests are. Paths are relative to th
 | Contacts search (Android) | — | — | `contacts.screen.test.tsx`, `device.native.test.tsx`, `settings.screen.test.tsx` | — |
 | Start from your location | — | `directions.test.tsx` | `plan.screen.test.tsx`, `device.native.test.tsx` | `planner.spec.ts` |
 | Send a route to the phone; planned routes | `app-api.test.ts`, `trips-places-api.test.ts` | `directions.test.tsx`, `panels.test.tsx`, `settings.test.tsx` | `settings.screen.test.tsx` | `planner.spec.ts` |
-| Turn-by-turn navigation (following you zoomed in) | `packages/nav/test/*` | — | `turn-by-turn.native.test.tsx`, `navigate.screen.test.tsx`, `map-canvas.native.test.tsx` | — |
+| Turn-by-turn navigation (following you zoomed in) | `packages/nav/test/*` | — | `turn-by-turn.native.test.tsx`, `navigation-service.native.test.tsx`, `navigation-location.native.test.tsx`, `navigate.screen.test.tsx`, `map-canvas.native.test.tsx` | — |
+| Android Auto: search, Discover, planned routes, route choice, directions, map | `carProtocol.test.ts`, `carNavModel.test.ts`, `carModule.test.ts`, `categories.test.ts` | — | `car-controller.native.test.tsx`, `car-handlers.native.test.tsx`, `navigation-service.native.test.tsx`, `navigation-location.native.test.tsx`, `voice.native.test.tsx`, `navigating-banner.screen.test.tsx`, Kotlin tests in `modules/wayfinder-car` | — |
 | Speed limit while navigating | `geo.test.ts` (`speedLimitRuns`), `routing.test.ts`, `graphhopper.test.ts`, `packages/nav/test/engine.test.ts` | — | `navigate.screen.test.tsx` | — |
 | Recording trips (background and navigation) | `segmentation.test.ts`, `tracks.test.ts`, `queue.test.ts` (mobile), `apiClient.test.ts`, `androidManifest.test.ts` (the permissions background recording needs) | — | `tracking.native.test.tsx`, `settings.screen.test.tsx` | — |
 | Coverage: roads travelled, stats, the map layer | `tracks.test.ts` (road matching, new roads), `app-api.test.ts`, `copy.test.ts` (no hexagon words) | `panels.test.tsx`, `map-provider.test.tsx`, `map-shell.test.tsx` | `screens.screen.test.tsx`, `map-canvas.native.test.tsx` | `planner.spec.ts` |

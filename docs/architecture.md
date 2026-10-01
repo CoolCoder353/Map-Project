@@ -133,3 +133,37 @@ The Android app keeps its refresh token in secure storage and restores the sessi
 the server can't be reached then, it says so with a Try again button rather than asking someone
 who is still signed in to sign in again. Cached server data (trips, coverage, planned routes) is
 dropped whenever the signed-in account changes, so the next person on a phone never sees it.
+
+## Android Auto
+
+The car app is a local Expo module, `apps/mobile/modules/wayfinder-car` (Kotlin; `android/` is
+generated, so nothing native lives there). Android Auto binds `WayfinderCarAppService`; its screens
+are Car App Library templates, and it draws its own map (MapLibre, the phone map's engine) onto
+the car's surface through a virtual display, using the server's `/map/style.json`. A screen puts
+a scene on the car map only while it is on top (`Screen.show` in `screens/ScreenKit.kt`), so a
+late answer never repaints the map under the screen that took over.
+
+The car screens hold no data of their own. They ask the JavaScript side through a small bridge
+(`CarBridge` in Kotlin, `src/car/controller.ts` in JS): `status`, `search`, `discover`, `plan`,
+`planned`, `routeLine`, `start`, `stop` and `mute`, and JS pushes every navigation change back
+(`src/car/navModel.ts`). The messages are defined in `src/car/protocol.ts` and `bridge/Protocol.kt`,
+pinned by fixtures both test suites read. Another test (`carModule.test.ts`) checks that every
+request `BridgeCarApi.kt` sends has a handler in `src/car/handlers.ts`.
+
+Navigation is one session for the whole app (`src/nav/navigationService.ts`), followed by the
+phone's Navigate screen and the car alike; a trip started on either shows on both. While it runs,
+a location foreground service keeps directions coming with the phone locked. Spoken directions use
+the module's own `NavVoice`, which plays as navigation guidance and asks other audio to duck, so
+music dips and comes back; where the module isn't there, `expo-speech` speaks instead
+(`src/nav/voice.ts`).
+
+If Android Auto opens Wayfinder while the phone app is closed, Kotlin starts React, and the app
+entry (`apps/mobile/index.ts`) starts the car controller without any screen.
+
+Manoeuvre icons are Material Symbols (Apache 2.0, credited in the module's `NOTICE`); both kinds of
+roundabout use the clockwise icon, `wf_roundabout_cw`. A release build only answers Google's own
+Android Auto hosts (the `HostValidator` allowlist in `WayfinderCarAppService`); a debug build
+answers any host.
+
+Templates are the ones every Android Auto version has (`minCarApiLevel` 1). Not yet: panning the
+car map, a speed-limit sign in the car, cars with Android built in (Android Automotive).

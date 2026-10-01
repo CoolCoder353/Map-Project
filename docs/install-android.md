@@ -59,6 +59,24 @@ For reliable recording, also allow the app to run in the background: **Settings 
 
 Routes, search and the map cover **Queensland only**. Ask for another state if you need one.
 
+## 6. Android Auto
+
+Wayfinder works on a car screen through Android Auto. Because it isn't from the Play Store,
+Android Auto hides it until you allow it once:
+
+1. On the phone, open **Settings → Connected devices → Connection preferences → Android Auto**
+   (or search Settings for "Android Auto").
+2. Scroll to the bottom and tap **Version** ten times, then **OK** to turn on developer settings.
+3. Open the **⋮** menu → **Developer settings**, and turn on **Unknown sources**.
+4. Connect to the car. Wayfinder is in the car's app list.
+
+In the car you can search (while parked), pick a planned route, find places nearby you haven't
+explored, choose between the fastest route and new ways, and follow directions. Directions keep
+going with the phone locked. Start a trip on the phone and the car shows it too.
+
+Android Auto updates occasionally turn **Unknown sources** off again; if Wayfinder disappears
+from the car, repeat step 3.
+
 ## Updating later
 
 Install the newer `wayfinder.apk` the same way, straight over the top. Your account, recorded trips and settings stay as they are.

@@ -106,6 +106,29 @@ DATABASE_URL=postgres://wayfinder:…@localhost:5432/wayfinder GRAPHHOPPER_URL=h
 
 Results are recorded in [live-stack-results.md](live-stack-results.md).
 
+## Android Auto (Desktop Head Unit)
+
+**Not run yet.** The car app is built and its automated tests pass (`pnpm test:android`,
+`pnpm test:mobile`, `carModule.test.ts`), but no head unit or car was available, so nothing below
+has been ticked. Run it against a release APK on a real phone (build-android.md, "Trying it in a
+car"), tick each item as it passes, and record the date. Fix anything that fails, with a test.
+
+- [ ] Wayfinder is listed in Android Auto; opening it with the phone app force-stopped shows Home within 5 s
+- [ ] Signed out on the phone: the car asks to sign in; after signing in, Try again shows Home
+- [ ] Search (parked) finds a place; its preview shows Fastest and Explore rows, the chosen one blue on the map
+- [ ] The route-preview rows for explore routes show their "(N min longer)" text
+- [ ] Discover nearby lists places with "% unexplored area"; Planned routes lists driving routes only
+- [ ] The car map draws through the virtual display: the style loads, and the map follows each screen (places, routes, directions)
+- [ ] Go: directions with icon, distance and arrival; "then" hint on close turns; map follows heading-up
+- [ ] Wrong turn: "Off route", then "Finding a new route…", then new directions and route line
+- [ ] Roundabout icons turn clockwise (both kinds of roundabout)
+- [ ] Music dips for each spoken direction and comes back after; Mute silences them
+- [ ] Phone locked for the whole drive: directions keep coming
+- [ ] Trip started on the phone appears in the car; trip started in the car shows the phone banner, with its padding clear of the status bar and gesture bar
+- [ ] End in the car, End on the phone, and the car's own "End navigation" each end the trip everywhere
+- [ ] Night mode switches the map to the dark style; OSM attribution visible
+- [ ] Cold start from the car: force-stop the phone app, open Wayfinder from the car, and Home appears without opening the phone
+
 ## Open / manual
 
 - **Android on a device.** Install the APK (`infra/scripts/build-apk.sh`) and check: background tracking survives the app being killed and Doze; a real walk appears as new coverage on the web; turn-by-turn with a deliberate wrong turn triggers a reroute; the offline queue uploads when connectivity returns.
@@ -125,3 +148,6 @@ Results are recorded in [live-stack-results.md](live-stack-results.md).
   `maps.paulsjones.com` on 2026-09-28: it installs over the old build, opens on the emulator with no
   crash, and its sign-in screen reaches the server. It hasn't been shared with testers yet. This
   is likely what the crash reports were.
+- **App 0.3.0 (versionCode 3), with Android Auto, is not built or shared yet.** The version is
+  set; the release APK, its install over 0.2.0, `pnpm verify:mobile` against the live server and the
+  Android Auto checklist above are all still to do.

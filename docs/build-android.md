@@ -8,7 +8,7 @@ that file. You need Docker and nothing else: the Android SDK lives in a build im
 
 1. **The checks pass.** A crash that reaches a phone stays there until the next APK is shared.
    ```bash
-   pnpm lint && pnpm typecheck && pnpm test && pnpm test:mobile
+   pnpm lint && pnpm typecheck && pnpm test && pnpm test:mobile && CI=true pnpm test:android
    ```
 2. **Native modules match the Expo SDK.** A module from another SDK compiles, passes every test
    (Jest fakes native modules), and then kills the app on launch. The 2026-09-23 APK did exactly
@@ -89,6 +89,28 @@ EXPO_PUBLIC_API_URL=http://10.0.2.2:3000 ALLOW_HTTP=1 infra/scripts/build-apk.sh
 
 That build only works on the emulator and accepts unencrypted traffic. Move it out of `dist/`
 when you're done, so it can't be shared by mistake.
+
+## Trying it in a car
+
+Without a car, use Google's Desktop Head Unit (DHU):
+
+1. Install it with the Android SDK tools: `sdkmanager "extras;google;auto"` (and `platform-tools`
+   for `adb`).
+2. On the phone: turn on Android Auto's developer settings and **Unknown sources**
+   ([install-android.md](install-android.md), section 6), then in the **⋮** menu choose **Start
+   head unit server**.
+3. Connect the phone by USB with USB debugging on, then:
+
+   ```bash
+   adb forward tcp:5277 tcp:5277
+   ```
+
+   ```bash
+   $ANDROID_HOME/extras/google/auto/desktop-head-unit
+   ```
+
+Type `day` or `night` in the DHU console to switch modes. For a drive without driving, replay a
+GPX track with a mock-location app set in the phone's developer options.
 
 ## Share it
 
