@@ -109,3 +109,15 @@ test('deleting your account signs you out and stops sign-in; an admin can restor
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/directions$/);
 });
+
+test('the privacy policy and deletion pages open without signing in', async ({ page }) => {
+  await page.goto('/privacy');
+  await expect(page).toHaveURL(/\/privacy$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Privacy policy' })).toBeVisible();
+  await page.getByRole('link', { name: 'how to delete your account' }).click();
+  await expect(page).toHaveURL(/\/delete-account$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Delete your account' })).toBeVisible();
+  // Settings needs an account: the link asks for sign-in first.
+  await page.getByRole('link', { name: 'Sign in and open Settings' }).click();
+  await expect(page).toHaveURL(/\/sign-in/);
+});

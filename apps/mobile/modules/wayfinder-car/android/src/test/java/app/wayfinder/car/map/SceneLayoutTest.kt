@@ -34,4 +34,17 @@ class SceneLayoutTest {
     assertEquals(CameraSpec.Fit(line), SceneLayout.camera(MapScene.Following(line, null, null)))
     assertEquals(here, SceneLayout.drawing(MapScene.Following(line, here, 90.0)).position)
   }
+
+  /** Car app quality SA-1: no animation on the car screen, except the map following the car. */
+  @Test fun onlyFollowingTheCarMovesSmoothlyEverythingElseJumps() {
+    val line = listOf(here, LngLat(153.1, -27.5))
+    assertEquals(SceneLayout.FOLLOW_MS, SceneLayout.moveMs(SceneLayout.camera(MapScene.Following(line, here, 90.0))))
+    listOf(
+      MapScene.Overview(here),
+      MapScene.Overview(null),
+      MapScene.Places(listOf(Samples.place())),
+      MapScene.Routes(listOf(Samples.option("a")), 0),
+      MapScene.Following(line, null, null),
+    ).forEach { assertEquals(it.toString(), 0, SceneLayout.moveMs(SceneLayout.camera(it))) }
+  }
 }

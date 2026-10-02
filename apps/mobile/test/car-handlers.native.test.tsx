@@ -92,7 +92,8 @@ describe('discover', () => {
 
   it('explains when it can’t tell where you are', async () => {
     jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValueOnce({ granted: false } as never);
-    await expect(carHandlers.discover!({})).rejects.toThrow(/Can’t tell where you are/);
+    // Shown in the car: sending the driver to the phone says to wait until it's safe (VI-1).
+    await expect(carHandlers.discover!({})).rejects.toThrow(/Can’t tell where you are. When it’s safe, check that location is on/);
   });
 });
 

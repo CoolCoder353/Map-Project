@@ -34,3 +34,6 @@ infra/android/*.keystore
 # pnpm store left by older APK builds
 .pnpm-store/
 infra/android/keystore.env
+
+# Google Play reviewer sign-in (docs/play-store-android-auto.md)
+infra/android/play-review.env

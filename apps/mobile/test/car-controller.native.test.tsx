@@ -28,7 +28,7 @@ it('says so when the car asks for something this build doesn’t do', async () =
   const car = fakeCarNative();
   startCarController({}, car as never);
   const id = car.ask('teleport');
-  await waitFor(() => expect(car.reject).toHaveBeenCalledWith(id, expect.stringMatching(/update Wayfinder/)));
+  await waitFor(() => expect(car.reject).toHaveBeenCalledWith(id, expect.stringMatching(/When it’s safe, update Wayfinder/)));
 });
 
 it('does nothing where there is no car app (Expo Go, tests)', () => {

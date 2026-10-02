@@ -44,6 +44,15 @@ describe('Android Auto module', () => {
     expect(filters.some((f) => f.includes('androidx.car.app.CarAppService'))).toBe(true);
   });
 
+  it('declares the navigate filter on an activity too, where Android Auto looks for it (NF-6)', () => {
+    const manifest = readFileSync(join(moduleDir, 'src/main/AndroidManifest.xml'), 'utf8');
+    const activity = manifest.slice(manifest.indexOf('<activity'), manifest.indexOf('</activity>'));
+    expect(activity).toContain('android:name="app.wayfinder.car.nav.NavigateActivity"');
+    expect(activity).toContain('android:exported="true"');
+    expect(activity).toContain('<action android:name="androidx.car.app.action.NAVIGATE" />');
+    expect(activity).toContain('<data android:scheme="geo" />');
+  });
+
   it('reads the intent that opened the car app and ones that arrive later', () => {
     const session = readFileSync(join(moduleDir, 'src/main/java/app/wayfinder/car/WayfinderSession.kt'), 'utf8');
     expect(session).toContain('override fun onNewIntent(intent: Intent)');

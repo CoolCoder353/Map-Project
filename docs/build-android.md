@@ -48,15 +48,16 @@ What happens:
 - The first build creates the `wayfinder-android-build` Docker image (JDK, Android SDK and NDK;
   several GB, one-off). Later builds reuse it.
 - Inside the container: `pnpm install`, `expo prebuild` (regenerates `apps/mobile/android/`, which
-  is not in git), then Gradle builds and signs a release APK. About 10 minutes.
+  is not in git), then Gradle builds and signs a release APK and an Android App Bundle. About 10 minutes.
 - **It takes over `node_modules` while it runs.** Don't run pnpm, tests or dev servers until it
   finishes; it puts `node_modules` back at the end. If a build is interrupted, run
   `CI=true pnpm install`.
-- **It overwrites `dist/wayfinder.apk`.** Copy the old file elsewhere first if you want to keep it.
+- **It overwrites `dist/wayfinder.apk` and `dist/wayfinder.aab`.** Copy the old files elsewhere first if you want to keep them. Share the APK directly; upload the `.aab` to Google Play (Play rejects APKs for new apps). Both are signed with the same keystore, which becomes the Play upload key, so back it up.
 - It refuses documentation addresses (`example.com`, `your-server`), refuses `http://` unless
   `ALLOW_HTTP=1`, and reads the address back out of the finished APK. The last line confirms it:
   ```
   APK: /…/dist/wayfinder.apk (server: https://maps.paulsjones.com)
+  Bundle for Google Play: /…/dist/wayfinder.aab
   ```
 
 Every build setting is listed in [configuration.md](configuration.md#android-build-infrascriptsbuild-apksh).

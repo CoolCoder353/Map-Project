@@ -27,5 +27,20 @@
         <data android:scheme="geo" />
       </intent-filter>
     </service>
+    <!-- Android Auto looks for the NAVIGATE filter on an activity (the one used away from the car):
+         developer.android.com/training/cars/apps/navigation, NF-6. In the car the intent goes to the
+         service above; on the phone this opens Wayfinder. -->
+    <activity
+      android:name="app.wayfinder.car.nav.NavigateActivity"
+      android:exported="true"
+      android:excludeFromRecents="true"
+      android:noHistory="true"
+      android:theme="@android:style/Theme.NoDisplay">
+      <intent-filter>
+        <action android:name="androidx.car.app.action.NAVIGATE" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:scheme="geo" />
+      </intent-filter>
+    </activity>
   </application>
 </manifest>

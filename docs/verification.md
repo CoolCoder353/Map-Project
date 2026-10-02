@@ -142,6 +142,12 @@ and adaptive quality gaps, in
 - [ ] During a trip, the car's notification area shows the next instruction, with a heads-up only when it changes; tapping it returns to the directions; it is gone when the trip ends
 - [ ] DHU "auto drive" (`adb shell dumpsys activity service androidx.car.app.samples.navigation.car.NavigationCarAppService AUTO_DRIVE`, with our service name) starts a test drive with no route chosen and with one running; it arrives, ends cleanly, and the trip does not appear in the web app's trips or coverage
 - [ ] Start a trip with no signal at all: the car map is blank at first, then draws once there is signal (the style is tried again)
+- [ ] Every car message that sends the driver to the phone (signed out, phone not answering, update needed, location off) says "When it’s safe" (VI-1)
+- [ ] Choosing places, routes or a list row jumps the car map straight to them with no glide; only the map following the car moves smoothly (SA-1)
+- [ ] "Navigate to …" by voice works from a Play install, where Android Auto finds Wayfinder through `NavigateActivity`'s filter (NF-6, VC-1); `adb shell am start -a androidx.car.app.action.NAVIGATE -d "geo:0,0?q=Mt+Coot-tha"` on the phone alone just opens Wayfinder
+- [ ] Another navigation app starts directions while Wayfinder's trip runs: Wayfinder's voice, notification and cluster info stop (NF-5)
+- [ ] Launch to Home in under 10 s and content (search, Discover, route preview) in under 10 s; every button answers within 2 s (DR-1 to DR-3)
+- [ ] Maneuver icons and the map's route colours are legible in day and night on the DHU (VD-1)
 
 ## Phone app: window sizes, keyboard and mouse
 
@@ -163,6 +169,13 @@ emulators are enough.
 - [ ] Mouse: buttons, list rows, chips and cards shade under the pointer; scroll wheel scrolls lists; the map zooms with Ctrl plus the scroll wheel and with pinch on a touchscreen
 - [ ] A password manager offers to save and generate on the register form, and fills sign in
 
+## Google Play permission checks (phone)
+
+- [ ] Settings, Background tracking on, with location never granted: the "Use your location in the background?" disclosure shows first; "Not now" leaves the switch off with no Android prompt; "Continue" leads to Android's location prompt, then "Allow all the time"
+- [ ] With "Allow all the time" already granted, turning tracking on asks nothing
+- [ ] Android 13+, notifications never allowed: turning tracking on (after location) and starting a trip on the phone each ask to allow notifications; a trip started from the car does not ask on the phone
+- [ ] Record the disclosure, the system prompts and the recording notification for the Play background location declaration video
+
 ## Open / manual
 
 - **Android on a device.** Install the APK (`infra/scripts/build-apk.sh`) and check: background tracking survives the app being killed and Doze; a real walk appears as new coverage on the web; turn-by-turn with a deliberate wrong turn triggers a reroute; the offline queue uploads when connectivity returns.
@@ -182,6 +195,7 @@ emulators are enough.
   `maps.paulsjones.com` on 2026-09-28: it installs over the old build, opens on the emulator with no
   crash, and its sign-in screen reaches the server. It hasn't been shared with testers yet. This
   is likely what the crash reports were.
+- **App 0.4.0 (versionCode 5)** adds Delete account and a privacy policy link in Settings, and builds an `.aab` for Google Play. Not built or deployed yet; the web `/privacy` and `/delete-account` pages need the web deploy, then check both load signed out.
 - **App 0.3.1 (versionCode 4), with Android Auto and the 2026-10-01 feedback fixes, is not shared
   yet.** 0.3.0 was never built. Still to do for 0.3.1: its install over 0.2.0, `pnpm verify:mobile`
   against the live server and the Android Auto checklist above.

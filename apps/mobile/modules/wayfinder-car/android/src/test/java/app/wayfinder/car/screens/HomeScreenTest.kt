@@ -46,21 +46,21 @@ class HomeScreenTest {
   @Test fun asksToSignInOnThePhone() {
     open()
     api.answer("status", Samples.status(Account.SIGNED_OUT))
-    assertEquals("Open Wayfinder on your phone and sign in.", (screen.onGetTemplate() as MessageTemplate).message.text())
+    assertEquals("When it’s safe, open Wayfinder on your phone and sign in.", (screen.onGetTemplate() as MessageTemplate).message.text())
   }
 
   @Test fun saysWhenTheServerCantBeReachedAndTriesAgain() {
     open()
     api.answer("status", Samples.status(Account.OFFLINE))
     val t = screen.onGetTemplate() as MessageTemplate
-    assertEquals("Can’t reach your server. Check your phone has signal, then try again.", t.message.text())
+    assertEquals("Can’t reach your server. Try again when your phone has signal.", t.message.text())
     assertEquals("Try again", t.actions.single().title.text())
   }
 
   @Test fun saysWhenThePhoneAppDoesntAnswer() {
     open()
-    api.fail("status", "Wayfinder on your phone isn’t answering. Open it on your phone, then try again.")
-    assertEquals("Wayfinder on your phone isn’t answering. Open it on your phone, then try again.", (screen.onGetTemplate() as MessageTemplate).message.text())
+    api.fail("status", "Wayfinder on your phone isn’t answering. When it’s safe, open it on your phone, then try again.")
+    assertEquals("Wayfinder on your phone isn’t answering. When it’s safe, open it on your phone, then try again.", (screen.onGetTemplate() as MessageTemplate).message.text())
   }
 
   private fun titles(t: Any?) = (t as PlaceListNavigationTemplate).itemList!!.items.map { (it as Row).title.text() }

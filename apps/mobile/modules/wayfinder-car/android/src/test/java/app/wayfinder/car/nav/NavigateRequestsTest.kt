@@ -72,7 +72,7 @@ class NavigateRequestsTest {
   @Test fun signedOutAsksToSignInThenTryAgainContinues() {
     requests.handle(navigate("geo:-27.47,153.03"))
     api.answer("status", Samples.status(Account.SIGNED_OUT))
-    assertEquals("Open Wayfinder on your phone and sign in.", message())
+    assertEquals("When it’s safe, open Wayfinder on your phone and sign in.", message())
     (pushed().last().onGetTemplate() as MessageTemplate).actions.single().onClickDelegate!!.sendClick(object : androidx.car.app.OnDoneCallback {})
     shadowOf(Looper.getMainLooper()).idle()
     api.answer("status", Samples.status())
@@ -82,13 +82,13 @@ class NavigateRequestsTest {
   @Test fun offlineSaysSo() {
     requests.handle(navigate("geo:-27.47,153.03"))
     api.answer("status", Samples.status(Account.OFFLINE))
-    assertEquals("Can’t reach your server. Check your phone has signal, then try again.", message())
+    assertEquals("Can’t reach your server. Try again when your phone has signal.", message())
   }
 
   @Test fun anAppThatIsntAnsweringIsTold() {
     requests.handle(navigate("geo:-27.47,153.03"))
-    api.fail("status", "Wayfinder on your phone isn’t answering. Open it on your phone, then try again.")
-    assertEquals("Wayfinder on your phone isn’t answering. Open it on your phone, then try again.", message())
+    api.fail("status", "Wayfinder on your phone isn’t answering. When it’s safe, open it on your phone, then try again.")
+    assertEquals("Wayfinder on your phone isn’t answering. When it’s safe, open it on your phone, then try again.", message())
   }
 
   @Test fun anUnreadableDestinationIsExplainedWithoutAskingThePhone() {

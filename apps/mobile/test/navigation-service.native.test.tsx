@@ -28,6 +28,8 @@ jest.mock('../src/nav/navigationLocation', () => ({
   stopNavigationLocation: jest.fn(async () => undefined),
   setNavigationFixHandler: jest.fn(),
 }));
+const mockAskForNotifications = jest.fn(async () => true);
+jest.mock('../src/lib/notifications', () => ({ askForNotifications: () => mockAskForNotifications() }));
 import * as NavLocation from '../src/nav/navigationLocation';
 
 // Registered once when navigationService loads, before resetFakes() clears mock records.
@@ -70,6 +72,28 @@ it('navigates with no screen open, as the car starts it', async () => {
   expect(Speech.speak).toHaveBeenCalledWith('Turn left', expect.anything());
   expect(changes).toBeGreaterThanOrEqual(2);
   off();
+});
+
+// Android 13+ hides "Navigating to …" without permission; the phone asks, the car never does.
+it('asks for notifications for a trip started on the phone, after location, and never for the car', async () => {
+  navigation.start(route({ id: 'r1' }), { destinationName: 'Mt Coot-tha Lookout' });
+  await waitFor(() => expect(NavLocation.startNavigationLocation).toHaveBeenCalled());
+  expect(mockAskForNotifications).not.toHaveBeenCalled();
+  navigation.stop();
+  navigation.start(route({ id: 'r2' }), { askForNotifications: true });
+  await waitFor(() => expect(mockAskForNotifications).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(NavLocation.startNavigationLocation).toHaveBeenCalledTimes(2));
+});
+
+it('a trip ended while the notification question is up starts no location service', async () => {
+  let answer!: (v: boolean) => void;
+  mockAskForNotifications.mockImplementationOnce(() => new Promise<boolean>((r) => (answer = r)));
+  navigation.start(route({ id: 'r1' }), { askForNotifications: true });
+  await waitFor(() => expect(mockAskForNotifications).toHaveBeenCalled());
+  navigation.stop();
+  answer(true);
+  await new Promise((r) => setTimeout(r, 0));
+  expect(NavLocation.startNavigationLocation).not.toHaveBeenCalled();
 });
 
 it('starting another trip ends the first and records the new one separately', async () => {

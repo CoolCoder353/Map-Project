@@ -41,7 +41,7 @@ export function useTurnByTurn(initial: Route | null): TurnByTurn {
   // whole route into text on every GPS fix.)
   const key = initial?.id ?? null;
   useEffect(() => {
-    if (initial) navigation.start(initial);
+    if (initial) navigation.start(initial, { askForNotifications: true });
     quietly(() => activateKeepAwakeAsync(KEEP_AWAKE_TAG));
     return () => {
       if (initial) navigation.stop();

@@ -1,5 +1,6 @@
 package app.wayfinder.car.bridge
 
+import app.wayfinder.car.CarMessages
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -32,6 +33,6 @@ class BridgeCarApi(private val bridge: CarBridge) : CarApi {
     }
 
   private companion object {
-    const val OUT_OF_STEP = "Update Wayfinder on your phone, then try again."
+    const val OUT_OF_STEP = CarMessages.UPDATE_PHONE_APP
   }
 }

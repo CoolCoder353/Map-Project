@@ -2,7 +2,7 @@ import { type PlannedRoute, PlannedRouteListSchema, PublicUserSchema, type UserS
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
-import { Car, Footprints, LogOut, MessageSquarePlus, Navigation, RefreshCw, Trash2 } from 'lucide-react-native';
+import { Car, ExternalLink, Footprints, LogOut, MessageSquarePlus, Navigation, RefreshCw, Trash2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ScrollView, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,9 +16,10 @@ import { CONTENT_MAX_WIDTH } from '../../src/lib/layout';
 import { space, useTheme } from '../../src/lib/theme';
 import { contactsSearchEnabled, setContactsSearchEnabled } from '../../src/lib/contacts';
 import { requestTrackingPermission, trackingPermission } from '../../src/tracking/background';
+import { confirmBackgroundLocation } from '../../src/tracking/disclosure';
 import { sqliteQueueStore } from '../../src/tracking/sqliteStore';
 import { syncQueue } from '../../src/tracking/sync';
-import { Body, Button, Card, Heading, Notice, Segmented, Small, Title } from '../../src/ui/kit';
+import { Body, Button, Card, Field, Heading, Notice, Segmented, Small, Title } from '../../src/ui/kit';
 
 export default function SettingsScreen() {
   const t = useTheme();
@@ -33,6 +34,11 @@ export default function SettingsScreen() {
   const [message, setMessageState] = useState<{ text: string; openSettings: boolean } | null>(null);
   const setMessage = (text: string | null, openSettings = false) => setMessageState(text ? { text, openSettings } : null);
   const [syncing, setSyncing] = useState(false);
+  // Deleting the account asks for the email typed back, as the website does.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [typedEmail, setTypedEmail] = useState('');
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const planned = useQuery({ queryKey: ['planned-routes'], queryFn: () => api.request('api/planned-routes', { schema: PlannedRouteListSchema }) });
 
@@ -60,10 +66,12 @@ export default function SettingsScreen() {
     if (on) {
       let p: Awaited<ReturnType<typeof requestTrackingPermission>>;
       try {
-        p = await requestTrackingPermission();
+        // Play's prominent disclosure comes first; Android is only asked after "Continue".
+        p = await requestTrackingPermission(() => confirmBackgroundLocation(config.appName));
       } catch {
         p = 'denied';
       }
+      if (p === 'declined') return; // "Not now": the switch stays off, nothing to fix
       setPermission(p);
       if (p !== 'granted') {
         setMessage('Background tracking needs location access set to “Allow all the time”. Open app settings to change it.', true);
@@ -104,6 +112,21 @@ export default function SettingsScreen() {
     } catch (e) {
       setMessage(`Couldn’t change contact search. ${errorMessage(e)}`);
     }
+  };
+
+  const deleteAccount = async () => {
+    if (!user || deleting) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.request('api/me', { method: 'DELETE', body: { confirm: typedEmail.trim() } });
+    } catch (e) {
+      setDeleteError(`Couldn’t delete your account. ${errorMessage(e)}`);
+      setDeleting(false);
+      return;
+    }
+    // The account is gone (restorable for 7 days): sign out here too, which stops tracking.
+    await signOut().finally(() => router.replace('/sign-in'));
   };
 
   const removePlanned = async (id: string) => {
@@ -219,7 +242,49 @@ export default function SettingsScreen() {
         ) : null}
 
         <Button label="Sign out" kind="secondary" icon={LogOut} onPress={() => void signOut().finally(() => router.replace('/sign-in'))} style={{ marginTop: space[4] }} />
-        <Small>Delete your account or download your data from the website’s Settings.</Small>
+
+        <Heading>Your data</Heading>
+        <Small>Download a copy of your data from Settings on the website.</Small>
+        <Button
+          label="Privacy policy"
+          kind="secondary"
+          icon={ExternalLink}
+          disabled={!server}
+          onPress={() => void Linking.openURL(`${server.replace(/\/+$/, '')}/privacy`).catch(() => setMessage('Couldn’t open the privacy policy. Is a browser installed?'))}
+          style={{ alignSelf: 'flex-start' }}
+        />
+        {confirmingDelete ? (
+          <Card>
+            <Text style={{ color: t.text, fontWeight: '700' }}>Delete your account?</Text>
+            <Small>
+              You’ll be signed out. Your trips, coverage and planned routes can be restored for 7 days, then they’re removed permanently.
+            </Small>
+            <Field
+              label="Type your email to confirm"
+              value={typedEmail}
+              onChangeText={setTypedEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              placeholder={user.email}
+              error={deleteError}
+            />
+            <View style={{ flexDirection: 'row', gap: space[2], marginTop: space[2] }}>
+              <Button label="Cancel" kind="ghost" compact disabled={deleting} onPress={() => { setConfirmingDelete(false); setTypedEmail(''); setDeleteError(null); }} />
+              <Button
+                label="Delete my account"
+                kind="danger"
+                icon={Trash2}
+                compact
+                busy={deleting}
+                disabled={typedEmail.trim().toLowerCase() !== user.email.toLowerCase()}
+                onPress={() => void deleteAccount()}
+              />
+            </View>
+          </Card>
+        ) : (
+          <Button label="Delete account" kind="danger" icon={Trash2} onPress={() => setConfirmingDelete(true)} style={{ alignSelf: 'flex-start' }} />
+        )}
       </ScrollView>
     </SafeAreaView>
   );

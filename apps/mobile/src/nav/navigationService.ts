@@ -5,6 +5,7 @@ import * as Crypto from 'expo-crypto';
 import * as Location from 'expo-location';
 import { speak as say, stopSpeaking } from './voice';
 import { api } from '../lib/api';
+import { askForNotifications } from '../lib/notifications';
 import { setNavigationRecording } from '../tracking/navigationRecording';
 import { sqliteQueueStore } from '../tracking/sqliteStore';
 import { syncQueue } from '../tracking/sync';
@@ -37,13 +38,20 @@ export interface NavSnapshot {
   headingDeg: number | null;
 }
 
+export interface StartOptions {
+  destinationName?: string;
+  simulated?: boolean;
+  askForNotifications?: boolean;
+}
+
 export interface NavigationService {
   /**
    * `simulated` is a test drive (the car's "auto drive"): it follows fixes fed to [handleFix] by
    * the caller, never uses the phone's location, and records and uploads nothing, so it can't
-   * become a trip in the user's coverage.
+   * become a trip in the user's coverage. `askForNotifications` is for a trip started on the phone:
+   * the "Navigating to …" notification needs permission on Android 13 and up. Never from the car.
    */
-  start(route: Route, opts?: { destinationName?: string; simulated?: boolean }): void;
+  start(route: Route, opts?: StartOptions): void;
   stop(): void;
   setMuted(muted: boolean): void;
   /** `source` 'simulation' is the test drive's own fixes: the only ones a test drive follows. */
@@ -254,7 +262,7 @@ export function createNavigationService(): NavigationService {
     if (snap !== IDLE) set(IDLE);
   }
 
-  function start(route: Route, opts: { destinationName?: string; simulated?: boolean } = {}) {
+  function start(route: Route, opts: StartOptions = {}) {
     stop();
     let next: NavigationSession;
     try {
@@ -284,6 +292,10 @@ export function createNavigationService(): NavigationService {
         if (!perm.granted) {
           set({ error: 'Navigation needs location permission.' });
           return;
+        }
+        if (opts.askForNotifications) {
+          await askForNotifications();
+          if (gen !== generation) return;
         }
         // Failing to start it only matters with the phone locked; the watch below still navigates.
         void inTurn(async () => {

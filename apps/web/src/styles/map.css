@@ -825,3 +825,46 @@ a.trip-row:hover,
   place-items: center;
   color: var(--text-2);
 }
+
+/* Public reading pages: the privacy policy and the deletion instructions. */
+.doc {
+  min-height: 100%;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+  background: var(--bg);
+}
+.doc-card {
+  width: min(680px, 100%);
+  height: fit-content;
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+  font-size: var(--text-md);
+  line-height: 1.55;
+}
+.doc-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.doc-brand {
+  font-weight: 650;
+}
+.doc-card h2 {
+  font-size: var(--text-lg);
+  font-weight: 650;
+  margin-top: var(--space-2);
+}
+.doc-card ul,
+.doc-card ol {
+  display: grid;
+  gap: var(--space-2);
+  padding-left: var(--space-5);
+}
+.doc-card a {
+  color: var(--accent);
+}

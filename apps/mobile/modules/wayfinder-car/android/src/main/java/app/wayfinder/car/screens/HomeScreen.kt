@@ -9,6 +9,7 @@ import androidx.car.app.model.Template
 import androidx.car.app.navigation.model.PlaceListNavigationTemplate
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import app.wayfinder.car.CarMessages
 import app.wayfinder.car.bridge.Account
 import app.wayfinder.car.bridge.CarApi
 import app.wayfinder.car.bridge.CarStatus
@@ -73,8 +74,8 @@ class HomeScreen(
       ?: return PlaceListNavigationTemplate.Builder().setTitle(appName(carContext)).setHeaderAction(Action.APP_ICON).setLoading(true).build()
     val s = loaded.getOrElse { return message(it.message ?: "Something went wrong. Try again.") }
     return when (s.account) {
-      Account.SIGNED_OUT -> message("Open Wayfinder on your phone and sign in.")
-      Account.OFFLINE -> message("Can’t reach your server. Check your phone has signal, then try again.")
+      Account.SIGNED_OUT -> message(CarMessages.SIGN_IN)
+      Account.OFFLINE -> message(CarMessages.OFFLINE)
       Account.SIGNED_IN -> PlaceListNavigationTemplate.Builder()
         .setTitle(appName(carContext))
         .setHeaderAction(Action.APP_ICON)

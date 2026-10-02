@@ -19,7 +19,7 @@ export function startCarController(handlers: CarHandlers, n: CarNative | null = 
 async function answer(n: CarNative, handlers: CarHandlers, call: CarCall) {
   const handler = handlers[call.method];
   if (!handler) {
-    n.reject(call.id, 'The car asked for something this version can’t do; update Wayfinder on your phone.');
+    n.reject(call.id, 'The car asked for something this version can’t do. When it’s safe, update Wayfinder on your phone.');
     return;
   }
   try {

@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import { askForNotifications } from '../lib/notifications';
 import { isNavigationRecording } from './navigationRecording';
 import { sqliteQueueStore } from './sqliteStore';
 import { syncQueue } from './sync';
@@ -42,12 +43,20 @@ export async function trackingPermission(): Promise<TrackingPermission> {
   return bg.granted ? 'granted' : 'foreground-only';
 }
 
-/** Android asks for "while using" first, then separately for "Allow all the time". */
-export async function requestTrackingPermission(): Promise<TrackingPermission> {
+/**
+ * Android asks for "while using" first, then separately for "Allow all the time". Before either,
+ * `confirm` shows Google Play's prominent disclosure (./disclosure.ts); without a yes Android is
+ * never asked ('declined'). Once location is allowed, notifications are asked for too, so the
+ * recording notification can show.
+ */
+export async function requestTrackingPermission(confirm: () => Promise<boolean>): Promise<TrackingPermission | 'declined'> {
+  if ((await trackingPermission()) !== 'granted' && !(await confirm())) return 'declined';
   const fg = await Location.requestForegroundPermissionsAsync();
   if (!fg.granted) return 'denied';
   const bg = await Location.requestBackgroundPermissionsAsync();
-  return bg.granted ? 'granted' : 'foreground-only';
+  if (!bg.granted) return 'foreground-only';
+  await askForNotifications();
+  return 'granted';
 }
 
 export async function isTrackingRunning() {

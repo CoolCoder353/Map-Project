@@ -2,10 +2,11 @@ package app.wayfinder.car.bridge
 
 import android.os.Handler
 import android.os.Looper
+import app.wayfinder.car.CarMessages
 import org.json.JSONObject
 
 class CarBridgeError(message: String) : Exception(message)
-class CarBridgeTimeout : Exception("Wayfinder on your phone isn’t answering. Open it on your phone, then try again.")
+class CarBridgeTimeout : Exception(CarMessages.PHONE_NOT_ANSWERING)
 
 /**
  * The car screens' line to the JavaScript side, which has the account, the server and navigation.

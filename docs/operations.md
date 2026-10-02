@@ -162,7 +162,8 @@ Afterwards run `pnpm verify:stack` and `pnpm verify:mobile` against the server (
 ## Data and privacy
 
 - Raw GPS points live in `track_points`; the host disk should be encrypted (LUKS).
-- Users can export (`Settings → Download my data`) and delete their own account.
+- Users can export (`Settings → Download my data`, website) and delete their own account (`Settings → Delete account`, website and Android app).
+- The public privacy policy (`/privacy`) and deletion instructions (`/delete-account`) are web pages, served like the rest of the web app. Their contact address, `privacy@paulsjones.com`, is set in `apps/web/src/pages/DocPage.tsx`; keep that mailbox working.
 - Deleted users and trips are restorable for 7 days (**Admin → Recently deleted**), then a daily job removes them permanently.
 - Every admin view of another person's data is recorded in the append-only audit log. The database role cannot update or delete audit rows (a trigger blocks it).
 - Logs and metrics never contain coordinates, tokens or emails; error messages are scrubbed before storage.

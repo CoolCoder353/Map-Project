@@ -10,6 +10,7 @@ import androidx.car.app.SurfaceContainer
 import app.wayfinder.car.bridge.LngLat
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdate
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.geometry.LatLngBounds
@@ -141,8 +142,13 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
     val top = visible.top.toDouble()
     val right = (surfaceSize.width() - visible.right).toDouble().coerceAtLeast(0.0)
     val bottom = (surfaceSize.height() - visible.bottom).toDouble().coerceAtLeast(0.0)
-    when (val spec = SceneLayout.camera(scene)) {
-      is CameraSpec.Follow -> m.easeCamera(
+    val spec = SceneLayout.camera(scene)
+    val move = { update: CameraUpdate ->
+      val ms = SceneLayout.moveMs(spec)
+      if (ms > 0) m.easeCamera(update, ms) else m.moveCamera(update)
+    }
+    when (spec) {
+      is CameraSpec.Follow -> move(
         CameraUpdateFactory.newCameraPosition(
           CameraPosition.Builder()
             .target(spec.target.latLng())
@@ -153,18 +159,17 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
             .padding(left, top + visible.height() * 0.4, right, bottom)
             .build(),
         ),
-        900,
       )
       is CameraSpec.Fit -> {
         val distinct = spec.points.distinct()
         if (distinct.size == 1) {
-          m.easeCamera(CameraUpdateFactory.newLatLngZoom(distinct[0].latLng(), 15.0), 600)
+          move(CameraUpdateFactory.newLatLngZoom(distinct[0].latLng(), 15.0))
         } else {
           val bounds = LatLngBounds.Builder().includes(distinct.map { it.latLng() }).build()
-          m.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds, (left + 40).toInt(), (top + 40).toInt(), (right + 40).toInt(), (bottom + 40).toInt()), 600)
+          move(CameraUpdateFactory.newLatLngBounds(bounds, (left + 40).toInt(), (top + 40).toInt(), (right + 40).toInt(), (bottom + 40).toInt()))
         }
       }
-      is CameraSpec.Center -> m.moveCamera(CameraUpdateFactory.newLatLngZoom(spec.target.latLng(), spec.zoom))
+      is CameraSpec.Center -> move(CameraUpdateFactory.newLatLngZoom(spec.target.latLng(), spec.zoom))
       CameraSpec.Keep -> Unit
     }
   }

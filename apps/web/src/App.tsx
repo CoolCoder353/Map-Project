@@ -7,6 +7,8 @@ import { ConfigProvider } from './lib/config';
 import { ToastProvider } from './lib/toast';
 import { MapProvider } from './map/MapProvider';
 import { MapShell } from './map/MapShell';
+import { DeleteAccountPage } from './pages/DeleteAccountPage';
+import { PrivacyPage } from './pages/PrivacyPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { SignInPage } from './pages/SignInPage';
@@ -87,6 +89,9 @@ const router = createBrowserRouter([
     ],
   },
   { path: '/reset-password', element: <ResetPasswordPage /> },
+  // Public: Google Play and the people deciding whether to use the app read these without an account.
+  { path: '/privacy', element: <PrivacyPage /> },
+  { path: '/delete-account', element: <DeleteAccountPage /> },
   {
     element: <RequireAuth />,
     children: [

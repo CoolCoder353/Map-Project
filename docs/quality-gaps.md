@@ -45,10 +45,86 @@ Gaps 1 to 11 below were fixed or decided in one change. What each did, and what 
 - **Keyboard, mouse (Tier 2):** focus outline, hover shading, Esc in search, Enter sends feedback on large windows. Not built: context menus and content zoom. Ctrl+scroll map zoom and tab order are untested on a device.
 - **Signing in on a new phone:** decision: not needed for an invite-only group. The backup rules include only shared preferences, so the sign-in token and `wayfinder-tracking.db` stay off the new phone; users sign in again. If ever wanted: Credential Manager, then Restore Credentials, then an optional biometric lock.
 
+## Fixed (2026-10-02, full-page audit)
+
+A second pass read the full car app quality page, the navigation and distribution pages, and Play's
+permission rules, criterion by criterion (table below). Found and fixed:
+
+- **Background location prominent disclosure (Play User Data policy; the likeliest rejection):**
+  there was none; Settings went straight to Android's prompts. Now `requestTrackingPermission`
+  (`src/tracking/background.ts`) shows the disclosure (`src/tracking/disclosure.ts`) before any
+  Android prompt unless "Allow all the time" is already granted, and asks Android nothing on "Not
+  now" or a dismiss. It names the data (location), says it is collected even when the app is closed
+  or not in use, says what for (recording roads travelled, suggesting new ones), who gets it (only
+  the group's server) and how to turn it off. Tests: `tracking.native.test.tsx`,
+  `permissions.native.test.tsx`, `settings.screen.test.tsx`.
+- **`POST_NOTIFICATIONS` was declared but never asked for**, so on Android 13+ the recording
+  notification, "Navigating to …" and the car's turn-by-turn notification (NF-3) were hidden. Now
+  asked after location when tracking is turned on, and when a trip starts on the phone (never from
+  the car). `src/lib/notifications.ts`; tests in `permissions.native.test.tsx`,
+  `navigation-service.native.test.tsx`.
+- **VI-1:** car messages sending the driver to the phone ("Open Wayfinder on your phone and sign
+  in", "isn't answering", "update", "location is off") didn't say to look only when safe; "Check
+  your phone has signal" sent the driver to the phone for no reason. Now in `CarMessages.kt` (and
+  `src/car/handlers.ts`, `controller.ts`), each with "When it's safe". Tests: `CarMessagesTest`,
+  `HomeScreenTest`, `NavigateRequestsTest`, `BridgeCarApiTest`, `car-handlers`/`car-controller`.
+- **SA-1:** the car map glided (600 ms) to places and routes on list and preview screens. Now it
+  jumps; only following the car moves smoothly (`SceneLayout.moveMs`, `SceneLayoutTest`).
+- **NF-6 / VC-1:** Google's navigation page says Android Auto looks for the `NAVIGATE` filter on an
+  **activity**; it was only on the car service. `NavigateActivity` now carries it (and on the phone
+  just opens Wayfinder); the service filter stays. Tests: `NavigateActivityTest`, `carModule.test.ts`.
+
+### Car app criteria, one by one (navigation, Android Auto)
+
+Tier 2 is needed for open testing and production. AAOS-only criteria (PE-1, EP-4, DO-1, DL-1,
+DL-2, LS-*) and those for other categories (media, messaging, video, games, browsers, POI, IoT,
+weather) don't apply.
+
+| ID | Status | Notes |
+| -- | ------ | ----- |
+| PC-1 | met | Search, routes, Discover nearby, turn-by-turn: all navigation |
+| EP-1 | Play | The listing must describe what the car app does |
+| EP-2 | met | A running trip comes back on connect; Home offers "Back to directions" |
+| AR-1 | n/a | Templates only on the car; no activity draws there |
+| SA-1 | fixed | Only the map following the car animates |
+| AD-1, NA-1, PA-1 | n/a | No ads, no payments |
+| IU-1 | met | Images are maneuver icons and the app icon only |
+| VI-1 | fixed | "When it's safe" on every message that sends the driver to the phone |
+| AC-1 | met | Every task is three screens (Home, list or search, preview); navigate requests pop to Home first |
+| ST-1 | met | No scrolling text |
+| VC-1 | fixed, needs device | NAVIGATE on an activity as well as the service; try Assistant on the DHU |
+| DR-1 | met, needs device | Go shows "Starting…" at once; lists show loading; measure on the DHU |
+| DR-2, DR-3 | needs device | 10 s launch and content load |
+| VD-1 | needs device | Maneuver icons are host-tinted vectors; check contrast day and night |
+| TH-1 | n/a | Car App Library 1.7, no custom theme |
+| DD-1 | met | Navigation audio (`USAGE_ASSISTANCE_NAVIGATION_GUIDANCE`, transient may-duck) only for spoken directions |
+| IN-1 | met | Only the navigation notification, only during a trip |
+| NF-1 | met | Turn-by-turn on `NavigationTemplate` |
+| NF-2 | met, needs device | Surface draws only map, route and position within the visible area |
+| NF-3 | met (now with permission asked), needs device | One ongoing `CarAppExtender` notification |
+| NF-4 | met | `updateTrip` with step, road and destination estimates |
+| NF-5 | met, needs device | `onStopNavigation` ends the trip: voice, notification and `updateTrip` stop |
+| NF-6 | fixed, needs device | `geo:` points and queries, from onCreateScreen and onNewIntent |
+| NF-7 | met | `onAutoDriveEnabled` test drive, records nothing |
+| MR-1 | met | `isDarkMode` picks the dark style; redrawn on configuration change |
+| NF-9 (Tier 1) | open | Cluster map; optional |
+
+Play policy items: target SDK 36 (met); `FOREGROUND_SERVICE_LOCATION` with the service's
+`foregroundServiceType="location"` from expo-location (met); background location disclosure
+(fixed); `POST_NOTIFICATIONS` (fixed). The background location declaration form and video are
+the owner's ([play-store-android-auto.md](play-store-android-auto.md)).
+
 ## Still open
 
 - **NF-9 (map on the cluster, Tier 1):** not started; it needs the owner's go-ahead.
-- **Smaller car app items:** DR-2/DR-3 launch time, NF-5 and NF-2 all need a head unit.
+- **Smaller car app items:** DR-1/DR-2/DR-3 timings, NF-2, NF-5, VD-1 and the new VC-1/NF-6 activity filter all need a head unit.
+- **Starting navigation from the car with the phone app in the background** starts a location
+  foreground service from the background; Android 14 may refuse it with only "while using"
+  permission. Directions still come from the location watch while the process lives; check on a
+  device (verification.md has the item).
+- **Contacts:** read only after the person turns on contact search, whose description explains
+  it. Play may still want a separate disclosure before the contacts prompt if the reviewer judges
+  the address lookup unexpected; low risk, not built.
 - **Phone gaps: context menus (`T-Context_Menus`) and content zoom (`T-Content_Zoom`)** are not built.
 
 ### Needs measuring, not changing
@@ -84,10 +160,8 @@ These need a device or the Play pre-launch report, and no code change is known. 
 
 - Read [architecture.md](architecture.md#android-auto), which explains the bridge between the
   Kotlin car screens and the JavaScript side, and [testing.md](testing.md) for where tests go.
-- This list was built on 2026-10-02 from the car navigation criteria, the core app quality page
-  and the adaptive Tier 3 and Tier 2 pages, each read through a summary. **Fetch the full pages and
-  check every criterion that applies**, including the car app's general (non-navigation) ones, in
-  case something is missing. Adaptive Tier 1 was not read in full.
+- The car criteria were checked against the full pages on 2026-10-02 (table above). The core and
+  adaptive pages were read through summaries only; adaptive Tier 1 was not read.
 - Several fixes here (gaps 4 to 6 and 9) change how the phone app behaves for existing users. Ask
   the owner before landing them, and build an APK to try on a phone and a tablet emulator first.
 - No coverage floor drops and no test is skipped to land these (CLAUDE.md). `pnpm check` must pass.

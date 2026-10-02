@@ -152,12 +152,42 @@ describe('background tracking', () => {
     jest.mocked(Location.getBackgroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
     expect(await trackingPermission()).toBe('granted');
 
+    jest.mocked(Location.getBackgroundPermissionsAsync).mockResolvedValue({ granted: false } as never);
+    const yes = async () => true;
     jest.mocked(Location.requestForegroundPermissionsAsync).mockResolvedValue({ granted: false } as never);
-    expect(await requestTrackingPermission()).toBe('denied');
+    expect(await requestTrackingPermission(yes)).toBe('denied');
     expect(Location.requestBackgroundPermissionsAsync).not.toHaveBeenCalled();
     jest.mocked(Location.requestForegroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    jest.mocked(Location.requestBackgroundPermissionsAsync).mockResolvedValue({ granted: false } as never);
+    expect(await requestTrackingPermission(yes)).toBe('foreground-only');
     jest.mocked(Location.requestBackgroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
-    expect(await requestTrackingPermission()).toBe('granted');
+    expect(await requestTrackingPermission(yes)).toBe('granted');
+  });
+
+  // Google Play's prominent disclosure: shown, and agreed to, before Android's location prompts.
+  it('shows the disclosure before asking Android, and asks nothing when it is declined', async () => {
+    jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    jest.mocked(Location.getBackgroundPermissionsAsync).mockResolvedValue({ granted: false } as never);
+    const order: string[] = [];
+    jest.mocked(Location.requestForegroundPermissionsAsync).mockImplementation(async () => (order.push('android'), { granted: true }) as never);
+    jest.mocked(Location.requestBackgroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+
+    expect(await requestTrackingPermission(async () => (order.push('declined'), false))).toBe('declined');
+    expect(Location.requestForegroundPermissionsAsync).not.toHaveBeenCalled();
+    expect(Location.requestBackgroundPermissionsAsync).not.toHaveBeenCalled();
+
+    expect(await requestTrackingPermission(async () => (order.push('disclosure'), true))).toBe('granted');
+    expect(order).toEqual(['declined', 'disclosure', 'android']);
+  });
+
+  it('skips the disclosure when “Allow all the time” is already granted', async () => {
+    jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    jest.mocked(Location.getBackgroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    jest.mocked(Location.requestForegroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    jest.mocked(Location.requestBackgroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    const confirm = jest.fn(async () => false);
+    expect(await requestTrackingPermission(confirm)).toBe('granted');
+    expect(confirm).not.toHaveBeenCalled();
   });
 
   it('starts once with a visible notification naming the app, and stops', async () => {

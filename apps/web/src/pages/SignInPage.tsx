@@ -36,6 +36,8 @@ export function SignInPage() {
       footer={
         <>
           New here? <Link to="/register">Create an account with an invite code</Link>
+          <br />
+          <Link to="/privacy">Privacy policy</Link>
         </>
       }
     >

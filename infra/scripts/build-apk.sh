@@ -1,11 +1,13 @@
 #!/bin/sh
-# Build a signed release APK inside Docker (no local Android SDK needed).
+# Build a signed release APK and Android App Bundle inside Docker (no local Android SDK needed).
+# dist/wayfinder.apk is what you share directly; dist/wayfinder.aab is what Google Play takes.
 # Usage: EXPO_PUBLIC_API_URL=https://maps.your-server.org infra/scripts/build-apk.sh
 # The address is baked into the app as the server it talks to, so give it your real one: an app
 # built with the documentation's example address cannot reach anything.
 # Signing: infra/android/release.keystore with its passwords in infra/android/keystore.env
 # (both kept out of git) are used automatically. Keep them: an update only installs over an
-# existing app when it is signed with the same key.
+# existing app when it is signed with the same key. The same keystore signs the bundle, so it is
+# also the Play upload key.
 # Without a keystore each build is signed with a throwaway debug key, so updates need the app
 # to be uninstalled first (which loses the offline queue and sign-in).
 set -eu
@@ -58,16 +60,17 @@ docker run --rm -t \
     npx expo prebuild --platform android --clean
     cd android
     if [ -f /workspace/infra/android/release.keystore ]; then
-      ./gradlew assembleRelease \
+      ./gradlew assembleRelease bundleRelease \
         -Pandroid.injected.signing.store.file=/workspace/infra/android/release.keystore \
         -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD" \
         -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
         -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
     else
-      ./gradlew assembleRelease
+      ./gradlew assembleRelease bundleRelease
     fi
     mkdir -p /workspace/dist
     cp app/build/outputs/apk/release/app-release.apk /workspace/dist/wayfinder.apk
+    cp app/build/outputs/bundle/release/app-release.aab /workspace/dist/wayfinder.aab
   '
 # Read the server address back out of the finished APK. The build bakes it in at bundling time,
 # so this is the only way to know what the file people install will actually talk to.
@@ -77,6 +80,7 @@ if [ "$BUILT_URL" != "$EXPO_PUBLIC_API_URL" ]; then
   exit 1
 fi
 echo "APK: $ROOT/dist/wayfinder.apk (server: $BUILT_URL)"
+echo "Bundle for Google Play: $ROOT/dist/wayfinder.aab"
 
 # The container installed node_modules against its own store, which leaves the checkout's
 # packages pointing somewhere this machine cannot see. Put them back.

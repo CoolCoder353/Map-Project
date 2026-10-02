@@ -33,10 +33,11 @@ can apply for production access. An organisation account does not.
 | Run the Android Auto checklist on a Desktop Head Unit                         | open     | [verification.md](verification.md#android-auto-desktop-head-unit): nothing ticked yet. Do this before open testing   |
 | Remaining car items: DR-2/DR-3 launch time, NF-5, NF-2                        | open     | Need a head unit to measure                                                                                          |
 | **Play Console developer account** ($25, identity check)                      | **you**  | Not started                                                                                                          |
-| **Build an Android App Bundle (.aab)**                                        | code     | `infra/scripts/build-apk.sh` only runs `assembleRelease`. Add `bundleRelease` (Play rejects APKs for new apps)       |
+| Build an Android App Bundle (.aab)                                            | done     | `build-apk.sh` now also runs `bundleRelease` and writes `dist/wayfinder.aab`; version 0.4.0 / versionCode 5. Not yet built |
 | **Play App Signing / upload key**                                             | you      | Enrol in Play App Signing. The current `infra/android/release.keystore` can become the upload key; keep it backed up |
 | **Server address baked in**                                                   | decision | A Play build points at `https://maps.paulsjones.com`. Reviewers need to reach it, so it must stay up                 |
-| **Privacy policy at a public URL**                                            | code     | None exists. Required by Play, and mandatory because we use background location and contacts                         |
+| Privacy policy at a public URL                                                | done     | `https://maps.paulsjones.com/privacy` (web `PrivacyPage`, no sign-in; Settings in the app opens it). Contact is `privacy@paulsjones.com`, a placeholder: make sure that mailbox exists. Live after the next web deploy |
+| Account deletion web page                                                     | done     | `https://maps.paulsjones.com/delete-account`, linked from the privacy page. Android Settings now also has Delete account. Live after the next web deploy |
 | Data safety form                                                              | you      | Answers below                                                                                                        |
 | Background location declaration + demo video                                  | you      | Answers below. Play reviews this separately and it is the likeliest rejection                                        |
 | Foreground service (location) declaration                                     | you      | Declared in the manifest; Play asks what it does                                                                     |
@@ -49,10 +50,10 @@ can apply for production access. An organisation account does not.
 
 ## Order of work
 
-1. **Code, in this repo** (not done yet; each needs tests and `pnpm check`):
-   - `bundleRelease` option in the build script, writing `dist/wayfinder.aab`, and the build-android.md section for it.
-   - A privacy policy page served by the API or web app (public, no sign-in), written from the answers below, and linked from Settings.
-   - A bump of `version` and `versionCode` in `apps/mobile/app.config.ts` for the first Play build.
+1. **Code, in this repo** (written and tested; deploy the web app and build the bundle):
+   - The build script also writes `dist/wayfinder.aab` ([build-android.md](build-android.md)).
+   - Privacy policy and account deletion pages (public, web app), linked from Settings.
+   - Version 0.4.0, versionCode 5 in `apps/mobile/app.config.ts` for the first Play build.
 2. **Head unit pass.** Install the release APK on a phone, run the DHU, tick the verification.md checklist, fix failures with tests.
 3. **Console setup.** Create the developer account, the app (`app.wayfinder.maps`, which can never change once uploaded), the store listing and the declarations.
 4. **Internal testing.** Upload the bundle, add testers, confirm the app shows in Android Auto from a Play install.
@@ -65,9 +66,9 @@ can apply for production access. An organisation account does not.
 - **Background location:** the core feature is recording trips so coverage counts roads travelled. Off until the user turns it on in Settings, with a foreground notification while running. Needs a short screen recording showing the Settings switch, the permission prompt and the notification.
 - **Contacts:** read only, only when the user turns on contact search, never uploaded as a list. Addresses are looked up on the phone.
 - **Photos:** the system photo picker, for feedback screenshots only.
-- **Data sent to our server:** account email, name, trip points, trip history, feedback. **Nothing to third parties:** routing, tiles and search all run on our server (CLAUDE.md rule).
+- **Data sent to our server:** account email, trip points, trip history, feedback. **Nothing to third parties:** routing, tiles and search all run on our server (CLAUDE.md rule).
 - **Encryption in transit:** yes, cleartext is off in release builds.
-- **Deletion:** users can export and delete their account in Settings ([operations.md](operations.md#data-and-privacy)). Play also wants a **web** page for account deletion requests; none exists yet.
+- **Deletion:** users can export and delete their account in Settings ([operations.md](operations.md#data-and-privacy)). Android Settings has **Delete account** too (email typed to confirm, same 7-day restore). Play's web deletion page is `/delete-account`; enter `https://maps.paulsjones.com/delete-account` in the Data safety form.
 - **Permissions to justify:** `ACCESS_BACKGROUND_LOCATION`, `FOREGROUND_SERVICE_LOCATION`, `POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED`.
 
 ## Things that will bite

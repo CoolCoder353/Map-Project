@@ -20,7 +20,7 @@ class BridgeCarApiTest {
   }
 
   @Test fun asksForAnUpdateWhenThePhoneSendsSomethingItCantRead() {
-    val update = "Update Wayfinder on your phone, then try again."
+    val update = "When it’s safe, update Wayfinder on your phone, then try again."
     assertEquals("missing fields", update, statusAfter { resolve("c0", "{}") })
     assertEquals("not JSON at all", update, statusAfter { resolve("c1", "not json") })
   }

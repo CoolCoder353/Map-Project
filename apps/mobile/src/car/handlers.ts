@@ -39,7 +39,8 @@ async function here(fresh = false): Promise<LngLat | null> {
 
 /** Android Auto shows about six rows while driving; never send more. */
 export const MAX_ROWS = 6;
-const NO_LOCATION = 'Can’t tell where you are. Check that location is on for Wayfinder on your phone.';
+// Shown in the car: anything that sends the driver to the phone says to wait until it's safe (VI-1).
+const NO_LOCATION = 'Can’t tell where you are. When it’s safe, check that location is on for Wayfinder on your phone.';
 
 /** Routes the car has been offered, so "Go" can start one by id. The newest 30 are kept. */
 const offered = new Map<string, Route>();

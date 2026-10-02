@@ -3,6 +3,7 @@ package app.wayfinder.car.nav
 import android.content.Intent
 import androidx.car.app.CarContext
 import androidx.car.app.ScreenManager
+import app.wayfinder.car.CarMessages
 import app.wayfinder.car.bridge.Account
 import app.wayfinder.car.bridge.CarApi
 import app.wayfinder.car.bridge.CarPlace
@@ -41,8 +42,8 @@ class NavigateRequests(
       if (!alive()) return@status
       val status = r.getOrElse { return@status show(it.message ?: "Something went wrong. Try again.", request) }
       when (status.account) {
-        Account.SIGNED_OUT -> show("Open Wayfinder on your phone and sign in.", request)
-        Account.OFFLINE -> show("Can’t reach your server. Check your phone has signal, then try again.", request)
+        Account.SIGNED_OUT -> show(CarMessages.SIGN_IN, request)
+        Account.OFFLINE -> show(CarMessages.OFFLINE, request)
         Account.SIGNED_IN -> open(request)
       }
     }

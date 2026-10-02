@@ -58,14 +58,15 @@ Docker Compose passes on; copy [`infra/.env.example`](../infra/.env.example) to 
 
 ## Android build (`infra/scripts/build-apk.sh`)
 
-How to build, check and share the app: [build-android.md](build-android.md).
+How to build, check and share the app: [build-android.md](build-android.md). Every build produces
+`dist/wayfinder.apk` (to share) and `dist/wayfinder.aab` (for Google Play), both signed with the same key.
 
 | Variable | Needed | Notes |
 |---|---|---|
 | `EXPO_PUBLIC_API_URL` | yes | The server the app talks to, **baked into the APK**. Must be `https://`, and not a documentation address: the script refuses `example.com` and checks the finished APK |
 | `ALLOW_HTTP` | no | `1` allows an `http://` server, for a test build only |
 | `APP_DISPLAY_NAME` | no | Home-screen name (default `Wayfinder`). The in-app name comes from the server |
-| `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | no | Read from `infra/android/keystore.env` when present. Keep the keystore: an update only installs over an app signed with the same key |
+| `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | no | Read from `infra/android/keystore.env` when present. Keep the keystore: an update only installs over an app signed with the same key, and it is the Play upload key for the `.aab` |
 
 ## Scripts
 

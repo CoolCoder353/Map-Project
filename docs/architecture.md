@@ -177,7 +177,8 @@ Android Auto hosts (the `HostValidator` allowlist in `WayfinderCarAppService`); 
 answers any host.
 
 **Navigate requests.** The car service also declares the `androidx.car.app.action.NAVIGATE` filter
-(`geo:` scheme), so "navigate to ..." through Google Assistant, or a `geo:` link from another app,
+(`geo:` scheme), and so does `NavigateActivity`, because Android Auto looks for it on an activity
+(on the phone alone that activity just opens Wayfinder), so "navigate to ..." through Google Assistant, or a `geo:` link from another app,
 opens the route preview for that place. `NavigateIntents` reads the URI (`geo:lat,lon`, or
 `geo:0,0?q=name`; the lat/lon order is swapped to our `[lon, lat]` there, once) and
 `NavigateRequests` handles it both when it opens the car app (`onCreateScreen`) and while it is open
