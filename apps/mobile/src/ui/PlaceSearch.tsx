@@ -4,11 +4,12 @@ import type { Place } from '@wayfinder/shared/schemas';
 import * as Location from 'expo-location';
 import { LocateFixed, MapPin, Search, UserRound, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Text, TextInput, View } from 'react-native';
 import { api, errorMessage } from '../lib/api';
 import { type ContactMatch, findContacts } from '../lib/contacts';
 import { formatDistanceShort } from '../lib/format';
 import { radius, space, useTheme } from '../lib/theme';
+import { MIN_TARGET, Press } from './kit';
 
 export interface ChosenPlace {
   name: string;
@@ -69,6 +70,7 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
     };
   }, [text, focused, near, value?.name]);
 
+  const rowStyle = { flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3], minHeight: MIN_TARGET } as const;
   const Icon = tone === 'search' ? Search : MapPin;
   const iconColor = tone === 'end' ? t.danger : t.text2;
   const choose = (p: ChosenPlace) => {
@@ -76,6 +78,12 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
     onChange(p);
     setFocused(false);
     setResults([]);
+  };
+
+  const clear = () => {
+    setText('');
+    setError(null);
+    onChange(null);
   };
 
   const locateMe = async () => {
@@ -119,31 +127,40 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
             if (value) onChange(null);
           }}
           returnKeyType="search"
+          // Esc: the first press closes the suggestions, the next clears what was typed.
+          onKeyPress={(e) => {
+            if (e.nativeEvent.key !== 'Escape') return;
+            if (focused && (results.length > 0 || contacts.length > 0)) {
+              setResults([]);
+              setContacts([]);
+              setFocused(false);
+            } else clear();
+          }}
         />
         {text ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={`Clear ${label.toLowerCase()}`} onPress={() => { setText(''); onChange(null); }} style={{ padding: space[3] }}>
+          <Press accessibilityRole="button" accessibilityLabel={`Clear ${label.toLowerCase()}`} onPress={clear} style={({ hovered }) => ({ minWidth: MIN_TARGET, minHeight: MIN_TARGET, alignItems: 'center', justifyContent: 'center', borderRadius: radius.control, backgroundColor: hovered ? t.surface3 : 'transparent' })}>
             <X size={18} color={t.text2} />
-          </Pressable>
+          </Press>
         ) : null}
       </View>
       {focused && (contacts.length > 0 || results.length > 0 || allowCurrentLocation) ? (
         <View style={{ marginTop: 4, borderRadius: radius.control, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border }}>
           {allowCurrentLocation ? (
-            <Pressable
+            <Press
               accessibilityRole="button"
               accessibilityState={{ busy: locating }}
-              style={{ flexDirection: 'row', gap: space[3], padding: space[3] }}
+              style={({ hovered }) => [rowStyle, hovered && { backgroundColor: t.surface2 }]}
               onPress={() => void locateMe()}
             >
               {locating ? <ActivityIndicator size="small" color={t.accent} /> : <LocateFixed size={18} color={t.accent} />}
               <Text style={{ color: t.text, fontWeight: '600' }}>Your location</Text>
-            </Pressable>
+            </Press>
           ) : null}
           {contacts.map((c) => (
-            <Pressable
+            <Press
               key={c.id}
               accessibilityRole="button"
-              style={{ flexDirection: 'row', gap: space[3], padding: space[3] }}
+              style={({ hovered }) => [rowStyle, hovered && { backgroundColor: t.surface2 }]}
               onPress={async () => {
                 setError(null);
                 try {
@@ -163,17 +180,17 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
                 <Text style={{ color: t.text, fontWeight: '600' }}>{c.name}</Text>
                 <Text style={{ color: t.text2, fontSize: 13 }}>{c.label ? `${c.label} · ${c.address}` : c.address}</Text>
               </View>
-            </Pressable>
+            </Press>
           ))}
           {results.map((p) => (
-            <Pressable key={p.id} accessibilityRole="button" style={{ flexDirection: 'row', gap: space[3], padding: space[3] }} onPress={() => choose(chosen(p))}>
+            <Press key={p.id} accessibilityRole="button" style={({ hovered }) => [rowStyle, hovered && { backgroundColor: t.surface2 }]} onPress={() => choose(chosen(p))}>
               <MapPin size={18} color={t.text3} />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: t.text, fontWeight: '600' }}>{p.name}</Text>
                 <Text style={{ color: t.text2, fontSize: 13 }}>{placeDetail(p, formatDistanceShort)}</Text>
                 {p.hours ? <Text style={{ color: p.hours.openNow ? t.explore : t.text2, fontSize: 13, fontWeight: p.hours.openNow ? '600' : '400' }}>{p.hours.label}</Text> : null}
               </View>
-            </Pressable>
+            </Press>
           ))}
         </View>
       ) : null}

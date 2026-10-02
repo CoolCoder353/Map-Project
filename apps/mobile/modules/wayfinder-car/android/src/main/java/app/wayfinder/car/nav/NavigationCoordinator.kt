@@ -1,6 +1,7 @@
 package app.wayfinder.car.nav
 
 import androidx.car.app.CarContext
+import androidx.car.app.CarToast
 import androidx.car.app.ScreenManager
 import androidx.car.app.navigation.NavigationManager
 import androidx.car.app.navigation.NavigationManagerCallback
@@ -22,17 +23,39 @@ class NavigationCoordinator(
   private val icons: ManeuverIcons,
 ) {
   private var navigating = false
+  /** The running trip is a test drive the car asked for (auto drive). */
+  private var testDrive = false
+  /** Asked for a test drive and not yet answered: replacing a running trip ends it first, which mustn't clear [testDrive]. */
+  private var testDriveStarting = false
+  private val notifications = NavNotifications(carContext, icons)
   private val screens get() = carContext.getCarService(ScreenManager::class.java)
   private val navManager get() = carContext.getCarService(NavigationManager::class.java)
 
   fun attach(): () -> Unit {
     navManager.setNavigationManagerCallback(object : NavigationManagerCallback {
       override fun onStopNavigation() = api.stop()
+
+      /** Google's reviewers and the Desktop Head Unit switch this on to see a trip without driving one (NF-7). */
+      override fun onAutoDriveEnabled() {
+        testDrive = true
+        testDriveStarting = true
+        api.simulate { r ->
+          testDriveStarting = false
+          r.onFailure {
+            testDrive = false
+            CarToast.makeText(carContext, it.message ?: "Couldn’t start a test drive. Try again.", CarToast.LENGTH_LONG).show()
+          }
+        }
+      }
     })
     val off = api.onNavigation(::update)
     update(api.navigation)
     return {
       off()
+      // A test drive ends with the car session; a real trip carries on with the phone.
+      if (navigating && testDrive) api.stop()
+      testDrive = false
+      notifications.cancel()
       if (navigating) navManager.navigationEnded()
       navigating = false
       navManager.clearNavigationManagerCallback()
@@ -47,10 +70,15 @@ class NavigationCoordinator(
       showDrive()
     } else if (nav == null && navigating) {
       navigating = false
+      if (!testDriveStarting) testDrive = false
+      notifications.cancel()
       navManager.navigationEnded()
       screens.popToRoot()
     }
-    if (nav != null) navManager.updateTrip(NavTemplates.trip(nav, icons))
+    if (nav != null) {
+      navManager.updateTrip(NavTemplates.trip(nav, icons))
+      notifications.update(nav)
+    }
   }
 
   /** Puts the driving screen on top during a trip, unless it already is. */

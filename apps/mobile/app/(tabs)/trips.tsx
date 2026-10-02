@@ -2,13 +2,14 @@ import { TripListResponseSchema } from '@wayfinder/shared/schemas';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { Car, Footprints, History } from 'lucide-react-native';
-import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { FlatList, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../../src/lib/api';
 import { useAppConfig } from '../../src/lib/appConfig';
 import { formatDateTime, formatDistanceShort } from '../../src/lib/format';
-import { space, useTheme } from '../../src/lib/theme';
-import { Empty, NewBadge, Notice, Small, Title } from '../../src/ui/kit';
+import { CONTENT_MAX_WIDTH } from '../../src/lib/layout';
+import { radius, space, useTheme } from '../../src/lib/theme';
+import { Empty, NewBadge, Notice, Press, Small, Title } from '../../src/ui/kit';
 
 export default function Trips() {
   const t = useTheme();
@@ -25,7 +26,7 @@ export default function Trips() {
       <FlatList
         data={trips}
         keyExtractor={(i) => i.id}
-        contentContainerStyle={{ padding: space[4], gap: space[2] }}
+        contentContainerStyle={{ padding: space[4], gap: space[2], width: '100%', maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center' }}
         ListHeaderComponent={
           <View style={{ gap: space[2], marginBottom: space[2] }}>
             <Title>Trips</Title>
@@ -39,7 +40,7 @@ export default function Trips() {
           if (q.hasNextPage && !q.isFetchingNextPage && !q.isError) void q.fetchNextPage();
         }}
         renderItem={({ item }) => (
-          <Pressable accessibilityRole="button" onPress={() => router.push(`/trip/${item.id}`)} style={{ flexDirection: 'row', gap: space[3], alignItems: 'center', paddingVertical: space[2] }}>
+          <Press accessibilityRole="button" onPress={() => router.push(`/trip/${item.id}`)} style={({ hovered }) => ({ flexDirection: 'row', gap: space[3], alignItems: 'center', paddingVertical: space[2], paddingHorizontal: space[2], borderRadius: radius.control, backgroundColor: hovered ? t.surface2 : 'transparent' })}>
             <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: t.surface3, alignItems: 'center', justifyContent: 'center' }}>
               {item.mode === 'car' ? <Car size={18} color={t.text2} /> : <Footprints size={18} color={t.text2} />}
             </View>
@@ -50,7 +51,7 @@ export default function Trips() {
                 {item.newRoads > 0 ? <NewBadge text={`${item.newRoads} new road${item.newRoads === 1 ? '' : 's'}`} /> : null}
               </View>
             </View>
-          </Pressable>
+          </Press>
         )}
       />
     </SafeAreaView>

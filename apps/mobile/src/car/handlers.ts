@@ -9,6 +9,7 @@ import { kindOf } from '../lib/categories';
 import { getServerUrl } from '../lib/server';
 import { navigation } from '../nav/navigationService';
 import type { CarHandlers } from './controller';
+import { DEMO_DESTINATION_NAME, demoRoute, startTestDrive } from './simulation';
 import { type CarPlace, CarParams, type CarRouteOption, type CarStatus } from './protocol';
 
 let copyCache: CopyCatalog | null = null;
@@ -142,6 +143,17 @@ export const carHandlers: CarHandlers = {
 
   async stop() {
     navigation.stop();
+    return {};
+  },
+
+  /**
+   * The car's "auto drive": a test drive along the running trip, else a built-in route from where
+   * the phone is. Records and uploads nothing (see simulation.ts).
+   */
+  async simulate() {
+    const now = navigation.getSnapshot();
+    if (now.active && now.route) startTestDrive(navigation, now.route, now.destinationName);
+    else startTestDrive(navigation, demoRoute((await here()) ?? undefined), DEMO_DESTINATION_NAME);
     return {};
   },
 

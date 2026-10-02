@@ -176,5 +176,29 @@ roundabout use the clockwise icon, `wf_roundabout_cw`. A release build only answ
 Android Auto hosts (the `HostValidator` allowlist in `WayfinderCarAppService`); a debug build
 answers any host.
 
+**Navigate requests.** The car service also declares the `androidx.car.app.action.NAVIGATE` filter
+(`geo:` scheme), so "navigate to ..." through Google Assistant, or a `geo:` link from another app,
+opens the route preview for that place. `NavigateIntents` reads the URI (`geo:lat,lon`, or
+`geo:0,0?q=name`; the lat/lon order is swapped to our `[lon, lat]` there, once) and
+`NavigateRequests` handles it both when it opens the car app (`onCreateScreen`) and while it is open
+(`onNewIntent`): ask the phone for the account (which starts React if needed), then show the preview
+for a point, or search the name and preview the first match. Signed out or offline shows the same
+sentences as Home, with "Try again".
+
+**Navigation notification.** While a trip runs, `NavNotifications` keeps one ongoing, alert-once
+notification (category navigation, extended with `CarAppExtender`) with the next instruction, which
+the car shows in its notification area. It is a heads-up only when the instruction changes, updates
+quietly with the distance, and is removed when the trip ends or the car session does. Tapping it
+brings the car app forward. The phone's own "Navigating to ..." service notification is separate.
+
+**Test drive.** The host's "auto drive" (`onAutoDriveEnabled`, switched on by Google's reviewers and
+the Desktop Head Unit) sends the `simulate` request. `src/car/simulation.ts` then runs the same
+navigation session with made-up fixes, one a second, along the trip already running if there is
+one, otherwise a built-in two-kilometre route that starts where the phone is (central Brisbane
+without a position), so it works with no route chosen and no server. It is marked `simulated` in
+the navigation service, which then records nothing, uploads nothing, starts no location service and
+ignores the phone's real position, so a test drive can never become a trip in someone's coverage.
+It ends with the trip (Done, or the car session closing).
+
 Templates are the ones every Android Auto version has (`minCarApiLevel` 1). Not yet: panning the
 car map, a speed-limit sign in the car, cars with Android built in (Android Automotive).

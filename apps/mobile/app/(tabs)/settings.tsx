@@ -12,6 +12,7 @@ import { formatDistanceShort, formatDuration } from '../../src/lib/format';
 import { setRouteToNavigate } from '../../src/lib/plannedStore';
 import { getServerUrl } from '../../src/lib/server';
 import { useSession } from '../../src/lib/session';
+import { CONTENT_MAX_WIDTH } from '../../src/lib/layout';
 import { space, useTheme } from '../../src/lib/theme';
 import { contactsSearchEnabled, setContactsSearchEnabled } from '../../src/lib/contacts';
 import { requestTrackingPermission, trackingPermission } from '../../src/tracking/background';
@@ -129,7 +130,7 @@ export default function SettingsScreen() {
   if (!user) return null;
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: t.surface }}>
-      <ScrollView contentContainerStyle={{ padding: space[4], gap: space[3] }}>
+      <ScrollView contentContainerStyle={{ padding: space[4], gap: space[3], width: '100%', maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center' }}>
         <Title>Settings</Title>
         <Small>{user.email} · {config.appName} at {server}</Small>
 

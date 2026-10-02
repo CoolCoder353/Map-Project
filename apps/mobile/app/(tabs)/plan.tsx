@@ -8,6 +8,7 @@ import { api, errorMessage } from '../../src/lib/api';
 import { useAppConfig } from '../../src/lib/appConfig';
 import { formatDuration } from '../../src/lib/format';
 import { setRouteToNavigate } from '../../src/lib/plannedStore';
+import { splitStyles, useLayout } from '../../src/lib/layout';
 import { useSession } from '../../src/lib/session';
 import { space, useTheme } from '../../src/lib/theme';
 import { MapCanvas, type MapCanvasHandle } from '../../src/map/MapCanvas';
@@ -24,6 +25,7 @@ export default function Plan() {
   const { user } = useSession();
   const { copy } = useAppConfig();
   const map = useRef<MapCanvasHandle>(null);
+  const split = splitStyles(useLayout().sideBySide, '38%');
   const [tab, setTab] = useState<Tab>('directions');
   const [mode, setMode] = useState<Mode>(user?.settings.defaultMode ?? 'car');
   const [from, setFrom] = useState<ChosenPlace | null>(null);
@@ -112,8 +114,9 @@ export default function Plan() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: t.bg }}>
-      <MapCanvas ref={map} style={{ height: '38%' }} routes={routes ?? []} selectedRouteId={selected} onRoutePress={setSelected} markers={markers} />
-      <ScrollView style={{ flex: 1, backgroundColor: t.surface }} contentContainerStyle={{ padding: space[4], gap: space[3] }} keyboardShouldPersistTaps="handled">
+      <View style={split.container}>
+      <MapCanvas ref={map} style={split.map} routes={routes ?? []} selectedRouteId={selected} onRoutePress={setSelected} markers={markers} />
+      <ScrollView style={[split.panel, { backgroundColor: t.surface }]} contentContainerStyle={{ padding: space[4], gap: space[3], ...split.content }} keyboardShouldPersistTaps="handled">
         <Segmented<Tab>
           label="Planning mode"
           value={tab}
@@ -171,6 +174,7 @@ export default function Plan() {
         ) : null}
         {!loading && !routes && tab === 'directions' ? <Empty icon={Car} text="Choose where you’re going to compare the fastest route with ways you haven’t been." /> : null}
       </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -179,9 +183,9 @@ function Stepper({ label, onMinus, onPlus }: { label: string; onMinus(): void; o
   const t = useTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
-      <Button label="−" kind="secondary" compact onPress={onMinus} style={{ minWidth: 40 }} />
+      <Button label="−" kind="secondary" compact onPress={onMinus} style={{ minWidth: 48 }} />
       <Small color={t.text}>{label}</Small>
-      <Button label="+" kind="secondary" compact onPress={onPlus} style={{ minWidth: 40 }} />
+      <Button label="+" kind="secondary" compact onPress={onPlus} style={{ minWidth: 48 }} />
     </View>
   );
 }

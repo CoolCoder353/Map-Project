@@ -38,10 +38,16 @@ export interface NavSnapshot {
 }
 
 export interface NavigationService {
-  start(route: Route, opts?: { destinationName?: string }): void;
+  /**
+   * `simulated` is a test drive (the car's "auto drive"): it follows fixes fed to [handleFix] by
+   * the caller, never uses the phone's location, and records and uploads nothing, so it can't
+   * become a trip in the user's coverage.
+   */
+  start(route: Route, opts?: { destinationName?: string; simulated?: boolean }): void;
   stop(): void;
   setMuted(muted: boolean): void;
-  handleFix(loc: Location.LocationObject, source?: 'watch' | 'service'): void;
+  /** `source` 'simulation' is the test drive's own fixes: the only ones a test drive follows. */
+  handleFix(loc: Location.LocationObject, source?: 'watch' | 'service' | 'simulation'): void;
   getSnapshot(): NavSnapshot;
   subscribe(listener: () => void): () => void;
 }
@@ -101,6 +107,8 @@ export function createNavigationService(): NavigationService {
   /** Which way the car is going, so a new route starts that way rather than turning it round. */
   let travelHeading: number | null = null;
   let movedFrom: LngLat | null = null;
+  /** The trip being followed is a test drive: nothing about it is saved. */
+  let simulated = false;
 
   const set = (patch: Partial<NavSnapshot>) => {
     snap = { ...snap, ...patch };
@@ -157,7 +165,7 @@ export function createNavigationService(): NavigationService {
       if (e.type === 'announce') speak(e.text);
       if (e.type === 'arrived') {
         speak('You have arrived');
-        void syncQueue().catch(() => undefined);
+        if (!simulated) void syncQueue().catch(() => undefined);
       }
       if (e.type === 'backOnRoute') {
         pendingReroute = null;
@@ -167,9 +175,11 @@ export function createNavigationService(): NavigationService {
     }
   }
 
-  function handleFix(loc: Location.LocationObject, source: 'watch' | 'service' = 'watch') {
+  function handleFix(loc: Location.LocationObject, source: 'watch' | 'service' | 'simulation' = 'watch') {
     const nav = session;
     if (!nav) return;
+    // A test drive ignores the phone's real position, and a real trip ignores made-up fixes.
+    if (simulated !== (source === 'simulation')) return;
     const { longitude: lon, latitude: lat } = loc.coords;
     if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
     // The location service and the GPS watch deliver the same fixes; follow each once. Only the
@@ -194,6 +204,7 @@ export function createNavigationService(): NavigationService {
     if (result.state.status === 'offRoute' && pending && !reroutingNow && Date.now() - pending.at >= REROUTE_RETRY_MS) {
       void reroute([lon, lat], pending.to, pending.via);
     }
+    if (simulated) return;
     void sqliteQueueStore
       .append([
         {
@@ -225,10 +236,12 @@ export function createNavigationService(): NavigationService {
 
   function stop() {
     const wasActive = session !== null;
+    const wasSimulated = simulated;
+    simulated = false;
     generation++;
     watch?.remove();
     watch = null;
-    if (wasActive) void inTurn(stopNavigationLocation).catch(() => undefined);
+    if (wasActive && !wasSimulated) void inTurn(stopNavigationLocation).catch(() => undefined);
     if (uploader) clearInterval(uploader);
     uploader = null;
     session = null;
@@ -237,11 +250,11 @@ export function createNavigationService(): NavigationService {
     rerouteAttempt++; // an answer for the trip that ended is ignored
     setNavigationRecording(false);
     quietly(() => stopSpeaking());
-    if (wasActive) void syncQueue().catch(() => undefined);
+    if (wasActive && !wasSimulated) void syncQueue().catch(() => undefined);
     if (snap !== IDLE) set(IDLE);
   }
 
-  function start(route: Route, opts: { destinationName?: string } = {}) {
+  function start(route: Route, opts: { destinationName?: string; simulated?: boolean } = {}) {
     stop();
     let next: NavigationSession;
     try {
@@ -252,15 +265,18 @@ export function createNavigationService(): NavigationService {
       return;
     }
     session = next;
+    simulated = opts.simulated === true;
     sessionId = Crypto.randomUUID();
     lastFixTs = -Infinity;
     lastServiceFixTs = -Infinity;
     travelHeading = null;
     movedFrom = null;
-    // This trip records its own fixes; background recording leaves it to it until it ends.
-    setNavigationRecording(true);
     const gen = generation;
     set({ ...IDLE, active: true, route, destinationName: opts.destinationName ?? null });
+    // A test drive is fed its fixes by the caller and saves nothing.
+    if (simulated) return;
+    // This trip records its own fixes; background recording leaves it to it until it ends.
+    setNavigationRecording(true);
     void (async () => {
       try {
         const perm = await Location.requestForegroundPermissionsAsync();

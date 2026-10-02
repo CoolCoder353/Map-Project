@@ -16,6 +16,7 @@ class BridgeCarApi(private val bridge: CarBridge) : CarApi {
     ask("start", JSONObject().put("routeId", routeId).put("destinationName", destinationName), { }, done)
   override fun stop() = bridge.call("stop", JSONObject()) { }
   override fun setMuted(muted: Boolean) = bridge.call("mute", JSONObject().put("muted", muted)) { }
+  override fun simulate(done: (Result<Unit>) -> Unit) = ask("simulate", JSONObject(), { }, done)
   override val navigation: CarNav? get() = bridge.navigation?.let(::readNav)
   override fun onNavigation(listener: (CarNav?) -> Unit): () -> Unit = bridge.onNavigation { json -> listener(json?.let(::readNav)) }
 

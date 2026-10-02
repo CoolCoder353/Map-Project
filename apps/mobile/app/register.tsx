@@ -6,8 +6,9 @@ import { errorMessage } from '../src/lib/api';
 import { useAppConfig } from '../src/lib/appConfig';
 import { getServerUrl, setServerUrl } from '../src/lib/server';
 import { useSession } from '../src/lib/session';
+import { FORM_MAX_WIDTH } from '../src/lib/layout';
 import { space, useTheme } from '../src/lib/theme';
-import { Body, Button, Field, Notice, Title } from '../src/ui/kit';
+import { Body, Button, Column, Field, Notice, Title } from '../src/ui/kit';
 
 export default function Register() {
   const t = useTheme();
@@ -42,16 +43,18 @@ export default function Register() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ padding: space[5], gap: space[4], flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ padding: space[5], flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
+          <Column max={FORM_MAX_WIDTH} style={{ gap: space[4] }}>
           <Title>Join {config.appName}</Title>
           <Body muted>{copy.registerIntro}</Body>
           <Field label="Server" value={server} onChangeText={setServer} autoCapitalize="none" autoCorrect={false} keyboardType="url" />
           <Field label="Invite code" value={code} onChangeText={(s) => setCode(s.toUpperCase())} autoCapitalize="characters" autoCorrect={false} placeholder="XXXX-XXXX-XXXX" />
           <Field label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
-          <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry hint="At least 10 characters." onSubmitEditing={() => void submit()} />
+          <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry autoComplete="new-password" textContentType="newPassword" hint="At least 10 characters." onSubmitEditing={() => void submit()} />
           {error ? <Notice tone="error">{error}</Notice> : null}
           <Button label="Create account" onPress={submit} busy={busy} disabled={!ready} />
-          <Link href="/sign-in" style={{ color: t.accent, fontWeight: '600', textAlign: 'center', padding: space[2] }}>I already have an account</Link>
+          <Link href="/sign-in" style={{ color: t.accent, fontWeight: '600', textAlign: 'center', paddingVertical: space[3], lineHeight: 24 }}>I already have an account</Link>
+          </Column>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

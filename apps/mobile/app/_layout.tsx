@@ -5,12 +5,14 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppConfigProvider } from '../src/lib/appConfig';
 import { SessionProvider } from '../src/lib/session';
+import { useOrientationPolicy } from '../src/lib/orientation';
 import { useTheme } from '../src/lib/theme';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30_000 } } });
 
 function Root() {
   const t = useTheme();
+  useOrientationPolicy();
   return (
     <>
       <StatusBar style={t.dark ? 'light' : 'dark'} />

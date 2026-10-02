@@ -15,6 +15,8 @@ jest.mock('expo-location', () => ({
 }));
 const mockNavigation = { start: jest.fn(), stop: jest.fn(), setMuted: jest.fn(), getSnapshot: jest.fn(() => ({ route: null, active: true, error: null as string | null })) };
 // Read lazily: the handlers import this before the const above is initialised.
+jest.mock('../src/car/simulation', () => ({ ...jest.requireActual('../src/car/simulation'), startTestDrive: jest.fn() }));
+import { DEMO_DESTINATION_NAME, DEMO_ORIGIN, startTestDrive } from '../src/car/simulation';
 jest.mock('../src/nav/navigationService', () => ({ get navigation() { return mockNavigation; } }));
 
 beforeEach(() => {
@@ -164,6 +166,34 @@ describe('during a trip', () => {
     await carHandlers.mute!({ muted: true });
     expect(mockNavigation.stop).toHaveBeenCalled();
     expect(mockNavigation.setMuted).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('test drive (auto drive)', () => {
+  it('follows the trip already running, under its own name', async () => {
+    const current = route({ id: 'r-now' });
+    mockNavigation.getSnapshot.mockReturnValueOnce({ route: current, active: true, error: null, destinationName: 'Mt Coot-tha Lookout' } as never);
+    expect(await carHandlers.simulate!({})).toEqual({});
+    expect(startTestDrive).toHaveBeenCalledWith(mockNavigation, current, 'Mt Coot-tha Lookout');
+  });
+
+  it('with no trip, drives the built-in route from where the phone is', async () => {
+    await carHandlers.simulate!({});
+    const [, demo, name] = jest.mocked(startTestDrive).mock.calls[0]!;
+    expect(demo.id).toBe('test-drive');
+    expect(demo.geometry[0]).toEqual([153.02, -27.47]); // the phone's last known fix, [lon, lat]
+    expect(name).toBe(DEMO_DESTINATION_NAME);
+  });
+
+  it('with no trip and no position, starts from central Brisbane', async () => {
+    jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValueOnce({ granted: false } as never);
+    await carHandlers.simulate!({});
+    expect(jest.mocked(startTestDrive).mock.calls[0]![1].geometry[0]).toEqual(DEMO_ORIGIN);
+  });
+
+  it('never calls the server', async () => {
+    await carHandlers.simulate!({});
+    expect(fake.api.calls).toHaveLength(0);
   });
 });
 

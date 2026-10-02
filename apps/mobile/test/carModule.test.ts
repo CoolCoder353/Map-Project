@@ -31,4 +31,40 @@ describe('Android Auto module', () => {
     expect(sent.length).toBeGreaterThan(0);
     for (const method of sent) expect(handlers, method).toMatch(new RegExp(`^  (async )?${method}\\(`, 'm'));
   });
+
+  it('handles navigate requests from Google Assistant and other apps (geo: links)', () => {
+    const manifest = readFileSync(join(moduleDir, 'src/main/AndroidManifest.xml'), 'utf8');
+    const service = manifest.slice(manifest.indexOf('<service'), manifest.indexOf('</service>'));
+    const filters = [...service.matchAll(/<intent-filter>([\s\S]*?)<\/intent-filter>/g)].map((m) => m[1]!);
+    const navigate = filters.find((f) => f.includes('androidx.car.app.action.NAVIGATE'));
+    expect(navigate, 'a navigate intent filter on the car service').toBeDefined();
+    expect(navigate).toContain('<category android:name="android.intent.category.DEFAULT" />');
+    expect(navigate).toContain('<data android:scheme="geo" />');
+    // The car service filter is still there beside it.
+    expect(filters.some((f) => f.includes('androidx.car.app.CarAppService'))).toBe(true);
+  });
+
+  it('reads the intent that opened the car app and ones that arrive later', () => {
+    const session = readFileSync(join(moduleDir, 'src/main/java/app/wayfinder/car/WayfinderSession.kt'), 'utf8');
+    expect(session).toContain('override fun onNewIntent(intent: Intent)');
+    expect(session).toMatch(/navigate\.handle\(intent\)/);
+    expect(session).toMatch(/requests\?\.handle\(intent\)/);
+  });
+
+  it('turns the geo: latitude,longitude order into [lon, lat] in one place only', () => {
+    const intents = readFileSync(join(moduleDir, 'src/main/java/app/wayfinder/car/nav/NavigateIntents.kt'), 'utf8');
+    expect(intents.match(/LngLat\(/g)!.length).toBeGreaterThan(0);
+    expect(intents).not.toMatch(/LngLat\(lat\s*[,=]/);
+  });
+
+  it('posts a navigation notification the car can show', () => {
+    const src = readFileSync(join(moduleDir, 'src/main/java/app/wayfinder/car/nav/NavNotifications.kt'), 'utf8');
+    for (const part of ['.setOngoing(true)', '.setOnlyAlertOnce(true)', 'CATEGORY_NAVIGATION', 'CarAppExtender.Builder()', 'IMPORTANCE_HIGH']) expect(src).toContain(part);
+  });
+
+  it('answers the host’s auto drive with a test drive the phone side handles', () => {
+    const coordinator = readFileSync(join(moduleDir, 'src/main/java/app/wayfinder/car/nav/NavigationCoordinator.kt'), 'utf8');
+    expect(coordinator).toContain('override fun onAutoDriveEnabled()');
+    expect(coordinator).toContain('api.simulate');
+  });
 });

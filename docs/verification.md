@@ -113,6 +113,11 @@ Results are recorded in [live-stack-results.md](live-stack-results.md).
 has been ticked. Run it against a release APK on a real phone (build-android.md, "Trying it in a
 car"), tick each item as it passes, and record the date. Fix anything that fails, with a test.
 
+Known gaps against Google's car app quality guidelines (navigation requests from other apps and
+Assistant, navigation notifications, a test-drive mode) are written up, with the phone app's core
+and adaptive quality gaps, in
+[quality-gaps.md](quality-gaps.md); they are not on this checklist until they are built.
+
 - [ ] Wayfinder is listed in Android Auto; opening it with the phone app force-stopped shows Home within 5 s
 - [ ] Signed out on the phone: the car asks to sign in; after signing in, Try again shows Home
 - [ ] Search (parked) finds a place; its preview shows Fastest and Explore rows, the chosen one blue on the map
@@ -132,7 +137,31 @@ car"), tick each item as it passes, and record the date. Fix anything that fails
 - [ ] Cold start from the car: force-stop the phone app, open Wayfinder from the car, and Home appears without opening the phone
 - [ ] Cold start from the car with the phone app never opened since the phone started and the phone locked, then start a trip: the "Navigating to …" notification appears and directions keep coming (Android 12+ limits on starting foreground services from the background; Android 14's "while using the app" location rules)
 - [ ] Swipe the app away mid-trip, then open it again: no "Navigating" notification left over, and GPS isn't left running
+- [ ] "Navigate to Mt Coot-tha Lookout" by voice (Assistant) opens its route preview, with the phone app closed and with it open; `adb shell am start -a androidx.car.app.action.NAVIGATE -d "geo:-27.47,153.03"` (or the DHU's equivalent) does the same for a point
+- [ ] A navigate request while signed out on the phone asks to sign in, and Try again continues to the place
+- [ ] During a trip, the car's notification area shows the next instruction, with a heads-up only when it changes; tapping it returns to the directions; it is gone when the trip ends
+- [ ] DHU "auto drive" (`adb shell dumpsys activity service androidx.car.app.samples.navigation.car.NavigationCarAppService AUTO_DRIVE`, with our service name) starts a test drive with no route chosen and with one running; it arrives, ends cleanly, and the trip does not appear in the web app's trips or coverage
 - [ ] Start a trip with no signal at all: the car map is blank at first, then draws once there is signal (the style is tried again)
+
+## Phone app: window sizes, keyboard and mouse
+
+Not run yet: needs an APK built with the orientation change (see quality-gaps.md, gap 4) on
+emulators. Jest covers the layouts at phone, 600 dp and 1000 dp with the window faked; these check
+what Jest can't (the real window, the real map, a real keyboard and mouse). Android Studio
+emulators are enough.
+
+- [ ] Phone (portrait, about 393 dp wide): the app stays upright when the phone is turned, on every screen
+- [ ] Foldable 841 x 701 dp, 8" tablet 1024 x 640 dp, 10.5" tablet 1280 x 800 dp, 13" Chromebook 1600 x 900 dp: fills the window with no letterboxing; sign in and register keep a narrow centred form
+- [ ] The same four sizes in landscape and portrait: Plan, Discover and Coverage show the map beside the details; Trip replay and Navigate do too, with the turn banner and the time left in the left panel
+- [ ] Rotate, fold and unfold, and drag the window between sizes in multi-window, with a trip running on Navigate: the trip keeps going, the map keeps following, nothing resets
+- [ ] The same with text typed in Plan's search fields, the feedback message, and the sign-in form; scroll positions on Settings and Trips stay
+- [ ] Resize a window down below 600 dp (phone-sized multi-window): the app locks upright again, and large again lifts the lock
+- [ ] Touch targets: every button, segment, chip, search clear button and the mute button is easy to hit; layout inspector shows none under 48 dp
+- [ ] Keyboard: Tab moves through every control in a sensible order with a visible outline; Enter or Space presses the focused control; Enter submits sign in and register
+- [ ] Esc in a search box closes the suggestions, then clears the box (a Chromebook's Esc may act as Back, so check what it does there)
+- [ ] Feedback on a tablet or Chromebook: Enter sends once there is a message; on a phone Enter starts a new line
+- [ ] Mouse: buttons, list rows, chips and cards shade under the pointer; scroll wheel scrolls lists; the map zooms with Ctrl plus the scroll wheel and with pinch on a touchscreen
+- [ ] A password manager offers to save and generate on the register form, and fills sign in
 
 ## Open / manual
 

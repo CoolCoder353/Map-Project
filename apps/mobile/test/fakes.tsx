@@ -14,9 +14,9 @@
 import { copyFor } from '@wayfinder/shared/copy';
 import type { CoverageStats, DiscoverItem, Place, PublicConfig, PublicUser, Route, TripDetail, TripSummary } from '@wayfinder/shared/schemas';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render } from '@testing-library/react-native';
+import { act, render } from '@testing-library/react-native';
 import { type ReactElement, type ReactNode, forwardRef, useEffect, useImperativeHandle } from 'react';
-import { Text, View } from 'react-native';
+import { Dimensions, Text, View } from 'react-native';
 import { user as makeUser } from './mocks';
 
 export interface Init {
@@ -65,7 +65,7 @@ export const fake = {
   router: { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) },
   params: {} as Record<string, string>,
   /** Props the screen last gave the map, and calls made through its handle. */
-  map: { props: {} as Record<string, unknown>, fitTo: jest.fn(), flyTo: jest.fn() },
+  map: { props: {} as Record<string, unknown>, mounts: 0, fitTo: jest.fn(), flyTo: jest.fn() },
   /** Come back to the screen (its tab chosen again): runs its focus effects. */
   focus() {
     focusEffects.forEach((effect) => effect());
@@ -73,6 +73,26 @@ export const fake = {
 };
 
 const focusEffects = new Set<() => void>();
+
+/** Window sizes in dp: a phone, the narrowest large screen, and a wide tablet or desktop window. */
+export const WINDOWS = {
+  phone: { width: 393, height: 851 },
+  phoneLandscape: { width: 851, height: 393 },
+  medium: { width: 600, height: 960 },
+  foldable: { width: 841, height: 701 },
+  tablet: { width: 1000, height: 700 },
+} as const;
+
+/** Set the window size before a screen renders. */
+export function windowSize(width: number, height: number) {
+  const dims = { width, height, scale: 1, fontScale: 1 };
+  Dimensions.set({ window: dims, screen: dims });
+}
+
+/** Resize the window while a screen is on show (rotation, folding, multi-window). */
+export async function resizeWindow(width: number, height: number) {
+  await act(async () => windowSize(width, height));
+}
 
 export const apiError = (status: number, message: string) => new HttpError(status, message);
 
@@ -87,6 +107,8 @@ export function resetFakes() {
   fake.config = { appName: 'Wayfinder', voice: 'plain', feedbackEnabled: false, osmDataDate: null };
   fake.params = {};
   fake.map.props = {};
+  fake.map.mounts = 0;
+  windowSize(WINDOWS.phone.width, WINDOWS.phone.height);
   jest.clearAllMocks();
 }
 
@@ -135,6 +157,8 @@ export const mapCanvasModule = {
   MapCanvas: forwardRef(function FakeMap(props: Record<string, unknown>, ref) {
     fake.map.props = props;
     useImperativeHandle(ref, () => ({ fitTo: fake.map.fitTo, flyTo: fake.map.flyTo }));
+    // Counts how often the map is created, so a test can tell a resize from a remount.
+    useEffect(() => void fake.map.mounts++, []);
     return <View testID="map" />;
   }),
 };

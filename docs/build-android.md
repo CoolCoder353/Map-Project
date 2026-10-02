@@ -87,7 +87,7 @@ To try a change end to end without touching real data, build against the local s
 EXPO_PUBLIC_API_URL=http://10.0.2.2:3000 ALLOW_HTTP=1 infra/scripts/build-apk.sh
 ```
 
-That build only works on the emulator and accepts unencrypted traffic. Move it out of `dist/`
+That build only works on the emulator and accepts unencrypted traffic (its network security config, `apps/mobile/plugins/withNetworkSecurityConfig.js`, permits cleartext; every other build's refuses it). Move it out of `dist/`
 when you're done, so it can't be shared by mistake.
 
 ## Trying it in a car

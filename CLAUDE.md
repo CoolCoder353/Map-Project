@@ -41,6 +41,7 @@ routing engine, live checks).
 | Settings and env vars                                    | [docs/configuration.md](docs/configuration.md)                                         |
 | Operating a server, troubleshooting                      | [docs/operations.md](docs/operations.md)                                               |
 | Building, checking and sharing the Android APK           | [docs/build-android.md](docs/build-android.md)                                         |
+| What falls short of Google's Android quality guidelines  | [docs/quality-gaps.md](docs/quality-gaps.md)                                           |
 | The live server (`maps.paulsjones.com`, Queensland)      | [docs/deploy-small-server.md](docs/deploy-small-server.md)                             |
 | What's verified and what's open                          | [docs/verification.md](docs/verification.md)                                           |
 | Why things are the way they are                          | [docs/adr](docs/adr)                                                                   |

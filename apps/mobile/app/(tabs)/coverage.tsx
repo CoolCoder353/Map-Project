@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../../src/lib/api';
 import { useAppConfig } from '../../src/lib/appConfig';
 import { formatNumber } from '../../src/lib/format';
+import { splitStyles, useLayout } from '../../src/lib/layout';
 import { useSession } from '../../src/lib/session';
 import { space, useTheme } from '../../src/lib/theme';
 import { MapCanvas, type MapCanvasHandle } from '../../src/map/MapCanvas';
@@ -20,6 +21,7 @@ export default function Coverage() {
   const [geo, setGeo] = useState<GeoJSON.FeatureCollection | null>(null);
   const pending = useRef<AbortController | null>(null);
   const map = useRef<MapCanvasHandle>(null);
+  const split = splitStyles(useLayout().sideBySide, '48%');
   const view = useRef<{ b: [number, number, number, number]; zoom: number } | null>(null);
   const [pulled, setPulled] = useState(false);
 
@@ -85,11 +87,12 @@ export default function Coverage() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: t.bg }}>
-      <MapCanvas ref={map} style={{ height: '48%' }} coverage={geo} onRegionChange={onRegion} />
+      <View style={split.container}>
+      <MapCanvas ref={map} style={split.map} coverage={geo} onRegionChange={onRegion} />
       <ScrollView
         testID="coverage-details"
-        style={{ flex: 1, backgroundColor: t.surface }}
-        contentContainerStyle={{ padding: space[4], gap: space[3] }}
+        style={[split.panel, { backgroundColor: t.surface }]}
+        contentContainerStyle={{ padding: space[4], gap: space[3], ...split.content }}
         refreshControl={<RefreshControl refreshing={pulled} onRefresh={() => void pullToRefresh()} />}
       >
         <Body muted>{copy.coverageIntro}</Body>
@@ -114,6 +117,7 @@ export default function Coverage() {
           </>
         ) : null}
       </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }

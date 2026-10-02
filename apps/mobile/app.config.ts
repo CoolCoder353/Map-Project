@@ -6,7 +6,6 @@ const config: ExpoConfig = {
   slug: 'wayfinder',
   scheme: 'wayfinder',
   version: '0.3.1',
-  orientation: 'portrait',
   userInterfaceStyle: 'automatic',
   android: {
     package: 'app.wayfinder.maps',
@@ -24,11 +23,24 @@ const config: ExpoConfig = {
       'RECEIVE_BOOT_COMPLETED',
     ],
     // The contacts plugin asks for write access as well; the app only ever reads.
-    blockedPermissions: ['android.permission.RECORD_AUDIO', 'android.permission.WRITE_CONTACTS'],
+    // Also blocked: SYSTEM_ALERT_WINDOW (Expo template; no overlays) and the external-storage pair
+    // (expo-image-picker declares them for Android 12 and lower, but the photo picker we use
+    // needs neither). Biometric permissions come from expo-secure-store and are left alone.
+    blockedPermissions: [
+      'android.permission.RECORD_AUDIO',
+      'android.permission.WRITE_CONTACTS',
+      'android.permission.SYSTEM_ALERT_WINDOW',
+      'android.permission.READ_EXTERNAL_STORAGE',
+      'android.permission.WRITE_EXTERNAL_STORAGE',
+    ],
+    // Android 13+ back gesture previews. The Expo template opts out; nothing in app/ or src/
+    // intercepts back by hand (no BackHandler), so the system callback is safe to use.
+    predictiveBackGestureEnabled: true,
   },
   plugins: [
     'expo-router',
     'expo-secure-store',
+    'expo-screen-orientation',
     'expo-sqlite',
     '@maplibre/maplibre-react-native',
     // Feedback screenshots come from the system photo picker; no camera or microphone.
@@ -43,6 +55,8 @@ const config: ExpoConfig = {
         isAndroidForegroundServiceEnabled: true,
       },
     ],
+    // Refuse cleartext in normal builds; ALLOW_HTTP=1 test builds may reach a local http server.
+    ['./plugins/withNetworkSecurityConfig', { allowCleartext: process.env.ALLOW_HTTP === '1' }],
     ['expo-build-properties', { android: { minSdkVersion: 26, usesCleartextTraffic: process.env.ALLOW_HTTP === '1' } }],
   ],
   experiments: { typedRoutes: false },

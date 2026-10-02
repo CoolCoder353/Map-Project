@@ -11,6 +11,8 @@ interface CarApi {
   fun start(routeId: String, destinationName: String, done: (Result<Unit>) -> Unit)
   fun stop()
   fun setMuted(muted: Boolean)
+  /** The car's "auto drive": a test drive that records nothing (see src/car/simulation.ts). */
+  fun simulate(done: (Result<Unit>) -> Unit)
   val navigation: CarNav?
   fun onNavigation(listener: (CarNav?) -> Unit): () -> Unit
 }

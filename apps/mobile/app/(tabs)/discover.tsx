@@ -2,16 +2,17 @@ import type { DiscoverItem, Mode } from '@wayfinder/shared/schemas';
 import { POI_CATEGORIES, type PoiCategory } from '@wayfinder/shared/schemas';
 import { Car, Compass, Footprints } from 'lucide-react-native';
 import { useRef, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../../src/lib/api';
 import { useAppConfig } from '../../src/lib/appConfig';
 import { CATEGORY_LABEL, kindOf } from '../../src/lib/categories';
 import { formatDistanceShort } from '../../src/lib/format';
+import { splitStyles, useLayout } from '../../src/lib/layout';
 import { radius, space, useTheme } from '../../src/lib/theme';
 import { MapCanvas, type MapCanvasHandle } from '../../src/map/MapCanvas';
 import { type ChosenPlace, PlaceSearch } from '../../src/ui/PlaceSearch';
-import { Body, Button, Card, Empty, NewBadge, Notice, Segmented, Small } from '../../src/ui/kit';
+import { Body, Button, Card, Empty, NewBadge, Notice, Press, Segmented, Small } from '../../src/ui/kit';
 import { useApproxLocation } from '../../src/lib/useApproxLocation';
 
 export default function Discover() {
@@ -19,6 +20,7 @@ export default function Discover() {
   const t = useTheme();
   const { copy } = useAppConfig();
   const map = useRef<MapCanvasHandle>(null);
+  const split = splitStyles(useLayout().sideBySide, '34%');
   const [origin, setOrigin] = useState<ChosenPlace | null>(null);
   const [mode, setMode] = useState<Mode>('car');
   const [minutes, setMinutes] = useState(30);
@@ -58,8 +60,9 @@ export default function Discover() {
 
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: t.bg }}>
-      <MapCanvas ref={map} style={{ height: '34%' }} markers={[...(origin ? [{ id: 'o', lngLat: origin.location, kind: 'start' as const }] : []), ...(items ?? []).map((i) => ({ id: i.id, lngLat: i.location, kind: 'poi' as const }))]} />
-      <ScrollView style={{ flex: 1, backgroundColor: t.surface }} contentContainerStyle={{ padding: space[4], gap: space[3] }} keyboardShouldPersistTaps="handled">
+      <View style={split.container}>
+      <MapCanvas ref={map} style={split.map} markers={[...(origin ? [{ id: 'o', lngLat: origin.location, kind: 'start' as const }] : []), ...(items ?? []).map((i) => ({ id: i.id, lngLat: i.location, kind: 'poi' as const }))]} />
+      <ScrollView style={[split.panel, { backgroundColor: t.surface }]} contentContainerStyle={{ padding: space[4], gap: space[3], ...split.content }} keyboardShouldPersistTaps="handled">
         <Body muted>{copy.discoverIntro}</Body>
         <PlaceSearch label="Search from" placeholder="Where are you starting?" tone="start" value={origin} onChange={chooseOrigin} allowCurrentLocation near={here} />
         <Segmented<Mode> label="Travel mode" value={mode} onChange={setMode} options={[{ value: 'car', label: 'Drive', icon: Car }, { value: 'foot', label: 'Walk', icon: Footprints }]} />
@@ -72,15 +75,15 @@ export default function Discover() {
           {POI_CATEGORIES.map((c) => {
             const on = cats.includes(c);
             return (
-              <Pressable
+              <Press
                 key={c}
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: on }}
                 onPress={() => setCats((cs) => (on ? cs.filter((x) => x !== c) : [...cs, c]))}
-                style={{ paddingHorizontal: space[3], minHeight: 34, justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: on ? 'transparent' : t.borderStrong, backgroundColor: on ? t.accentSoft : t.surface }}
+                style={({ hovered }) => ({ paddingHorizontal: space[3], minHeight: 48, justifyContent: 'center', borderRadius: radius.pill, borderWidth: 1, borderColor: on ? 'transparent' : t.borderStrong, backgroundColor: on ? t.accentSoft : hovered ? t.surface2 : t.surface })}
               >
                 <Text style={{ color: on ? t.accent : t.text2, fontWeight: '600' }}>{CATEGORY_LABEL[c]}</Text>
-              </Pressable>
+              </Press>
             );
           })}
         </View>
@@ -97,6 +100,7 @@ export default function Discover() {
           </Card>
         ))}
       </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }

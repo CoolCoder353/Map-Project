@@ -7,6 +7,7 @@ import { Image, Platform, ScrollView, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../src/lib/api';
 import { goBack } from '../src/lib/goBack';
+import { CONTENT_MAX_WIDTH, useLayout } from '../src/lib/layout';
 import { lastMapView } from '../src/lib/mapView';
 import { space, useTheme } from '../src/lib/theme';
 import { Body, Button, Field, Notice, Segmented, Small, Title } from '../src/ui/kit';
@@ -23,6 +24,8 @@ export default function FeedbackScreen() {
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const mapView = lastMapView();
+  // Where a hardware keyboard is likely (not a phone), Enter sends, as it does in a chat box.
+  const enterSends = !useLayout().phone;
 
   const pick = async () => {
     setError(null);
@@ -78,7 +81,7 @@ export default function FeedbackScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.surface }}>
-      <ScrollView contentContainerStyle={{ padding: space[4], gap: space[4] }} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={{ padding: space[4], gap: space[4], width: '100%', maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center' }} keyboardShouldPersistTaps="handled">
         <Button label="Settings" kind="ghost" icon={ArrowLeft} compact onPress={() => goBack('/settings')} style={{ alignSelf: 'flex-start' }} />
         <Title>Send feedback</Title>
         {sent ? (
@@ -103,6 +106,7 @@ export default function FeedbackScreen() {
               value={message}
               onChangeText={setMessage}
               multiline
+              {...(enterSends ? { submitBehavior: 'submit' as const, returnKeyType: 'send' as const, onSubmitEditing: () => void send() } : {})}
               numberOfLines={5}
               maxLength={4000}
               textAlignVertical="top"

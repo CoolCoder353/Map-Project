@@ -2,14 +2,15 @@ import { formatDistanceShort, formatDuration } from '@wayfinder/nav';
 import { useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, ArrowRight, ArrowUp, Flag, RotateCcw, Volume2, VolumeX, X } from 'lucide-react-native';
 import { useMemo } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { goBack } from '../src/lib/goBack';
+import { PANEL_WIDTH, useLayout } from '../src/lib/layout';
 import { takeRouteToNavigate } from '../src/lib/plannedStore';
 import { space, useTheme } from '../src/lib/theme';
 import { MapCanvas } from '../src/map/MapCanvas';
 import { useTurnByTurn } from '../src/nav/useTurnByTurn';
-import { Button, Empty, Notice } from '../src/ui/kit';
+import { Button, Empty, Notice, Press } from '../src/ui/kit';
 
 const iconFor = (sign: number) => (sign === 4 ? Flag : sign <= -2 ? ArrowLeft : sign >= 2 && sign <= 3 ? ArrowRight : sign === 6 || Math.abs(sign) === 8 ? RotateCcw : ArrowUp);
 
@@ -45,6 +46,7 @@ export default function Navigate() {
   // Resuming follows the trip already running (started in the car, say) instead of starting one.
   const initial = useMemo(() => (resume === '1' ? null : takeRouteToNavigate()), [resume]);
   const nav = useTurnByTurn(initial);
+  const { sideBySide } = useLayout();
 
   if (!initial && !(resume === '1' && nav.route)) {
     return (
@@ -60,8 +62,13 @@ export default function Navigate() {
   const Icon = iconFor(next?.sign ?? 0);
   const arrived = s?.status === 'arrived';
 
+  // The same views in every window size: the map is never remounted, so a trip keeps running
+  // and following you through a rotation or a fold. Narrow: banner, map, bar stacked. Wide: the
+  // banner and bar stack in a left panel and the map fills the rest (taken out of the flow).
+  const panel = sideBySide ? { width: PANEL_WIDTH } : null;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
+      <View style={panel}>
       <View style={{ backgroundColor: nav.route?.kind === 'fastest' ? t.accent : t.explore, padding: space[4], flexDirection: 'row', alignItems: 'center', gap: space[4] }} accessibilityLiveRegion="polite">
         <Icon size={40} color="#ffffff" />
         <View style={{ flex: 1 }}>
@@ -76,20 +83,21 @@ export default function Navigate() {
       {nav.rerouting ? <Notice tone="warning">Finding a new route…</Notice> : null}
       {s?.status === 'offRoute' && !nav.rerouting ? <Notice tone="warning">Off route</Notice> : null}
       {nav.error ? <Notice tone="error">{nav.error}</Notice> : null}
-      <View style={{ flex: 1 }}>
+      </View>
+      <View style={sideBySide ? { position: 'absolute', top: 0, bottom: 0, left: PANEL_WIDTH, right: 0 } : { flex: 1 }}>
         {/* Follows you close up. No fitting to the whole route: that zooms out of the drive. */}
         <MapCanvas style={{ flex: 1 }} routes={nav.route ? [nav.route] : []} selectedRouteId={nav.route?.id ?? null} followUser />
         {/* Only while on the route: off it, the road you are on isn't the one the limit is for. */}
         {s?.status === 'navigating' && s.speedLimitKmh != null ? <SpeedSign kmh={s.speedLimitKmh} /> : null}
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', padding: space[4], gap: space[3], backgroundColor: t.surface }}>
+      <View style={[{ flexDirection: 'row', alignItems: 'center', padding: space[4], gap: space[3], backgroundColor: t.surface }, panel, sideBySide && { marginTop: 'auto' }]}>
         <View style={{ flex: 1 }}>
           <Text style={{ color: t.text, fontSize: 22, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{s ? formatDuration(s.remainingDurationS) : '–'}</Text>
           <Text style={{ color: t.text2 }}>{s ? `${formatDistanceShort(s.remainingDistanceM)} to go` : ''}</Text>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel={nav.muted ? 'Unmute voice' : 'Mute voice'} onPress={() => nav.setMuted(!nav.muted)} style={{ padding: space[3] }}>
+        <Press accessibilityRole="button" accessibilityLabel={nav.muted ? 'Unmute voice' : 'Mute voice'} onPress={() => nav.setMuted(!nav.muted)} style={({ hovered }) => ({ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: hovered ? t.surface3 : 'transparent' })}>
           {nav.muted ? <VolumeX size={24} color={t.text2} /> : <Volume2 size={24} color={t.text} />}
-        </Pressable>
+        </Press>
         <Button label={arrived ? 'Done' : 'End'} kind={arrived ? 'primary' : 'secondary'} icon={X} onPress={() => { nav.stop(); goBack(); }} compact />
       </View>
     </SafeAreaView>

@@ -6,8 +6,9 @@ import { errorMessage } from '../src/lib/api';
 import { useAppConfig } from '../src/lib/appConfig';
 import { getServerUrl, setServerUrl } from '../src/lib/server';
 import { useSession } from '../src/lib/session';
+import { FORM_MAX_WIDTH } from '../src/lib/layout';
 import { space, useTheme } from '../src/lib/theme';
-import { Body, Button, Field, Notice, Small, Title } from '../src/ui/kit';
+import { Body, Button, Column, Field, Notice, Small, Title } from '../src/ui/kit';
 
 export default function SignIn() {
   const t = useTheme();
@@ -42,7 +43,8 @@ export default function SignIn() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ padding: space[5], gap: space[4], flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ padding: space[5], flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled">
+          <Column max={FORM_MAX_WIDTH} style={{ gap: space[4] }}>
           <Title>{copy.signInTitle(config.appName)}</Title>
           <Body muted>{copy.tagline}</Body>
           <Field label="Server" value={server} onChangeText={setServer} autoCapitalize="none" autoCorrect={false} keyboardType="url" hint="The address your group’s server runs on." />
@@ -51,9 +53,10 @@ export default function SignIn() {
           {error ? <Notice tone="error">{error}</Notice> : null}
           <Button label="Sign in" onPress={submit} busy={busy} disabled={!ready} />
           <View style={{ alignItems: 'center', gap: space[2] }}>
-            <Link href="/register" style={{ color: t.accent, fontWeight: '600', padding: space[2] }}>Create an account with an invite code</Link>
+            <Link href="/register" style={{ color: t.accent, fontWeight: '600', paddingVertical: space[3], lineHeight: 24 }}>Create an account with an invite code</Link>
             <Small>Forgot your password? Ask an admin for a reset link.</Small>
           </View>
+          </Column>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

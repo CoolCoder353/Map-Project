@@ -28,4 +28,14 @@ class BridgeCarApiTest {
   @Test fun passesOnWhatThePhoneSaid() {
     assertEquals("Can’t reach your server.", statusAfter { reject("c0", "Can’t reach your server.") })
   }
+
+  @Test fun asksThePhoneToStartATestDrive() {
+    val sent = mutableListOf<String>()
+    val b = CarBridge(post = { it.run() }, postDelayed = { _, _ -> }).also { it.connect { id, method, _ -> sent += "$id $method" } }
+    var r: Result<Unit>? = null
+    BridgeCarApi(b).simulate { r = it }
+    assertEquals(listOf("c0 simulate"), sent)
+    b.resolve("c0", "{}")
+    assertEquals(true, r!!.isSuccess)
+  }
 }

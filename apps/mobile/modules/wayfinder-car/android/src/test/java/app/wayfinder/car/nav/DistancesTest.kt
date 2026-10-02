@@ -20,4 +20,11 @@ class DistancesTest {
   @Test fun tensOfMetresUnderAKilometre() = check(347.0, 350.0, Distance.UNIT_METERS)
   @Test fun kilometresToOnePlace() = check(1234.0, 1.2, Distance.UNIT_KILOMETERS_P1)
   @Test fun wholeKilometresFromTen() = check(12_600.0, 13.0, Distance.UNIT_KILOMETERS)
+
+  @Test fun wordsRoundTheSameWay() {
+    assertEquals("47 m", distanceText(47.4))
+    assertEquals("350 m", distanceText(347.0))
+    assertEquals("1.2 km", distanceText(1234.0))
+    assertEquals("13 km", distanceText(12_600.0))
+  }
 }
