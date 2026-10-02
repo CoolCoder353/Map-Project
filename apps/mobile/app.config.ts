@@ -6,11 +6,16 @@ const config: ExpoConfig = {
   slug: 'wayfinder',
   scheme: 'wayfinder',
   version: '0.3.1',
+  icon: './assets/icons/icon.png',
   userInterfaceStyle: 'automatic',
   android: {
     package: 'app.wayfinder.maps',
     versionCode: 4,
-    adaptiveIcon: { backgroundColor: '#1765cc' },
+    adaptiveIcon: {
+      foregroundImage: './assets/icons/adaptive-foreground.png',
+      monochromeImage: './assets/icons/adaptive-monochrome.png',
+      backgroundColor: '#1765cc',
+    },
     permissions: [
       'ACCESS_COARSE_LOCATION',
       'ACCESS_FINE_LOCATION',

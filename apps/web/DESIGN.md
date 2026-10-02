@@ -427,3 +427,7 @@ Toasts centre at the bottom on the inverse surface, 8px radius, 280 to 520px wid
 - **Don't** add a display or brand typeface, uppercase UI labels or letterspaced labels; hierarchy comes from weight and size in the system UI stack.
 - **Don't** hard-code hex values in components; take them from the tokens so both themes follow.
 - **Don't** stretch phone patterns onto the desk layout; the bottom sheet is for widths below 900px only.
+
+## Logo
+
+A white direction arrow on a rounded blue (`accent`) square, with a short two-dot trail in light green behind it: the way you're heading and the ground you've covered. Never a hexagon. The master is `apps/web/public/logo-mark.svg` (also the favicon); `LogoMark.tsx` is the in-page copy. Android's adaptive-icon layers are `infra/logo/adaptive-*.svg`, drawn inside the 66dp safe zone. After changing any of them run `infra/scripts/build-icons.sh` (needs `rsvg-convert`) to regenerate the PNGs in `apps/mobile/assets/icons` and `apps/web/public`.

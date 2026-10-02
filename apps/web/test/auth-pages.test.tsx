@@ -12,6 +12,8 @@ describe('Sign in', () => {
   it('signs in and goes to Directions', async () => {
     const { api } = await renderApp(<SignInPage />, { path: '/sign-in', user: null, api: { 'POST /api/auth/login': () => auth() } });
     expect(screen.getByRole('heading', { name: 'Sign in to Wayfinder' })).toBeInTheDocument();
+    // The logo is decoration beside the heading, hidden from screen readers.
+    expect(document.querySelector('svg.brand-mark')).toHaveAttribute('aria-hidden', 'true');
     const button = screen.getByRole('button', { name: 'Sign in' });
     expect(button).toBeDisabled();
     await userEvent.type(screen.getByLabelText('Email'), 'sam@example.test');

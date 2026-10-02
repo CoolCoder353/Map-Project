@@ -1,3 +1,4 @@
+import { LogoMark } from '../components/LogoMark';
 import {
   ArrowLeft,
   ChevronDown,
@@ -89,11 +90,7 @@ export function MapShell() {
             </span>
           ) : (
             <span className="brand">
-              <svg viewBox="0 0 32 32" aria-hidden className="brand-mark">
-                <path d="M16 2 28.1 9v14L16 30 3.9 23V9z" fill="var(--accent)" />
-                <path d="M16 9.5 22 13v7l-6 3.5-6-3.5v-7z" fill="var(--surface)" />
-                <circle cx="16" cy="16.5" r="2.6" fill="var(--explore)" />
-              </svg>
+              <LogoMark className="brand-mark" />
               <span className="brand-name">{config.appName}</span>
             </span>
           )}
