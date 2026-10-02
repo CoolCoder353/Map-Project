@@ -29,7 +29,7 @@ submitting. The plan and status are in
   > Map data © OpenStreetMap contributors.
 
 - **Category:** Maps & Navigation. **Tags:** Navigation, Maps.
-- **Contact email:** a group address, not a personal one (Play shows it publicly).
+- **Contact email:** googledev@gmail.com (Play shows it publicly; the privacy page uses it too).
 - **Privacy policy URL:** `https://maps.paulsjones.com/privacy`
 - **Graphics:** `store/play/icon-512.png`, `store/play/feature-graphic.png`. Phone screenshots
   (2 to 8) and Android Auto screenshots are still to take ([README.md](README.md)).
@@ -58,7 +58,6 @@ Choose **All or some functionality is restricted** and add one instruction set:
 >
 > Background location is optional: Settings → Location history → Background tracking. It is used only to record which
 > roads the user has travelled, so the app can suggest roads they haven't.
-
 
 ## Ads
 

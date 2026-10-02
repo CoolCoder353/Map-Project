@@ -4,7 +4,7 @@ import { LogoMark } from '../components/LogoMark';
 import { useAppConfig } from '../lib/config';
 
 /** Where privacy and deletion questions go. There is no contact field in the admin settings yet. */
-export const PRIVACY_CONTACT = 'privacy@paulsjones.com';
+export const PRIVACY_CONTACT = 'googledev@gmail.com';
 
 /** A plain reading page that needs no sign-in: the privacy policy and the deletion instructions. */
 export function DocPage({ title, updated, children }: { title: string; updated?: string; children: ReactNode }) {

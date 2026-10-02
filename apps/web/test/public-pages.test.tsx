@@ -16,7 +16,7 @@ describe('Privacy policy', () => {
     }
     expect(screen.getByText(/Your contacts are never uploaded as a list/)).toBeInTheDocument();
     expect(screen.getByText(/no analytics or tracking tools/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'privacy@paulsjones.com' })).toHaveAttribute('href', 'mailto:privacy@paulsjones.com');
+    expect(screen.getByRole('link', { name: 'googledev@gmail.com' })).toHaveAttribute('href', 'mailto:googledev@gmail.com');
   });
 
   it('links to the deletion page', async () => {
