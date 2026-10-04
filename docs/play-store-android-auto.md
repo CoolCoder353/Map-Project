@@ -114,6 +114,14 @@ upload with the same versionCode: bump it in `apps/mobile/app.config.ts` before 
 
 ## Things that will bite
 
+- **Nothing installs from Play until the first review passes.** A new app stays "Draft" until Google
+  approves its first submission, and until then even the internal test and internal app sharing are
+  refused (the API answers `NOT_PUBLISHED`); testers see "Item not found", "This item isn't
+  available" or "Won't work on your device". Seen 2026-10-04 with versionCode 5 on internal and
+  closed testing while the first review ran.
+- **A Play install can't replace the shared APK.** Play signs with Google's app signing key; the
+  shared APK is signed with the upload key. Testers must uninstall the APK build (after Sync now in
+  Settings) before installing from Play, and back again.
 - An invite-only app with sign-in is fine, but reviewers must be able to register or use the test account on the live server.
 - Play may ask why a navigation app records location while not navigating. The answer above is the one to give; do not describe the feature as "tracking".
 - Package name `app.wayfinder.maps` and the upload key are permanent. Decide on the app name shown on Play (`APP_DISPLAY_NAME`) first.
