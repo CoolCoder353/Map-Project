@@ -14,7 +14,7 @@ submitting. The plan and status are in
   Sent with the website by `pnpm play listing` from [details.json](details.json).
 - **Privacy policy URL:** `https://maps.paulsjones.com/privacy`
 - **Graphics:** `store/play/icon-512.png`, `store/play/feature-graphic.png`. Phone screenshots
-  (2 to 8) and Android Auto screenshots are still to take ([README.md](README.md)).
+  in `store/play/screenshots/phone/` (five). Android Auto screenshots are still to take ([README.md](README.md)).
 
 ## App access (reviewer sign-in)
 

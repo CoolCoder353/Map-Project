@@ -178,7 +178,7 @@ emulators are enough.
 
 ## Open / manual
 
-- **`pnpm play` has only run against a fake Google.** `scripts/test/play.test.ts` covers the requests it makes; the first real `pnpm play status` and upload will confirm Play answers the same way.
+- **`pnpm play` against the real Play API (2026-10-04):** `status` lists the tracks and `listing` committed the store listing. An upload of a new bundle hasn't run against Play yet. Service account permission changes took more than 10 minutes to reach the API.
 
 - **Android on a device.** Install the APK (`infra/scripts/build-apk.sh`) and check: background tracking survives the app being killed and Doze; a real walk appears as new coverage on the web; turn-by-turn with a deliberate wrong turn triggers a reroute; the offline queue uploads when connectivity returns.
 - **The native map itself.** Every Android screen is tested in Jest with the map faked, and the map component with MapLibre Native mocked; MapLibre Native on a device is covered only by device testing.

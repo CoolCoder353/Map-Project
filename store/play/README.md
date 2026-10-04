@@ -25,7 +25,22 @@ location page (Allow all the time); the notification prompt; the switch on; then
 screen, the "Wayfinder is recording your travels" notification. Play wants a YouTube link: upload
 it as Unlisted and paste the link into the declaration.
 
+## Phone screenshots
+
+`screenshots/phone/` holds five, 1080x2160 (Play rejects a long side more than twice the short
+one, so the emulator's 1080x2400 captures are cropped: status bar, 41 px of map, gesture bar).
+Taken 2026-10-04 on the emulator with app 0.4.0 against the live server, signed in as the reviewer
+account in Brisbane, with Android's status bar demo mode for a clean clock and icons:
+
+1. `1-explore-routes.png`: directions to Mt Coot-tha Lookout, the fastest route and an explore route
+2. `2-turn-by-turn.png`: navigating, "Turn right onto George Street"
+3. `3-discover.png`: lookouts and parks nearby in areas not yet explored
+4. `4-round-trip.png`: hour-long loops from Kangaroo Point Cliffs
+5. `5-search.png`: place search with opening hours
+
+Coverage isn't among them: the reviewer account's only long trip was simulated, came out as a
+walk, and the screen opens zoomed in on one block.
+
 ## Still missing
 
-- Phone screenshots (2-8 required). Skipped: no `adb` or Android emulator on this machine. Capture from the APK (`dist/wayfinder.apk`) once an emulator or device is available, signing in with the reviewer account in `infra/android/play-review.env`.
 - Optional: 7-inch and 10-inch tablet screenshots, and a promo video.
