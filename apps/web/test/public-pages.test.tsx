@@ -16,7 +16,7 @@ describe('Privacy policy', () => {
     }
     expect(screen.getByText(/Your contacts are never uploaded as a list/)).toBeInTheDocument();
     expect(screen.getByText(/no analytics or tracking tools/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'googledev@gmail.com' })).toHaveAttribute('href', 'mailto:googledev@gmail.com');
+    expect(screen.getByRole('link', { name: 'WeaponryAndResourcesGame@gmail.com' })).toHaveAttribute('href', 'mailto:WeaponryAndResourcesGame@gmail.com');
   });
 
   it('links to the deletion page', async () => {
