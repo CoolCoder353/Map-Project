@@ -32,7 +32,7 @@ can apply for production access. An organisation account does not.
 | Quality gaps NF-3, NF-6, NF-7, VC-1, EP-2 fixed                               | done               | [quality-gaps.md](quality-gaps.md); only checked by tests, not on a head unit                                                                                                                                                                                  |
 | Run the Android Auto checklist on a Desktop Head Unit                         | open               | [verification.md](verification.md#android-auto-desktop-head-unit): nothing ticked yet. Do this before open testing                                                                                                                                             |
 | Remaining car items: DR-2/DR-3 launch time, NF-5, NF-2                        | open               | Need a head unit to measure                                                                                                                                                                                                                                    |
-| **Play Console developer account** ($25, identity check)                      | **you**            | Not started                                                                                                                                                                                                                                                    |
+| **Play Console developer account** ($25, identity check)                      | done 2026-10-04    | Personal or organisation decides whether the 12-testers step applies                                                                                                                                                                                                                                                    |
 | Build an Android App Bundle (.aab)                                            | done               | `build-apk.sh` now also runs `bundleRelease` and writes `dist/wayfinder.aab`; version 0.4.0 / versionCode 5. Not yet built                                                                                                                                     |
 | **Play App Signing / upload key**                                             | you                | Enrol in Play App Signing. The current `infra/android/release.keystore` can become the upload key; keep it backed up                                                                                                                                           |
 | **Server address baked in**                                                   | decision           | A Play build points at `https://maps.paulsjones.com`. Reviewers need to reach it, so it must stay up                                                                                                                                                           |
@@ -47,6 +47,7 @@ can apply for production access. An organisation account does not.
 | Android Auto screenshots                                                      | you                | Take from the DHU; no OEM branding                                                                                                                                                                                                                             |
 | Content rating questionnaire, target audience, ads declaration                | you                | App is for a private group; no ads                                                                                                                                                                                                                             |
 | Opt in to Android Auto in Play Console                                        | you                | Advanced settings, Form factors, Add form factor, Android Auto, after a bundle is on a track                                                                                                                                                                   |
+| Publishing from this machine (`pnpm play`)                                    | code done          | Needs the service account below; the first bundle still goes up by hand                                                                                                                                                                                        |
 
 ## Order of work
 
@@ -59,6 +60,46 @@ can apply for production access. An organisation account does not.
 4. **Internal testing.** Upload the bundle, add testers, confirm the app shows in Android Auto from a Play install.
 5. **Closed testing.** Opt in to Android Auto; collect the non-blocking review result and fix what it names. For a personal account, this is also the 12-testers-for-14-days step.
 6. **Open testing or production.** Blocking review. Fix anything it rejects, remove the rejected artifact, resubmit.
+
+## Publishing from this machine
+
+`pnpm play` (`scripts/play`) talks to the Google Play Developer API as a service account, so a
+release can be made here, by you or by Claude, without opening Play Console. Store listing forms,
+declarations and content rating are not in the API; they stay in Play Console
+([store/play/console-answers.md](../store/play/console-answers.md)).
+
+```bash
+pnpm play status                                    # what is on each track
+pnpm play upload --notes "What changed"             # dist/wayfinder.aab to internal testing, as a draft
+pnpm play upload --track closed --rollout           # straight out to closed testing
+pnpm play promote --version-code 5 --track closed   # a build already on Play, onto another track
+pnpm play listing                                   # store/play text and graphics
+```
+
+Tracks are `internal`, `closed`, `open` and `production`. A release is a draft until `--rollout`.
+Add `--dry-run` to have Play validate a change without publishing it. Play refuses a second
+upload with the same versionCode: bump it in `apps/mobile/app.config.ts` before building.
+
+### One-off setup
+
+1. **Create the app in Play Console** (Create app: name Wayfinder, default language English
+   (Australia) – en-AU, App, Free). The API can't create apps.
+2. **A Google Cloud project with the API on.** In Google Cloud Console, create a project (for
+   example `wayfinder-play`), then enable **Google Play Android Developer API** in it.
+3. **A service account and its key.** IAM & Admin → Service accounts → Create service account
+   (name `play-publisher`, no Google Cloud roles). Open it → Keys → Add key → JSON. Save the file as
+   `infra/android/play-service-account.json` (git ignores it; back it up with the keystore, and
+   delete the key in Google Cloud if it leaks).
+4. **Invite it in Play Console.** Users and permissions → Invite new users → the service
+   account's email (`…@…iam.gserviceaccount.com`). Under App permissions add Wayfinder with
+   **Release apps to testing tracks**, **Release to production, exclude devices, and use Play App
+   Signing**, **Manage testing tracks and edit tester lists** and **Manage store presence**. Invite.
+5. **Upload the first bundle by hand.** Play only lets the API update an app that already has a
+   build: Testing → Internal testing → Create new release → upload `dist/wayfinder.aab`. This also
+   enrols Play App Signing (keep Google's generated signing key; the keystore becomes the upload
+   key).
+6. **Check it:** `pnpm play status` lists the tracks. "The caller does not have permission" means
+   step 4 hasn't taken effect yet; it can take a few minutes.
 
 ## Answers for the Play forms (from the code)
 

@@ -33,7 +33,7 @@ The whole gate, about 5 minutes (Playwright and the Android Auto tests take most
 |---|---|
 | `pnpm lint && pnpm typecheck` | ESLint and TypeScript, every package |
 | `pnpm test` | All Vitest projects: `unit`, `integration`, `web` |
-| `pnpm test:unit` | Pure logic: `packages/*/test`, `apps/{api,worker}/test/unit`, `apps/mobile/test/*.test.ts` |
+| `pnpm test:unit` | Pure logic: `packages/*/test`, `apps/{api,worker}/test/unit`, `apps/mobile/test/*.test.ts`, `scripts/test` |
 | `pnpm test:integration` | Services, API and worker against a real database (in-process PGlite, or Postgres with `TEST_DATABASE_URL`) |
 | `pnpm test:web` | Web app components in jsdom: `apps/web/test` |
 | `pnpm test:coverage` | All Vitest projects, failing below the coverage floors |
@@ -85,6 +85,7 @@ Options:
 | Android logic with no React Native imports | `apps/mobile/test/*.test.ts` | Plain Vitest (the upload queue, the API client) |
 | A migration | An integration test of the service that uses it | Every test database runs every migration |
 | The Android app's use of the live API | `scripts/verify-mobile-contract.ts` | `pnpm verify:mobile` against a server |
+| Publishing to Google Play (`scripts/play`) | `scripts/test/*.test.ts` | Plain Vitest with a fake `fetch` standing in for Google |
 
 ### Web component tests
 
@@ -190,6 +191,7 @@ Each feature a person can use, and where its tests are. Paths are relative to th
 | Settings, download my data, delete account (web and Android) | `account.test.ts`, `auth-api.test.ts` | `settings.test.tsx` | `settings.screen.test.tsx` (delete with confirm, cancel, error; privacy policy link) | `account.spec.ts` |
 | Public privacy policy (`/privacy`) and account deletion page (`/delete-account`), no sign-in | — | `public-pages.test.tsx` (also the sign-in footer link) | `settings.screen.test.tsx` (opens `/privacy` in the browser) | `account.spec.ts` |
 | Play bundle: `build-apk.sh` also writes `dist/wayfinder.aab` | `apps/mobile/test/buildScript.test.ts` (shape only; the build itself is checked by running it) | — | — | — |
+| Publishing to Google Play: `pnpm play` status, upload, promote, listing; service account sign-in | `scripts/test/play.test.ts` (against a fake Google; the real API is checked by using it) | — | — | — |
 | Feedback | `feedback-api.test.ts` | `account-feedback.test.tsx`, `admin-management.test.tsx` | `feedback.screen.test.tsx` | `feedback.spec.ts` |
 | App name and voice | `copy.test.ts`, `admin-api.test.ts` | `auth-pages.test.tsx`, `admin-management.test.tsx` | `app-shell.native.test.tsx`, `screens.screen.test.tsx` | `admin.spec.ts` |
 | Admin: users, roles, sessions, reset links | `admin.test.ts`, `admin-api.test.ts` | `admin-management.test.tsx` | — | `admin.spec.ts`, `account.spec.ts` |

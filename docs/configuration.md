@@ -79,4 +79,5 @@ How to build, check and share the app: [build-android.md](build-android.md). Eve
 | `TEST_DATABASE_URL` | `pnpm test:integration` | Real Postgres instead of in-process PGlite |
 | `GRAPHHOPPER_LIVE_URL` | `pnpm test:integration` | Adds tests against a real routing graph |
 | `CAPTURE` | web e2e | `1` captures design-review screenshots |
+| `PLAY_SERVICE_ACCOUNT`, `PLAY_PACKAGE_NAME` | `pnpm play` | The Google Play service account key (default `infra/android/play-service-account.json`, not in git) and the app (default `app.wayfinder.maps`) |
 | `DEPLOY_HOST`, `DEPLOY_DIR`, `DATA_VOLUME`, `BUILD_DB` | `infra/scripts/deploy-small.sh` | Defaults `root@maps`, `/opt/wayfinder`, `wayfinder_qlddata`, `wf-qld-db` |

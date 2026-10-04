@@ -37,3 +37,6 @@ infra/android/keystore.env
 
 # Google Play reviewer sign-in (docs/play-store-android-auto.md)
 infra/android/play-review.env
+
+# Google Play publishing key (pnpm play, docs/play-store-android-auto.md)
+infra/android/play-service-account.json

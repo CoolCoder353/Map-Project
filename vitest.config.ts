@@ -8,7 +8,7 @@ export default defineConfig({
     // added; never lower them to make a change pass (docs/testing.md).
     coverage: {
       provider: 'v8',
-      include: ['packages/*/src/**/*.{ts,tsx}', 'apps/api/src/**/*.ts', 'apps/worker/src/**/*.ts', 'apps/web/src/**/*.{ts,tsx}', 'apps/mobile/src/lib/apiClient.ts', 'apps/mobile/src/tracking/queue.ts', 'apps/mobile/src/car/protocol.ts', 'apps/mobile/src/car/navModel.ts', 'apps/mobile/src/lib/categories.ts'],
+      include: ['packages/*/src/**/*.{ts,tsx}', 'apps/api/src/**/*.ts', 'apps/worker/src/**/*.ts', 'apps/web/src/**/*.{ts,tsx}', 'apps/mobile/src/lib/apiClient.ts', 'apps/mobile/src/tracking/queue.ts', 'apps/mobile/src/car/protocol.ts', 'apps/mobile/src/car/navModel.ts', 'apps/mobile/src/lib/categories.ts', 'scripts/play/**/*.ts'],
       exclude: [
         '**/index.ts',
         '**/*.d.ts',
@@ -22,14 +22,14 @@ export default defineConfig({
       ],
       reporter: ['text-summary', 'html', 'json-summary'],
       reportsDirectory: 'coverage',
-      thresholds: { lines: 96.9, statements: 94.6, functions: 93, branches: 87.1 },
+      thresholds: { lines: 97.1, statements: 94.8, functions: 93.1, branches: 87.4 },
     },
     projects: [
       {
         extends: true,
         test: {
           name: 'unit',
-          include: ['packages/*/test/**/*.test.ts', 'apps/{api,worker}/test/unit/**/*.test.ts', 'apps/mobile/test/**/*.test.ts'],
+          include: ['packages/*/test/**/*.test.ts', 'apps/{api,worker}/test/unit/**/*.test.ts', 'apps/mobile/test/**/*.test.ts', 'scripts/test/**/*.test.ts'],
           exclude: ['**/node_modules/**', '**/test/integration/**'],
           environment: 'node',
         },

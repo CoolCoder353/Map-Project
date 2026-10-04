@@ -1,4 +1,10 @@
-# Google Play listing graphics
+# Google Play listing
+
+`pnpm play listing` sends the text in `listing/<language>/` (title, short and full description),
+the two graphics below and, once there are some, the PNGs in `screenshots/phone/` (2 to 8, in
+file-name order). Edit the files here, not in Play Console, or the next sync undoes the change.
+
+## Graphics
 
 | File | Size | Notes |
 | --- | --- | --- |

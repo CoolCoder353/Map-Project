@@ -52,7 +52,7 @@ What happens:
 - **It takes over `node_modules` while it runs.** Don't run pnpm, tests or dev servers until it
   finishes; it puts `node_modules` back at the end. If a build is interrupted, run
   `CI=true pnpm install`.
-- **It overwrites `dist/wayfinder.apk` and `dist/wayfinder.aab`.** Copy the old files elsewhere first if you want to keep them. Share the APK directly; upload the `.aab` to Google Play (Play rejects APKs for new apps). Both are signed with the same keystore, which becomes the Play upload key, so back it up.
+- **It overwrites `dist/wayfinder.apk` and `dist/wayfinder.aab`.** Copy the old files elsewhere first if you want to keep them. Share the APK directly; upload the `.aab` to Google Play (Play rejects APKs for new apps) with `pnpm play upload` ([play-store-android-auto.md](play-store-android-auto.md#publishing-from-this-machine)). Both are signed with the same keystore, which becomes the Play upload key, so back it up.
 - It refuses documentation addresses (`example.com`, `your-server`), refuses `http://` unless
   `ALLOW_HTTP=1`, and reads the address back out of the finished APK. The last line confirms it:
   ```

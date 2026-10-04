@@ -7,27 +7,8 @@ submitting. The plan and status are in
 
 ## Store listing
 
-- **App name:** Wayfinder
-- **Short description (80 max):** Maps that show the roads you haven't driven yet, and routes to explore them.
-- **Full description:**
-
-  > Wayfinder is a map for people who like to explore. It remembers the roads you've travelled and
-  > points you to the ones you haven't.
-  >
-  > • Turn-by-turn directions on your phone and in your car through Android Auto
-  > • Explore routes: a slightly longer way that takes in new roads
-  > • Discover nearby places in areas you haven't been
-  > • See the roads you've covered and replay past trips
-  > • Spoken directions with lane-level turn icons and roundabout exits
-  >
-  > Your trips stay on the group's own server. Routing, maps and search all run there, with no
-  > ads and no outside tracking. Recording trips in the background is off until you turn it on.
-  >
-  > Wayfinder is invite-only: you need an invite code from the group running your server.
-  > Maps currently cover Queensland, Australia.
-  >
-  > Map data © OpenStreetMap contributors.
-
+- **App name, short and full description:** in [listing/en-AU/](listing/en-AU/); `pnpm play listing`
+  sends them, so edit them there.
 - **Category:** Maps & Navigation. **Tags:** Navigation, Maps.
 - **Contact email:** googledev@gmail.com (Play shows it publicly; the privacy page uses it too).
 - **Privacy policy URL:** `https://maps.paulsjones.com/privacy`
