@@ -73,7 +73,7 @@ pnpm play status                                    # what is on each track
 pnpm play upload --notes "What changed"             # dist/wayfinder.aab to internal testing, as a draft
 pnpm play upload --track closed --rollout           # straight out to closed testing
 pnpm play promote --version-code 5 --track closed   # a build already on Play, onto another track
-pnpm play listing                                   # store/play text and graphics
+pnpm play listing                                   # store/play text, graphics and contact details
 ```
 
 Tracks are `internal`, `closed`, `open` and `production`. A release is a draft until `--rollout`.

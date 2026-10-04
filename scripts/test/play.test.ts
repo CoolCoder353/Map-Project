@@ -116,6 +116,11 @@ describe('hints for Play errors', () => {
     ['Changes cannot be sent for review automatically. Please set the query parameter changesNotSentForReview to true.', 400, /--no-review/],
     ['APK specifies a version code that has already been used.', 403, /Bump versionCode/],
     ['The caller does not have permission', 403, /Users and permissions/],
+    [
+      'Google Play Android Developer API has not been used in project 100598136189 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/androidpublisher.googleapis.com/overview?project=100598136189 then retry.',
+      403,
+      /switched off in the service account's Google Cloud project/,
+    ],
   ])('%s', (message, status, hint) => {
     expect(hintFor(new PlayApiError(message, status))).toMatch(hint);
   });
@@ -297,11 +302,13 @@ describe('pnpm play listing', () => {
     'store/play/listing/en-AU/full-description.txt': 'A map for explorers.',
     'store/play/icon-512.png': 'ICON',
     'store/play/feature-graphic.png': 'FEATURE',
+    'store/play/details.json': JSON.stringify({ contactEmail: 'play@wayfinder.test', contactWebsite: 'https://maps.wayfinder.test' }),
     ...over,
   });
   const routes = (record: Call[]) => ({
     ...signIn,
     ...edit,
+    [`PATCH ${API}/edits/e1/details`]: (c: Call) => (record.push(c), {}),
     [`PUT ${API}/edits/e1/listings/en-AU`]: (c: Call) => (record.push(c), {}),
     [`DELETE ${API}/edits/e1/listings/en-AU/icon`]: (c: Call) => (record.push(c), {}),
     [`POST /upload${API}/edits/e1/listings/en-AU/icon`]: (c: Call) => (record.push(c), {}),
@@ -311,15 +318,17 @@ describe('pnpm play listing', () => {
     [`POST /upload${API}/edits/e1/listings/en-AU/phoneScreenshots`]: (c: Call) => (record.push(c), {}),
   });
 
-  it('sends the text and graphics, leaving screenshots alone when there are none', async () => {
+  it('sends the contact details, text and graphics, leaving screenshots alone when there are none', async () => {
     const record: Call[] = [];
     const google = fakeGoogle(routes(record));
     const { d, lines } = deps(google, listing());
     expect(await run(['listing'], d)).toBe(0);
-    expect(record[0]!.body).toEqual({ language: 'en-AU', title: 'Wayfinder', shortDescription: 'Roads you have not driven.', fullDescription: 'A map for explorers.' });
-    expect(record.map((c) => `${c.method} ${c.path.split('/').pop()}`)).toEqual(['PUT en-AU', 'DELETE icon', 'POST icon', 'DELETE featureGraphic', 'POST featureGraphic']);
-    expect(record[2]!.headers['content-type']).toBe('image/png');
-    expect(lines[0]).toMatch(/no phone screenshots yet/);
+    expect(record[0]!.body).toEqual({ contactEmail: 'play@wayfinder.test', contactWebsite: 'https://maps.wayfinder.test' });
+    expect(record[1]!.body).toEqual({ language: 'en-AU', title: 'Wayfinder', shortDescription: 'Roads you have not driven.', fullDescription: 'A map for explorers.' });
+    expect(record.map((c) => `${c.method} ${c.path.split('/').pop()}`)).toEqual(['PATCH details', 'PUT en-AU', 'DELETE icon', 'POST icon', 'DELETE featureGraphic', 'POST featureGraphic']);
+    expect(record[3]!.headers['content-type']).toBe('image/png');
+    expect(lines[0]).toBe('Contact details: play@wayfinder.test, https://maps.wayfinder.test.');
+    expect(lines[1]).toMatch(/no phone screenshots yet/);
     expect(lines.at(-1)).toBe('Committed.');
   });
 
@@ -374,5 +383,8 @@ describe('pnpm play', () => {
     expect(en!.listing.language).toBe('en-AU');
     expect(en!.listing.title).toBe('Wayfinder');
     expect(readFileSync(join(root, 'store/play/listing/en-AU/full-description.txt'), 'utf8')).not.toMatch(/hexagon/i);
+    // The contact email Play shows publicly is the one the privacy policy gives.
+    const privacyContact = /PRIVACY_CONTACT = '([^']+)'/.exec(readFileSync(join(root, 'apps/web/src/pages/DocPage.tsx'), 'utf8'))![1];
+    expect(JSON.parse(readFileSync(join(root, 'store/play/details.json'), 'utf8')).contactEmail).toBe(privacyContact);
   });
 });

@@ -79,6 +79,9 @@ export class PlayApiError extends Error {
 /** Plain-English next steps for the errors a first setup runs into. */
 export function hintFor(error: PlayApiError): string | undefined {
   const m = error.message;
+  if (/has not been used in project|androidpublisher\.googleapis\.com\/overview/i.test(m)) {
+    return 'The Google Play Android Developer API is switched off in the service account\'s Google Cloud project. Open the link above, press Enable, wait a few minutes and try again.';
+  }
   if (/only releases with status draft/i.test(m)) {
     return 'The app has never been published, so Play only takes draft releases. Run again without --rollout, then roll the draft out in Play Console.';
   }
@@ -115,6 +118,13 @@ export interface Listing {
   title: string;
   shortDescription: string;
   fullDescription: string;
+}
+
+/** The store's contact details, shown on the listing. */
+export interface AppDetails {
+  contactEmail?: string;
+  contactWebsite?: string;
+  contactPhone?: string;
 }
 
 export type ImageType = 'icon' | 'featureGraphic' | 'phoneScreenshots' | 'sevenInchScreenshots' | 'tenInchScreenshots';
@@ -193,6 +203,10 @@ export class PlayApi {
 
   async updateListing(editId: string, listing: Listing): Promise<void> {
     await this.call('PUT', this.app(`/edits/${editId}/listings/${listing.language}`), { json: listing });
+  }
+
+  async updateDetails(editId: string, details: AppDetails): Promise<void> {
+    await this.call('PATCH', this.app(`/edits/${editId}/details`), { json: details });
   }
 
   /** Replaces every image of one type with the given PNGs, in order. */

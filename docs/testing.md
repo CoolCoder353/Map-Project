@@ -191,7 +191,7 @@ Each feature a person can use, and where its tests are. Paths are relative to th
 | Settings, download my data, delete account (web and Android) | `account.test.ts`, `auth-api.test.ts` | `settings.test.tsx` | `settings.screen.test.tsx` (delete with confirm, cancel, error; privacy policy link) | `account.spec.ts` |
 | Public privacy policy (`/privacy`) and account deletion page (`/delete-account`), no sign-in | — | `public-pages.test.tsx` (also the sign-in footer link) | `settings.screen.test.tsx` (opens `/privacy` in the browser) | `account.spec.ts` |
 | Play bundle: `build-apk.sh` also writes `dist/wayfinder.aab` | `apps/mobile/test/buildScript.test.ts` (shape only; the build itself is checked by running it) | — | — | — |
-| Publishing to Google Play: `pnpm play` status, upload, promote, listing; service account sign-in | `scripts/test/play.test.ts` (against a fake Google; the real API is checked by using it) | — | — | — |
+| Publishing to Google Play: `pnpm play` status, upload, promote, listing (text, graphics, contact details); service account sign-in | `scripts/test/play.test.ts` (against a fake Google; the real API is checked by using it) | — | — | — |
 | Feedback | `feedback-api.test.ts` | `account-feedback.test.tsx`, `admin-management.test.tsx` | `feedback.screen.test.tsx` | `feedback.spec.ts` |
 | App name and voice | `copy.test.ts`, `admin-api.test.ts` | `auth-pages.test.tsx`, `admin-management.test.tsx` | `app-shell.native.test.tsx`, `screens.screen.test.tsx` | `admin.spec.ts` |
 | Admin: users, roles, sessions, reset links | `admin.test.ts`, `admin-api.test.ts` | `admin-management.test.tsx` | — | `admin.spec.ts`, `account.spec.ts` |

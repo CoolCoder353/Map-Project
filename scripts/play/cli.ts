@@ -4,7 +4,7 @@
  *   pnpm play status                                  what is on each track
  *   pnpm play upload [--track internal] [--rollout]   upload dist/wayfinder.aab
  *   pnpm play promote --version-code 5 --track closed  put an uploaded build on another track
- *   pnpm play listing                                 sync store/play text and graphics
+ *   pnpm play listing                                 sync store/play text, graphics and contact details
  *
  * Releases are drafts unless --rollout is given. --dry-run makes the same changes in an edit,
  * asks Play to validate them, then throws the edit away. The service account key is read from
@@ -13,12 +13,13 @@
  */
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { type Fetch, getAccessToken, hintFor, type Listing, parseServiceAccount, PlayApi, PlayApiError, type Release } from './api.js';
+import { type AppDetails, type Fetch, getAccessToken, hintFor, type Listing, parseServiceAccount, PlayApi, PlayApiError, type Release } from './api.js';
 
 export const PACKAGE_NAME = 'app.wayfinder.maps';
 export const DEFAULT_KEY = 'infra/android/play-service-account.json';
 export const DEFAULT_BUNDLE = 'dist/wayfinder.aab';
 export const LISTING_DIR = 'store/play/listing';
+export const DETAILS_FILE = 'store/play/details.json';
 
 export interface Deps {
   root: string;
@@ -149,7 +150,10 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
       const listings = await readListings(deps);
       const icon = await deps.readFile(join(deps.root, 'store/play/icon-512.png'));
       const feature = await deps.readFile(join(deps.root, 'store/play/feature-graphic.png'));
+      const details = JSON.parse((await deps.readFile(join(deps.root, DETAILS_FILE))).toString('utf8')) as AppDetails;
       await inEdit(api, editOpts, deps.log, async (editId) => {
+        await api.updateDetails(editId, details);
+        deps.log(`Contact details: ${Object.values(details).join(', ')}.`);
         for (const { listing, screenshots } of listings) {
           await api.updateListing(editId, listing);
           await api.replaceImages(editId, listing.language, 'icon', [icon]);

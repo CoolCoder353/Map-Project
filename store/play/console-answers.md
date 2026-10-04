@@ -11,6 +11,7 @@ submitting. The plan and status are in
   sends them, so edit them there.
 - **Category:** Maps & Navigation. **Tags:** Navigation, Maps.
 - **Contact email:** googledev@gmail.com (Play shows it publicly; the privacy page uses it too).
+  Sent with the website by `pnpm play listing` from [details.json](details.json).
 - **Privacy policy URL:** `https://maps.paulsjones.com/privacy`
 - **Graphics:** `store/play/icon-512.png`, `store/play/feature-graphic.png`. Phone screenshots
   (2 to 8) and Android Auto screenshots are still to take ([README.md](README.md)).
