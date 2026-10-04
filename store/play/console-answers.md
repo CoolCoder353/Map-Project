@@ -81,11 +81,17 @@ Collected data is **not** processed ephemerally (it is stored).
 
 ### Location permissions (background location declaration)
 
-- **Core feature that needs background location:** Recording the roads the user travels so the app
-  can show which roads they have and haven't driven, and suggest new ones. Without background
-  access, trips are only recorded while the app is on screen, so most drives would be missed.
-- **Is it the main purpose of the app?** Yes. Coverage of roads travelled is the app's core feature.
-- **Video (YouTube, unlisted, under 30 s):** Settings → Location history → Background tracking →
+Play asks two questions; paste these (each under 500 characters):
+
+- **What is the main purpose of your app?**
+
+  > Wayfinder is a navigation app for drivers who like to explore. It gives turn-by-turn directions on the phone and through Android Auto, and it remembers which roads the user has driven so it can suggest routes and places on roads they haven't been on yet. Showing the roads a user has and hasn't travelled is the app's core feature.
+
+- **Describe 1 location-based feature in your app that needs access to location in the background.**
+
+  > Recording the roads the user travels. When the user turns on Background tracking in Settings (off by default), the app records their location while they drive, even when the app is closed, and uploads the trip to the group's own server. It uses this to show which roads they have driven and suggest new ones. Without background access, most drives would go unrecorded, as the app is rarely on screen while driving. A notification shows while recording is on, and it can be turned off in Settings.
+
+- **Video (YouTube, unlisted):** `store/play/background-location.mp4`, 34 s. Settings → Location history → Background tracking →
   the in-app "Use your location in the background?" dialog → Continue → "Allow all the time" in the system dialog → the ongoing "Wayfinder is recording your
   travels" notification while driving.
 - **In-app disclosure:** "Use your location in the background?", shown before every system
