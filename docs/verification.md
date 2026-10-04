@@ -174,7 +174,7 @@ emulators are enough.
 - [ ] Settings, Background tracking on, with location never granted: the "Use your location in the background?" disclosure shows first; "Not now" leaves the switch off with no Android prompt; "Continue" leads to Android's location prompt, then "Allow all the time"
 - [ ] With "Allow all the time" already granted, turning tracking on asks nothing
 - [ ] Android 13+, notifications never allowed: turning tracking on (after location) and starting a trip on the phone each ask to allow notifications; a trip started from the car does not ask on the phone
-- [ ] Record the disclosure, the system prompts and the recording notification for the Play background location declaration video
+- [x] Record the disclosure, the system prompts and the recording notification for the Play background location declaration video (2026-10-04, emulator, app 0.4.0: `store/play/background-location.mp4`). On that run, with location and notifications never granted: the disclosure came first, Continue led to Android's prompt and then its location page, "Allow all the time" stuck, notifications were asked for next, and the notification showed with the app in the background. Its small icon is a plain circle, not the Wayfinder arrow
 
 ## Open / manual
 
