@@ -32,7 +32,12 @@ class NavTemplatesTest {
     assertEquals(listOf("Mute", "End"), t.actionStrip!!.actions.map { it.title.text() })
   }
 
-  @Test fun waitsForTheFirstFix() = assertTrue((template(Samples.nav(status = NavStatus.STARTING, maneuver = null)).navigationInfo as RoutingInfo).isLoading)
+  /** A spinner that never stops reads as the car app hanging; this says what it's waiting for. */
+  @Test fun saysItIsFindingYouBeforeTheFirstFix() {
+    val info = template(Samples.nav(status = NavStatus.STARTING, maneuver = null)).navigationInfo as MessageInfo
+    assertEquals(NavTemplates.FINDING_YOU, info.title.text())
+    assertEquals("To Mt Coot-tha Lookout", info.text.text())
+  }
   @Test fun loadsUntilThereIsATrip() = assertTrue((template(null).navigationInfo as RoutingInfo).isLoading)
 
   @Test fun saysWhenItIsFindingANewRoute() =
@@ -73,6 +78,41 @@ class NavTemplatesTest {
     val m = maneuverOf(Samples.nav(maneuver = CarManeuver("roundabout", 2)))
     assertEquals(Maneuver.TYPE_ROUNDABOUT_ENTER_AND_EXIT_CW, m.type)
     assertEquals(2, m.roundaboutExitNumber)
+  }
+
+  @Test fun aRoundaboutDrawsTheExitYouTake() {
+    val m = maneuverOf(Samples.nav(maneuver = CarManeuver("roundabout", 3, 268)))
+    assertEquals(Maneuver.TYPE_ROUNDABOUT_ENTER_AND_EXIT_CW_WITH_ANGLE, m.type)
+    assertEquals(3, m.roundaboutExitNumber)
+    assertEquals(268, m.roundaboutExitAngle)
+    assertEquals(androidx.core.graphics.drawable.IconCompat.TYPE_BITMAP, m.icon!!.icon!!.type)
+  }
+
+  private fun click(a: androidx.car.app.model.Action) {
+    a.onClickDelegate!!.sendClick(object : androidx.car.app.OnDoneCallback {})
+    org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+  }
+
+  @Test fun reportAndTheMapButtons() {
+    val icon = icons.iconFor("straight")
+    val zooms = mutableListOf<Double>()
+    var recentred = 0
+    fun withMap(panned: Boolean) = NavTemplates.navigation(Samples.nav(), icons, onEnd = {}, onMute = {}, onReport = {}, map = MapButtons(panned, icon, icon, icon, { zooms += it }, { recentred++ }))
+    val t = withMap(panned = false)
+    assertEquals(listOf("Mute", "Report", "End"), t.actionStrip!!.actions.map { it.title.text() })
+    val mapActions = t.mapActionStrip!!.actions
+    assertEquals(listOf(androidx.car.app.model.Action.TYPE_PAN, androidx.car.app.model.Action.TYPE_CUSTOM, androidx.car.app.model.Action.TYPE_CUSTOM), mapActions.map { it.type })
+    assertNotNull(t.panModeDelegate)
+    click(mapActions[1])
+    click(mapActions[2])
+    assertEquals(listOf(1.0, -1.0), zooms)
+    // Moved away from the car: a way back to following it.
+    val panned = withMap(panned = true).mapActionStrip!!.actions
+    assertEquals(4, panned.size)
+    click(panned[1])
+    assertEquals(1, recentred)
+    // No trip yet: nothing to report on.
+    assertEquals(listOf("Mute", "End"), NavTemplates.navigation(null, icons, onEnd = {}, onMute = {}, onReport = {}).actionStrip!!.actions.map { it.title.text() })
   }
 
   @Test fun aRoundaboutWithoutAUsableExitStillBuilds() {

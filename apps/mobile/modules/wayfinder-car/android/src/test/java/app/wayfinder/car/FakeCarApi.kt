@@ -37,6 +37,7 @@ class FakeCarApi : CarApi {
   override fun stop() { calls += "stop" }
   override fun setMuted(muted: Boolean) { calls += "mute $muted" }
   override fun simulate(done: (Result<Unit>) -> Unit) = hold("simulate", done)
+  override fun report(done: (Result<Unit>) -> Unit) = hold("report", done)
   override fun onNavigation(listener: (CarNav?) -> Unit): () -> Unit {
     navListeners += listener
     return { navListeners -= listener }

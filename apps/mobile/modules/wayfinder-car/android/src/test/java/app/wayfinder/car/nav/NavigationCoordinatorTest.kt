@@ -76,6 +76,50 @@ class NavigationCoordinatorTest {
     assertEquals(1, (scenes.shown.last() as MapScene.Following).line.size)
   }
 
+  /** Off the old route and on a new one: the stretch driven since the trip began stays on the map. */
+  @Test fun theRoadAlreadyDrivenStaysOnTheMap() {
+    val scenes = RecordingScenes()
+    NavigationCoordinator(carContext, api, scenes, ManeuverIcons(carContext)).attach()
+    api.pushNav(Samples.nav().copy(position = LngLat(153.0, -27.4)))
+    driveScreen()
+    api.pushNav(Samples.nav(routeId = "r-reroute").copy(position = LngLat(153.001, -27.4)))
+    api.pushNav(Samples.nav(routeId = "r-reroute").copy(position = LngLat(153.002, -27.4), speedLimitKmh = 60, speedKmh = 57))
+    val shown = scenes.shown.last() as MapScene.Following
+    assertEquals(listOf(LngLat(153.0, -27.4), LngLat(153.001, -27.4), LngLat(153.002, -27.4)), shown.travelled)
+    assertEquals(60, shown.speedLimitKmh)
+    assertEquals(57, shown.speedKmh)
+    // The next trip starts with none.
+    api.pushNav(null)
+    api.pushNav(Samples.nav().copy(position = LngLat(152.0, -27.0)))
+    driveScreen()
+    assertEquals(listOf(LngLat(152.0, -27.0)), (scenes.shown.last() as MapScene.Following).travelled)
+  }
+
+  /** A trip already running when the car connects goes straight over Home; the map still gets its styles. */
+  @Test fun theDrivingScreenMakesSureTheMapHasItsStyles() {
+    var asked = 0
+    api.navigation = Samples.nav()
+    NavigationCoordinator(carContext, api, RecordingScenes(), ManeuverIcons(carContext), ensureStyles = { asked++ }).attach()
+    driveScreen()
+    assertEquals(1, asked)
+  }
+
+  /** The toast (CarToast) isn't observable under Robolectric; one report at a time is. */
+  @Test fun reportAsksThePhoneOnceATap() {
+    coordinator.attach()
+    api.pushNav(Samples.nav())
+    val screen = screens.screensPushed.last { it is NavigationScreen } as NavigationScreen
+    driveScreen()
+    screen.report()
+    screen.report() // a second tap while the first is on its way
+    assertEquals(1, api.calls.count { it == "report" })
+    api.answer("report", Unit)
+    screen.report()
+    api.fail("report", "Feedback is switched off.")
+    screen.report()
+    assertEquals("asked again after each answer", 3, api.calls.count { it == "report" })
+  }
+
   @Test fun picksUpATripAlreadyRunningWhenTheCarConnects() {
     api.navigation = Samples.nav()
     coordinator.attach()

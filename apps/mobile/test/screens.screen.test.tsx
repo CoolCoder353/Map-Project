@@ -10,6 +10,7 @@ import Register from '../app/register';
 import Trip from '../app/trip/[id]';
 import { apiError, coverageStats, discoverItem, fake, place, renderScreen, resetFakes, trip, tripDetail } from './fakes';
 import { user } from './mocks';
+import { takeTripToPlan } from '../src/lib/plannedStore';
 
 jest.mock('expo-router', () => {
   const fakes = require('./fakes');
@@ -117,8 +118,10 @@ describe('Discover', () => {
     expect(screen.queryByText('10% unexplored area')).toBeNull();
     expect(fake.api.callsTo('GET api/discover')[0]!.query).toEqual({ lon: 153.15, lat: -27.49, mode: 'foot', maxMinutes: 35, categories: 'viewpoint', limit: 25 });
     expect(fake.map.fitTo).toHaveBeenCalled();
+    // A place found is somewhere to go: Plan works out the trip there, from the same start, walking.
     await fireEvent.press(screen.getByText('Mount Coot-tha Lookout'));
-    expect(fake.map.flyTo).toHaveBeenCalledWith([152.95, -27.48], 15);
+    expect(fake.router.navigate).toHaveBeenCalledWith('/plan');
+    expect(takeTripToPlan()).toMatchObject({ from: { name: 'Gumdale State School', location: [153.15, -27.49] }, to: { name: 'Mount Coot-tha Lookout', location: [152.95, -27.48] }, mode: 'foot' });
   });
 
   it('says when nothing new is in reach, and shows errors', async () => {

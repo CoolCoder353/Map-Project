@@ -9,7 +9,7 @@ const route = (instructions: Instruction[]): Route => ({
   id: 'r1', kind: 'fastest', mode: 'car', distanceM: 5000, durationS: 600, extraDurationS: 0,
   geometry: [[153, -27.4], [153.1, -27.5]], instructions, viaPoints: [], novelty: { totalKm: 5, newKm: 1, noveltyPct: 20 },
 });
-const snap = (over: Partial<NavSnapshot>): NavSnapshot => ({ active: true, route: null, destinationName: 'Lookout', state: null, rerouting: false, error: null, muted: false, position: null, headingDeg: null, ...over });
+const snap = (over: Partial<NavSnapshot>): NavSnapshot => ({ active: true, route: null, destinationName: 'Lookout', state: null, rerouting: false, error: null, muted: false, position: null, headingDeg: null, speedMps: null, travelled: [], ...over });
 
 describe('maneuverOf', () => {
   it.each([
@@ -18,8 +18,10 @@ describe('maneuverOf', () => {
   ])('GraphHopper sign %i is %s', (sign, type) => expect(maneuverOf({ sign }).type).toBe(type));
 
   it('turns an unknown U-turn right, as Queensland drives on the left', () => expect(maneuverOf({ sign: -98 }).type).toBe('uTurnRight'));
-  it('keeps the exit for a roundabout', () => expect(maneuverOf({ sign: 6, exitNumber: 2 })).toEqual({ type: 'roundabout', exit: 2 }));
-  it('treats a sign it doesn’t know as straight on', () => expect(maneuverOf({ sign: 42 })).toEqual({ type: 'straight', exit: null }));
+  it('keeps the exit for a roundabout', () => expect(maneuverOf({ sign: 6, exitNumber: 2 })).toEqual({ type: 'roundabout', exit: 2, exitAngleDeg: null }));
+  it('keeps how far round the roundabout the exit is, so the car can draw it', () =>
+    expect(maneuverOf({ sign: 6, exitNumber: 3, exitAngleDeg: 268 })).toEqual({ type: 'roundabout', exit: 3, exitAngleDeg: 268 }));
+  it('treats a sign it doesn’t know as straight on', () => expect(maneuverOf({ sign: 42 })).toEqual({ type: 'straight', exit: null, exitAngleDeg: null }));
 });
 
 describe('toCarNav', () => {
@@ -40,6 +42,7 @@ describe('toCarNav', () => {
       state: { status: 'navigating', snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 4000, remainingDurationS: 500, currentInstruction: instructions[0]!, nextInstruction: instructions[1]!, nextInstructionIndex: 1, distanceToNextManeuverM: 250, speedLimitKmh: 60 },
     }), 0)!;
     expect(n).toMatchObject({ status: 'navigating', maneuver: { type: 'left', exit: null }, cue: 'Turn left onto Main St', road: 'Main St', distanceToManeuverM: 250, next: { maneuver: { type: 'right', exit: null }, cue: 'Turn right' } });
+    expect(n).toMatchObject({ speedLimitKmh: 60, speedKmh: null });
     expect(instructions[1]!.distanceM).toBeLessThanOrEqual(THEN_WITHIN_M);
     expect(CarNavSchema.safeParse(n).success).toBe(true);
   });
@@ -50,5 +53,12 @@ describe('toCarNav', () => {
       state: { status: 'navigating', snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: instructions[1]!, nextInstruction: instructions[2]!, nextInstructionIndex: 2, distanceToNextManeuverM: 50, speedLimitKmh: null },
     }), 0)!;
     expect(n.next).toBeNull();
+  });
+
+  it('gives the speed limit only while on the route, and your speed in km/h', () => {
+    const state = { status: 'navigating' as const, snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: instructions[1]!, nextInstruction: instructions[2]!, nextInstructionIndex: 2, distanceToNextManeuverM: 50, speedLimitKmh: 80 };
+    expect(toCarNav(snap({ route: r, state, speedMps: 22.3 }), 0)).toMatchObject({ speedLimitKmh: 80, speedKmh: 80 });
+    expect(toCarNav(snap({ route: r, state: { ...state, status: 'offRoute' }, speedMps: 10 }), 0)).toMatchObject({ speedLimitKmh: null, speedKmh: 36 });
+    expect(toCarNav(snap({ route: r }), 0)).toMatchObject({ speedLimitKmh: null, speedKmh: null });
   });
 });

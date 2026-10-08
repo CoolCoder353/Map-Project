@@ -19,6 +19,19 @@ export const REROUTE_RETRY_MS = 15_000;
  * stalls then would otherwise leave "Finding a new route…" up for the rest of the trip.
  */
 export const REROUTE_TIMEOUT_MS = 20_000;
+/** How long "You've arrived" stays up before the trip ends by itself. */
+export const ARRIVED_END_MS = 15_000;
+/**
+ * After a new route that starts by turning around (a dead-end street, say), how long to let the
+ * driver find somewhere to do it before asking again. Asking sooner gets the same answer: the
+ * driver heard "Route updated" every few seconds while looking for a place to turn.
+ */
+export const TURNAROUND_GRACE_MS = 60_000;
+/** How long to wait for the first fix before saying the phone can't find where it is. */
+export const FIRST_FIX_WAIT_MS = 30_000;
+/** How far apart points of the road already driven are kept, in metres. */
+const TRAVELLED_STEP_M = 10;
+const NO_FIX_YET = 'Still finding where you are. When it’s safe, check that location is on for Wayfinder on your phone.';
 /** Below this the phone's compass heading is noise; the direction comes from movement instead. */
 const MOVING_MPS = 2;
 /** How far to have moved before the direction of travel is worked out from position alone. */
@@ -36,6 +49,10 @@ export interface NavSnapshot {
   muted: boolean;
   position: LngLat | null;
   headingDeg: number | null;
+  /** Speed from the last fix, metres a second, or null where the phone didn't say. */
+  speedMps: number | null;
+  /** Where this trip has been, including any stretch off the route. */
+  travelled: LngLat[];
 }
 
 export interface StartOptions {
@@ -62,7 +79,22 @@ export interface NavigationService {
 
 const REROUTE_FAILED = 'Couldn’t get a new route. Keep heading to the destination; trying again shortly.';
 
-const IDLE: NavSnapshot = { active: false, route: null, destinationName: null, state: null, rerouting: false, error: null, muted: false, position: null, headingDeg: null };
+const IDLE: NavSnapshot = {
+  active: false,
+  route: null,
+  destinationName: null,
+  state: null,
+  rerouting: false,
+  error: null,
+  muted: false,
+  position: null,
+  headingDeg: null,
+  speedMps: null,
+  travelled: [],
+};
+
+/** GraphHopper's U-turn signs: -98 direction unknown, -8 left, 8 right. */
+const isTurnaround = (sign: number | undefined) => sign === -98 || sign === -8 || sign === 8;
 
 /**
  * Starts and stops of the location service, run one at a time in order: every trip uses the same
@@ -117,6 +149,11 @@ export function createNavigationService(): NavigationService {
   let movedFrom: LngLat | null = null;
   /** The trip being followed is a test drive: nothing about it is saved. */
   let simulated = false;
+  /** When the destination was reached; the trip ends by itself [ARRIVED_END_MS] later. */
+  let arrivedAt: number | null = null;
+  /** When a new route that starts by turning around was given (see [TURNAROUND_GRACE_MS]). */
+  let turnaroundSince: number | null = null;
+  let timers: ReturnType<typeof setTimeout>[] = [];
 
   const set = (patch: Partial<NavSnapshot>) => {
     snap = { ...snap, ...patch };
@@ -147,7 +184,10 @@ export function createNavigationService(): NavigationService {
       current.replaceRoute(next);
       pendingReroute = null;
       set({ route: next, error: null });
-      speak('Route updated');
+      const first = next.instructions[0];
+      const turnaround = current.mode === 'car' && isTurnaround(first?.sign);
+      turnaroundSince = turnaround ? Date.now() : null;
+      speak(turnaround ? `Route updated. ${first!.text}` : 'Route updated');
     } catch {
       if (!stale()) set({ error: REROUTE_FAILED });
     } finally {
@@ -174,18 +214,42 @@ export function createNavigationService(): NavigationService {
       if (e.type === 'arrived') {
         speak('You have arrived');
         if (!simulated) void syncQueue().catch(() => undefined);
+        arrivedAt = Date.now();
+        later(ARRIVED_END_MS, () => endIfArrived());
       }
       if (e.type === 'backOnRoute') {
         pendingReroute = null;
+        turnaroundSince = null;
         set({ error: null });
       }
-      if (e.type === 'offRoute') void reroute(e.from, e.to, e.remainingVia);
+      if (e.type === 'offRoute') {
+        // Told to turn around and not yet able to: asking again now would only say the same.
+        if (turnaroundSince !== null && Date.now() - turnaroundSince < TURNAROUND_GRACE_MS) {
+          pendingReroute = { to: e.to, via: e.remainingVia, at: turnaroundSince + TURNAROUND_GRACE_MS - REROUTE_RETRY_MS };
+        } else void reroute(e.from, e.to, e.remainingVia);
+      }
     }
+  }
+
+  /** Runs [run] after [ms] if the same trip is still going. */
+  function later(ms: number, run: () => void) {
+    const gen = generation;
+    timers.push(setTimeout(() => gen === generation && run(), ms));
+  }
+
+  /**
+   * Ends the trip once it has been arrived at for [ARRIVED_END_MS]. Also checked on each fix,
+   * as timers don't run with the phone locked.
+   */
+  function endIfArrived() {
+    if (arrivedAt !== null && Date.now() - arrivedAt >= ARRIVED_END_MS) stop();
   }
 
   function handleFix(loc: Location.LocationObject, source: 'watch' | 'service' | 'simulation' = 'watch') {
     const nav = session;
     if (!nav) return;
+    endIfArrived();
+    if (session !== nav) return;
     // A test drive ignores the phone's real position, and a real trip ignores made-up fixes.
     if (simulated !== (source === 'simulation')) return;
     const { longitude: lon, latitude: lat } = loc.coords;
@@ -197,14 +261,17 @@ export function createNavigationService(): NavigationService {
     if (source === 'service') lastServiceFixTs = loc.timestamp;
     const fix = { ts: loc.timestamp, lon, lat, accuracyM: loc.coords.accuracy, speedMps: loc.coords.speed, headingDeg: loc.coords.heading };
     followHeading(fix);
+    const here: LngLat = [lon, lat];
+    const speedMps = fix.speedMps != null && Number.isFinite(fix.speedMps) && fix.speedMps >= 0 ? fix.speedMps : null;
+    const firstFix = snap.error === NO_FIX_YET ? { error: null } : {};
     let result: ReturnType<NavigationSession['update']>;
     try {
       result = nav.update(fix);
     } catch {
-      set({ position: [lon, lat] });
+      set({ position: here, speedMps, ...firstFix });
       return; // one odd fix; the next one carries on
     }
-    set({ position: [lon, lat], headingDeg: fix.headingDeg ?? snap.headingDeg, state: result.state });
+    set({ position: here, headingDeg: fix.headingDeg ?? snap.headingDeg, speedMps, travelled: withTravelled(snap.travelled, here), state: result.state, ...firstFix });
     handleEvents(result.events);
     if (reroutingNow && Date.now() - reroutingSince >= REROUTE_TIMEOUT_MS) abandonReroute();
     // Still off route after a failed attempt: ask again from here, now and then.
@@ -226,6 +293,12 @@ export function createNavigationService(): NavigationService {
         },
       ])
       .catch(() => undefined);
+  }
+
+  /** The road driven so far, a point every [TRAVELLED_STEP_M] or so (the same array when it hasn't grown). */
+  function withTravelled(line: LngLat[], here: LngLat): LngLat[] {
+    const last = line[line.length - 1];
+    return last && haversineM(last, here) < TRAVELLED_STEP_M ? line : [...line, here];
   }
 
   function followHeading(fix: { lon: number; lat: number; speedMps?: number | null; headingDeg?: number | null }) {
@@ -255,6 +328,10 @@ export function createNavigationService(): NavigationService {
     session = null;
     pendingReroute = null;
     reroutingNow = false;
+    arrivedAt = null;
+    turnaroundSince = null;
+    timers.forEach(clearTimeout);
+    timers = [];
     rerouteAttempt++; // an answer for the trip that ended is ignored
     setNavigationRecording(false);
     quietly(() => stopSpeaking());
@@ -283,6 +360,10 @@ export function createNavigationService(): NavigationService {
     set({ ...IDLE, active: true, route, destinationName: opts.destinationName ?? null });
     // A test drive is fed its fixes by the caller and saves nothing.
     if (simulated) return;
+    // No fix yet after a while: say so, rather than leave the car on "Starting…" with no reason.
+    later(FIRST_FIX_WAIT_MS, () => {
+      if (snap.position === null && snap.error === null) set({ error: NO_FIX_YET });
+    });
     // This trip records its own fixes; background recording leaves it to it until it ends.
     setNavigationRecording(true);
     void (async () => {

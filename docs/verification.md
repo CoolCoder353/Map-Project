@@ -8,7 +8,7 @@ What has been checked, how to repeat it, and what is still open. Update this whe
 |---|---|---|
 | Lint | `pnpm lint` | clean |
 | Types (7 packages) | `pnpm typecheck` | clean |
-| Whole gate | `pnpm check` | passing, 2026-09-28 |
+| Whole gate | `pnpm check` | passing, 2026-10-08 |
 | Unit tests | `pnpm test:unit` | passing, 149 tests: geo/H3/novelty/segmentation, schemas, copy in every voice, nav engine, OSM tag mapping, boundaries, opening hours, GraphHopper client, metrics, API and worker config, job registration, refresh steps, mobile upload queue and API client (timeouts, server addresses, answers checked against the schemas), the Android manifest's permissions |
 | Web component tests | `pnpm test:web` | passing, 164 tests: every planner panel, sign-in/register/reset, route guards, account menu, feedback, every admin page, the map layer against a fake MapLibre |
 | Integration tests, PGlite | `pnpm test:integration` | passing, 125 (+4 skipped unless `GRAPHHOPPER_LIVE_URL` is set): services, every API area, the admin CLI, the job queue, data export, worker jobs and the refresh pipeline |
@@ -148,6 +148,15 @@ and adaptive quality gaps, in
 - [ ] Another navigation app starts directions while Wayfinder's trip runs: Wayfinder's voice, notification and cluster info stop (NF-5)
 - [ ] Launch to Home in under 10 s and content (search, Discover, route preview) in under 10 s; every button answers within 2 s (DR-1 to DR-3)
 - [ ] Maneuver icons and the map's route colours are legible in day and night on the DHU (VD-1)
+- [ ] Start a trip on the phone, then connect the car: the driving screen's map draws (it was black until End; 2026-10-06 report)
+- [ ] Driving: the position marker stays put while the map glides under it; the speed-limit sign and the speed show bottom left of the map, the speed red when over the limit
+- [ ] Driving: + and − zoom the followed map; dragging (pan mode, or touch) stops it following and shows Re-centre, which brings it back
+- [ ] Off route and rerouted: the road driven before the reroute stays on the map, in purple
+- [ ] Roundabout icons show the exit taken (left, straight on, right) for a few real roundabouts
+- [ ] Report on the driving screen: a toast, and the report under Admin → Feedback with what the car showed and the place
+- [ ] Before the first fix the driving screen says "Finding where you are…", not a spinner
+- [ ] Arriving: "You have arrived" said once; the trip ends by itself about 15 s later, on the car and the phone
+- [ ] Drive into a dead end mid-trip: "Route updated. Turn around when you can" once, and no new route every few seconds while you find somewhere to turn
 
 ## Phone app: window sizes, keyboard and mouse
 
@@ -197,6 +206,16 @@ emulators are enough.
   `maps.paulsjones.com` on 2026-09-28: it installs over the old build, opens on the emulator with no
   crash, and its sign-in screen reaches the server. It hasn't been shared with testers yet. This
   is likely what the crash reports were.
+- **2026-10-08 feedback fixes** (reports from 5–7 October; app 0.5.0, versionCode 6, server
+  changes for routes and saved places). Checked by tests, and on the live server's data where noted:
+  the car map black when a trip was already running (the styles were only asked for by Home);
+  "You have arrived" said twice (the destination's "now" announcement and the arrival); a new route
+  asked for every 7 seconds in a dead-end street (Ironbark Street, 5 Oct: reproduced against the
+  live graph, where the only way on is back); the car's endless spinner before the first fix;
+  roundabout icons that ignored the exit; no zoom, pan, speed limit or speed in the car; a jerky
+  position marker; the road driven vanishing after a reroute. Added from ideas: Report in the car,
+  the trip ending itself after arriving, Discover places opening directions, Open in Google Maps,
+  and saved places ("Home", "Work"). Still to do: the car checklist above on a head unit or car.
 - **App 0.4.0 (versionCode 5)** adds Delete account and a privacy policy link in Settings, and builds an `.aab` for Google Play. Not built or deployed yet; the web `/privacy` and `/delete-account` pages need the web deploy, then check both load signed out.
 - **App 0.3.1 (versionCode 4), with Android Auto and the 2026-10-01 feedback fixes, is not shared
   yet.** 0.3.0 was never built. Still to do for 0.3.1: its install over 0.2.0, `pnpm verify:mobile`

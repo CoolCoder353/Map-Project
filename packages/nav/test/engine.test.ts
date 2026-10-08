@@ -61,6 +61,19 @@ describe('NavigationSession', () => {
     expect(mid.remainingDurationS).toBeLessThan(100);
   });
 
+  it('says you have arrived once: the arrival, not a "now" announcement of the destination too', () => {
+    for (const mode of ['car', 'foot'] as const) {
+      const route = lRoute(mode, mode === 'car' ? 14 : 1.4);
+      // Slow enough that a fix lands inside every threshold before the arrival radius.
+      const { events } = run(new NavigationSession(route), simulateFixes(route.geometry, { speedMps: mode === 'car' ? 5 : 1.4, intervalS: 1 }));
+      const toDestination = events.filter((e) => e.type === 'announce' && e.instructionIndex === 2);
+      // Still told it's coming ("In 200 metres, you will arrive ..."), never "You have arrived ..." early.
+      expect(toDestination.length).toBeGreaterThan(0);
+      expect(toDestination.every((e) => e.type === 'announce' && e.text.startsWith('In '))).toBe(true);
+      expect(events.filter((e) => e.type === 'arrived')).toHaveLength(1);
+    }
+  });
+
   it('tolerates GPS noise without going off route', () => {
     const route = lRoute();
     const s = new NavigationSession(route);

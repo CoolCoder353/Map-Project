@@ -36,6 +36,9 @@ export type NavEvent =
 
 export type NavStatus = 'navigating' | 'offRoute' | 'arrived';
 
+/** GraphHopper's sign for "Arrive at destination". */
+const DESTINATION_SIGN = 4;
+
 export interface NavState {
   status: NavStatus;
   /** Fix snapped to the route, or null before the first fix. */
@@ -227,12 +230,16 @@ export class NavigationSession {
           if (d >= smallest) this.announced.add(`${nextIdx}:${d}`);
         }
         const isFinal = smallest === Math.min(...this.config.announceDistancesM);
-        events.push({
-          type: 'announce',
-          text: announcementText(next, isFinal ? null : distanceToNext),
-          instructionIndex: nextIdx,
-          thresholdM: smallest,
-        });
+        // Arriving is said once, by the 'arrived' event: a "now" announcement of the destination
+        // just before it would say it twice.
+        if (!(isFinal && next.sign === DESTINATION_SIGN)) {
+          events.push({
+            type: 'announce',
+            text: announcementText(next, isFinal ? null : distanceToNext),
+            instructionIndex: nextIdx,
+            thresholdM: smallest,
+          });
+        }
       }
     }
 

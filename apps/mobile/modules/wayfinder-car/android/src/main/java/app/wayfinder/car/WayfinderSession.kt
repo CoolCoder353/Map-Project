@@ -15,6 +15,7 @@ import app.wayfinder.car.bridge.CarApi
 import app.wayfinder.car.bridge.CarBridge
 import app.wayfinder.car.bridge.ReactBoot
 import app.wayfinder.car.map.CarMapRenderer
+import app.wayfinder.car.map.MapStyles
 import app.wayfinder.car.nav.ManeuverIcons
 import app.wayfinder.car.nav.NavigateRequests
 import app.wayfinder.car.nav.NavigationCoordinator
@@ -32,7 +33,10 @@ class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared))
       override fun onDestroy(owner: LifecycleOwner) = map.release()
     })
     renderer = map
-    val coordinator = NavigationCoordinator(carContext, api, map, ManeuverIcons(carContext))
+    // Asked for now, not only by Home: a trip already running puts the driving screen over Home first.
+    val styles = MapStyles(api, map::setStyles)
+    styles.ensure()
+    val coordinator = NavigationCoordinator(carContext, api, map, ManeuverIcons(carContext), map, styles::ensure)
     // After Home is on the stack, so a trip already running goes on top of it.
     Handler(Looper.getMainLooper()).post {
       if (lifecycle.currentState == Lifecycle.State.DESTROYED) return@post // ended before this ran: nothing to detach later
@@ -45,7 +49,7 @@ class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared))
     requests = navigate
     // "Navigate to ..." that opened the app: once Home is on the stack, so the preview goes on top of it.
     Handler(Looper.getMainLooper()).post { navigate.handle(intent) }
-    return HomeScreen(carContext, api, map, onDrive = coordinator::showDrive) { status -> map.setStyles(status.styleLight, status.styleDark) }
+    return HomeScreen(carContext, api, map, onDrive = coordinator::showDrive, onStatus = styles::use)
   }
 
   /** "Navigate to ..." while the car app is already open. */

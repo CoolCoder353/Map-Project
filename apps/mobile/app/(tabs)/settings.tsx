@@ -1,4 +1,4 @@
-import { type PlannedRoute, PlannedRouteListSchema, PublicUserSchema, type UserSettings } from '@wayfinder/shared/schemas';
+import { type PlannedRoute, PlannedRouteListSchema, PublicUserSchema, SavedPlaceListSchema, type UserSettings } from '@wayfinder/shared/schemas';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
@@ -41,6 +41,7 @@ export default function SettingsScreen() {
   const [deleting, setDeleting] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const planned = useQuery({ queryKey: ['planned-routes'], queryFn: () => api.request('api/planned-routes', { schema: PlannedRouteListSchema }) });
+  const saved = useQuery({ queryKey: ['saved-places'], queryFn: () => api.request('api/saved-places', { schema: SavedPlaceListSchema }) });
 
   // Each check stands alone: one failing phone service shouldn't blank the others.
   const refreshStatus = async () => {
@@ -127,6 +128,20 @@ export default function SettingsScreen() {
     }
     // The account is gone (restorable for 7 days): sign out here too, which stops tracking.
     await signOut().finally(() => router.replace('/sign-in'));
+  };
+
+  const removeSaved = async (id: string) => {
+    if (removing) return;
+    setRemoving(id);
+    setMessage(null);
+    try {
+      await api.request(`api/saved-places/${id}`, { method: 'DELETE' });
+      await saved.refetch();
+    } catch (e) {
+      setMessage(`Couldn’t remove that place. ${errorMessage(e)}`);
+    } finally {
+      setRemoving(null);
+    }
   };
 
   const removePlanned = async (id: string) => {
@@ -217,6 +232,22 @@ export default function SettingsScreen() {
           <Body style={{ flexShrink: 1 }}>Explore routes may take up to {user.settings.exploreBudgetMin} min extra</Body>
           <Button label="+" kind="secondary" compact disabled={save.isPending} onPress={() => save.mutate({ exploreBudgetMin: Math.min(60, user.settings.exploreBudgetMin + 5) })} />
         </View>
+
+        <Heading>Saved places</Heading>
+        <Small>Type a saved place’s name, like “Home”, in any search to find it first. Save one from Plan once you’ve chosen a destination.</Small>
+        {saved.error ? <Notice tone="error">{errorMessage(saved.error)}</Notice> : null}
+        {saved.data?.items.length === 0 ? <Body muted>No saved places yet.</Body> : null}
+        {saved.data?.items.map((p) => (
+          <Card key={p.id}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: t.text, fontWeight: '700' }}>{p.name}</Text>
+                {p.description ? <Small>{p.description}</Small> : null}
+              </View>
+              <Button label="Remove" kind="ghost" icon={Trash2} compact busy={removing === p.id} disabled={!!removing} onPress={() => void removeSaved(p.id)} />
+            </View>
+          </Card>
+        ))}
 
         <Heading>Planned routes</Heading>
         <Small>Routes sent from the website.</Small>

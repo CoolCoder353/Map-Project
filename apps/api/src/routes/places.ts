@@ -2,9 +2,10 @@ import type { FastifyPluginAsync } from 'fastify';
 import {
   PlannedRouteCreateSchema,
   ReverseQuerySchema,
+  SavedPlaceSaveSchema,
   SearchQuerySchema,
 } from '@wayfinder/shared';
-import { parse, placeService } from '@wayfinder/core';
+import { parse, placeService, savedPlaceService } from '@wayfinder/core';
 import type { AppDeps } from '../deps.js';
 import { authenticate, currentUser } from '../plugins/auth.js';
 
@@ -17,13 +18,26 @@ export const placeRoutes =
     app.get('/search', async (req) => {
       const q = parse(SearchQuerySchema, req.query);
       const near = q.lon !== undefined && q.lat !== undefined ? ([q.lon, q.lat] as [number, number]) : null;
-      const results = await metrics.time('search', 'forward', () => placeService.searchPlaces(db, q.q, near, q.limit));
-      return { results };
+      const [saved, found] = await Promise.all([
+        savedPlaceService.matchingSavedPlaces(db, currentUser(req).id, q.q, near),
+        metrics.time('search', 'forward', () => placeService.searchPlaces(db, q.q, near, q.limit)),
+      ]);
+      // Your own "Home" before every other place called home.
+      return { results: [...saved, ...found].slice(0, q.limit) };
     });
 
     app.get('/reverse', async (req) => {
       const q = parse(ReverseQuerySchema, req.query);
       return { place: await placeService.reverseGeocode(db, [q.lon, q.lat]) };
+    });
+
+    app.get('/saved-places', async (req) => ({ items: await savedPlaceService.listSavedPlaces(db, currentUser(req).id) }));
+
+    app.post('/saved-places', async (req) => savedPlaceService.saveSavedPlace(db, currentUser(req).id, parse(SavedPlaceSaveSchema, req.body)));
+
+    app.delete<{ Params: { id: string } }>('/saved-places/:id', async (req) => {
+      await savedPlaceService.deleteSavedPlace(db, currentUser(req).id, req.params.id);
+      return { ok: true };
     });
 
     app.get('/planned-routes', async (req) => ({ items: await placeService.listPlannedRoutes(db, currentUser(req).id) }));

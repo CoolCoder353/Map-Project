@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 import { waitFor } from '@testing-library/react-native';
 import * as Speech from 'expo-speech';
-import { navigation, REROUTE_RETRY_MS, REROUTE_TIMEOUT_MS } from '../src/nav/navigationService';
+import { ARRIVED_END_MS, FIRST_FIX_WAIT_MS, navigation, REROUTE_RETRY_MS, REROUTE_TIMEOUT_MS, TURNAROUND_GRACE_MS } from '../src/nav/navigationService';
 import { isNavigationRecording } from '../src/tracking/navigationRecording';
 import { fake, resetFakes, route } from './fakes';
 
@@ -344,4 +344,132 @@ it('pauses background recording for the length of a navigated trip', async () =>
   expect(isNavigationRecording()).toBe(true);
   navigation.stop();
   expect(isNavigationRecording()).toBe(false);
+});
+
+it('ends the trip by itself a little while after arriving, even with the phone locked', async () => {
+  const realNow = Date.now.bind(Date);
+  let ahead = 0;
+  const now = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + ahead);
+  try {
+    navigation.start(route());
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    mockResults.push({ state: { status: 'arrived' }, events: [{ type: 'arrived' }] });
+    mockOnFix!(fix(153, -27.4, 1000));
+    expect(Speech.speak).toHaveBeenCalledWith('You have arrived', expect.anything());
+    // "You've arrived" stays up for a moment...
+    mockResults.push({ state: { status: 'arrived' }, events: [] });
+    mockOnFix!(fix(153, -27.4, 2000));
+    expect(navigation.getSnapshot().active).toBe(true);
+    // ...and the next fix after that ends it (timers don't run with the phone locked).
+    ahead = ARRIVED_END_MS;
+    mockOnFix!(fix(153, -27.4, 3000));
+    expect(navigation.getSnapshot().active).toBe(false);
+    expect(mockSync).toHaveBeenCalled();
+  } finally {
+    now.mockRestore();
+  }
+});
+
+it('ends an arrived trip on a timer when no more fixes come, and not a newer trip', async () => {
+  jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
+  try {
+    navigation.start(route({ id: 'r1' }));
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    mockResults.push({ state: { status: 'arrived' }, events: [{ type: 'arrived' }] });
+    mockOnFix!(fix(153, -27.4, 1000));
+    jest.advanceTimersByTime(ARRIVED_END_MS);
+    expect(navigation.getSnapshot().active).toBe(false);
+
+    // Arrived, then a new trip started straight away: the old timer leaves it alone.
+    mockOnFix = null;
+    navigation.start(route({ id: 'r2' }));
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    mockResults.push({ state: { status: 'arrived' }, events: [{ type: 'arrived' }] });
+    mockOnFix!(fix(153, -27.4, 5000));
+    navigation.start(route({ id: 'r3' }));
+    jest.advanceTimersByTime(ARRIVED_END_MS);
+    expect(navigation.getSnapshot()).toMatchObject({ active: true, route: { id: 'r3' } });
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('keeps the road driven, off the route too, and your speed', async () => {
+  navigation.start(route());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockOnFix!(fix(153, -27.4, 1000));
+  // About 1 m on: not worth another point.
+  mockOnFix!(fix(153.00001, -27.4, 2000));
+  mockResults.push({ state: { status: 'offRoute' }, events: [] });
+  mockOnFix!({ timestamp: 3000, coords: { longitude: 153.001, latitude: -27.4, accuracy: 5, speed: 12.5, heading: 90 } });
+  expect(navigation.getSnapshot()).toMatchObject({ travelled: [[153, -27.4], [153.001, -27.4]], speedMps: 12.5 });
+  // A phone that gives no speed (or a nonsense one) shows none.
+  mockOnFix!({ timestamp: 4000, coords: { longitude: 153.002, latitude: -27.4, accuracy: 5, speed: -1, heading: 90 } });
+  expect(navigation.getSnapshot().speedMps).toBeNull();
+  navigation.stop();
+  expect(navigation.getSnapshot().travelled).toEqual([]);
+});
+
+it('says so when it still can’t find where you are, and stops saying it once it can', async () => {
+  jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
+  try {
+    navigation.start(route());
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    jest.advanceTimersByTime(FIRST_FIX_WAIT_MS);
+    expect(navigation.getSnapshot().error).toMatch(/Still finding where you are/);
+    mockOnFix!(fix(153, -27.4, 1000));
+    expect(navigation.getSnapshot().error).toBeNull();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('in a dead end, says to turn around once and lets you find somewhere to do it before asking again', async () => {
+  const turnaround = route({ id: 'r-back', instructions: [{ sign: -98, text: 'Turn around when you can', streetName: 'Ironbark Street', distanceM: 98, durationS: 9, interval: [0, 1] }] });
+  fake.api.on({ 'POST api/routes/fastest': () => turnaround });
+  const realNow = Date.now.bind(Date);
+  let ahead = 0;
+  const now = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + ahead);
+  const offRoute = (lon: number, ts: number) => {
+    mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [lon, -27.56], to: [153.25, -27.56], remainingVia: [] }] });
+    mockOnFix!(fix(lon, -27.56, ts));
+  };
+  try {
+    navigation.start(route());
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    offRoute(153.2196, 1000);
+    await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-back'));
+    expect(Speech.speak).toHaveBeenLastCalledWith('Route updated. Turn around when you can', expect.anything());
+    // Still driving on up the street, away from the new route: not asked again every few seconds.
+    ahead = 7_000;
+    offRoute(153.2197, 8000);
+    ahead = 30_000;
+    mockResults.push({ state: { status: 'offRoute' }, events: [] });
+    mockOnFix!(fix(153.2198, -27.56, 9000));
+    expect(fake.api.callsTo('POST api/routes/fastest')).toHaveLength(1);
+    expect(navigation.getSnapshot()).toMatchObject({ rerouting: false, error: null });
+    // Still off it a minute on: asked again, from where you are then.
+    ahead = TURNAROUND_GRACE_MS;
+    mockResults.push({ state: { status: 'offRoute' }, events: [] });
+    mockOnFix!(fix(153.2199, -27.56, 10000));
+    await waitFor(() => expect(fake.api.callsTo('POST api/routes/fastest')).toHaveLength(2));
+    expect(fake.api.callsTo('POST api/routes/fastest')[1]!.body).toMatchObject({ from: [153.2199, -27.56] });
+  } finally {
+    now.mockRestore();
+  }
+});
+
+it('once turned round and back on the route, goes off it again and is rerouted straight away', async () => {
+  const turnaround = route({ id: 'r-back', instructions: [{ sign: -98, text: 'Turn around when you can', streetName: '', distanceM: 98, durationS: 9, interval: [0, 1] }] });
+  fake.api.on({ 'POST api/routes/fastest': () => turnaround });
+  navigation.start(route());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2, -27.56], to: [153.25, -27.56], remainingVia: [] }] });
+  mockOnFix!(fix(153.2, -27.56, 1000));
+  await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-back'));
+  mockResults.push({ state: { status: 'navigating' }, events: [{ type: 'backOnRoute' }] });
+  mockOnFix!(fix(153.21, -27.56, 2000));
+  mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.22, -27.56], to: [153.25, -27.56], remainingVia: [] }] });
+  mockOnFix!(fix(153.22, -27.56, 3000));
+  await waitFor(() => expect(fake.api.callsTo('POST api/routes/fastest')).toHaveLength(2));
 });

@@ -223,3 +223,19 @@ it('doesn’t turn the whole route into text on every GPS fix', async () => {
     stringify.mockRestore();
   }
 });
+
+it('tells the screen when the trip it showed has ended without it, and not before it started', async () => {
+  const { result } = await renderHook(() => useTurnByTurn(route()));
+  expect(result.current.ended).toBe(false);
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  expect(result.current.ended).toBe(false);
+  mockResults.push({ state: { status: 'navigating' }, events: [] });
+  await act(async () => mockOnFix!(fix(153, -27.4)));
+  mockResults.push({ state: { status: 'navigating' }, events: [] });
+  await act(async () => mockOnFix!({ ...fix(153.001, -27.4), timestamp: 2000 }));
+  expect(result.current.travelled).toEqual([[153, -27.4], [153.001, -27.4]]);
+  // Ended elsewhere (the car's End, or arriving and closing by itself).
+  const { navigation } = jest.requireActual<typeof import('../src/nav/navigationService')>('../src/nav/navigationService');
+  await act(async () => navigation.stop());
+  expect(result.current.ended).toBe(true);
+});

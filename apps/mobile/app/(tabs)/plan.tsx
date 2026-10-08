@@ -1,19 +1,22 @@
 import { ExploreRouteResponseSchema, type Mode, type Route, RoundTripResponseSchema } from '@wayfinder/shared/schemas';
-import { router } from 'expo-router';
-import { Car, Footprints, Repeat } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
+import * as Linking from 'expo-linking';
+import { router, useFocusEffect } from 'expo-router';
+import { Car, ExternalLink, Footprints, Repeat } from 'lucide-react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../../src/lib/api';
 import { useAppConfig } from '../../src/lib/appConfig';
 import { formatDuration } from '../../src/lib/format';
-import { setRouteToNavigate } from '../../src/lib/plannedStore';
+import { googleMapsUrl } from '../../src/lib/googleMaps';
+import { setRouteToNavigate, takeTripToPlan } from '../../src/lib/plannedStore';
 import { splitStyles, useLayout } from '../../src/lib/layout';
 import { useSession } from '../../src/lib/session';
 import { space, useTheme } from '../../src/lib/theme';
 import { MapCanvas, type MapCanvasHandle } from '../../src/map/MapCanvas';
 import { type ChosenPlace, PlaceSearch } from '../../src/ui/PlaceSearch';
 import { RouteCard } from '../../src/ui/RouteCard';
+import { isSavedPlace, SavePlace } from '../../src/ui/SavePlace';
 import { Body, Button, Empty, Heading, Loading, Notice, Segmented, Small } from '../../src/ui/kit';
 import { useApproxLocation } from '../../src/lib/useApproxLocation';
 
@@ -45,6 +48,18 @@ export default function Plan() {
   const [fastestNew, setFastestNew] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A place chosen in Discover: directions there, from where Discover searched.
+  useFocusEffect(
+    useCallback(() => {
+      const trip = takeTripToPlan();
+      if (!trip) return;
+      filledStart.current = true;
+      setTab('directions');
+      setMode(trip.mode);
+      if (trip.from) setFrom(trip.from);
+      setTo(trip.to);
+    }, []),
+  );
   // Every request takes a number; an answer that arrives after a newer request (or after the
   // tab, places or mode changed) is dropped, so a late round trip can't land in Directions.
   const latest = useRef(0);
@@ -102,6 +117,11 @@ export default function Plan() {
     }
   };
 
+  const openInGoogleMaps = () => {
+    if (!to) return;
+    void Linking.openURL(googleMapsUrl(from, to, mode)).catch(() => setError('Couldn’t open Google Maps. Is it or a browser installed?'));
+  };
+
   const start = (r: Route) => {
     setRouteToNavigate(r);
     router.push('/navigate');
@@ -135,6 +155,7 @@ export default function Plan() {
         {tab === 'directions' ? (
           <PlaceSearch label="Destination" placeholder={copy.searchPlaceholder} tone="end" value={to} onChange={setTo} near={from?.location ?? here} />
         ) : null}
+        {tab === 'directions' && to && !isSavedPlace(to) ? <SavePlace key={`${to.location[0]},${to.location[1]}`} place={to} /> : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[3], flexWrap: 'wrap' }}>
           <Segmented<Mode> label="Travel mode" value={mode} onChange={setMode} options={[{ value: 'car', label: 'Drive', icon: Car }, { value: 'foot', label: 'Walk', icon: Footprints }]} />
           {tab === 'directions' ? (
@@ -173,6 +194,7 @@ export default function Plan() {
           )
         ) : null}
         {!loading && !routes && tab === 'directions' ? <Empty icon={Car} text="Choose where you’re going to compare the fastest route with ways you haven’t been." /> : null}
+        {tab === 'directions' && to ? <Button label="Open in Google Maps" kind="ghost" icon={ExternalLink} onPress={openInGoogleMaps} style={{ alignSelf: 'flex-start' }} /> : null}
       </ScrollView>
       </View>
     </SafeAreaView>

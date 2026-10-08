@@ -62,7 +62,7 @@ export const fake = {
     signOut: jest.fn(async () => undefined),
     retry: jest.fn(async () => undefined),
   },
-  router: { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) },
+  router: { push: jest.fn(), navigate: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) },
   params: {} as Record<string, string>,
   /** Props the screen last gave the map, and calls made through its handle. */
   map: { props: {} as Record<string, unknown>, mounts: 0, fitTo: jest.fn(), flyTo: jest.fn() },

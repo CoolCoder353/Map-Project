@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 import * as Location from 'expo-location';
 import { formatDistanceShort } from '@wayfinder/nav';
-import { carHandlers, resetCarHandlers } from '../src/car/handlers';
+import { carHandlers, carReportMessage, resetCarHandlers } from '../src/car/handlers';
 import { getServerUrl } from '../src/lib/server';
 import { fake, place, resetFakes, route } from './fakes';
 
@@ -243,5 +243,65 @@ describe('the edges', () => {
     await expect(carHandlers.start!({ routeId: 'r0', destinationName: 'x' })).rejects.toThrow(/Plan it again/);
     await carHandlers.start!({ routeId: 'r30', destinationName: 'x' });
     expect(mockNavigation.start).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('report', () => {
+  const navigating = () => ({
+    active: true,
+    route: route({ kind: 'explore' }),
+    destinationName: 'Raby Bay',
+    rerouting: false,
+    error: null,
+    muted: false,
+    position: [153.27, -27.52],
+    headingDeg: 87.6,
+    speedMps: 16.7,
+    travelled: [],
+    state: {
+      status: 'navigating',
+      speedLimitKmh: 60,
+      distanceToNextManeuverM: 240,
+      currentInstruction: null,
+      nextInstruction: { sign: 6, text: 'At roundabout, take exit 2 onto Shore Street', streetName: 'Shore Street', distanceM: 300, durationS: 30, interval: [0, 1] },
+    },
+  });
+
+  it('files a bug report with what the car was showing, where and how fast', async () => {
+    fake.api.on({ 'POST api/feedback': () => ({ id: 'f1' }) });
+    mockNavigation.getSnapshot.mockReturnValueOnce(navigating() as never);
+    expect(await carHandlers.report!({})).toEqual({});
+    const body = fake.api.callsTo('POST api/feedback')[0]!.body as { type: string; message: string; context: Record<string, unknown> };
+    expect(body.type).toBe('bug');
+    expect(body.context).toMatchObject({ screen: 'Android Auto: driving', platform: 'android', mapView: { center: [153.27, -27.52], zoom: 17 } });
+    expect(body.message).toContain('explore route to Raby Bay, on the route.');
+    expect(body.message).toContain(`Showing: "At roundabout, take exit 2 onto Shore Street" in ${formatDistanceShort(240)} (Shore Street).`);
+    expect(body.message).toContain('Speed limit shown: 60 km/h. Speed: 60 km/h.');
+    expect(body.message).toContain('Heading: 88°.');
+  });
+
+  it('works with no trip running, placed where the phone is', async () => {
+    fake.api.on({ 'POST api/feedback': () => ({ id: 'f1' }) });
+    mockNavigation.getSnapshot.mockReturnValueOnce({ active: false, route: null, error: null, position: null } as never);
+    await carHandlers.report!({});
+    const body = fake.api.callsTo('POST api/feedback')[0]!.body as { message: string; context: Record<string, unknown> };
+    expect(body.message).toContain('No trip running.');
+    expect(body.context).toMatchObject({ screen: 'Android Auto', mapView: { center: [153.02, -27.47] } });
+  });
+
+  it('passes on the server’s refusal (feedback switched off) for the car to show', async () => {
+    fake.api.on({ 'POST api/feedback': () => { throw new Error('Feedback is switched off.'); } });
+    mockNavigation.getSnapshot.mockReturnValueOnce({ active: false, route: null, error: null, position: [153, -27] } as never);
+    await expect(carHandlers.report!({})).rejects.toThrow('Feedback is switched off.');
+  });
+});
+
+describe('carReportMessage', () => {
+  it('says what was shown before the first position and while finding a new route', () => {
+    const msg = carReportMessage({ active: true, route: route({ kind: 'fastest' }), destinationName: null, state: null, rerouting: true, error: 'Still finding where you are.', muted: false, position: null, headingDeg: null, speedMps: null, travelled: [] }, new Date('2026-10-06T09:04:22Z'));
+    expect(msg).toContain('6 Oct 2026, 7:04:22 pm');
+    expect(msg).toContain('Trip: fastest route, waiting for the first position, finding a new route.');
+    expect(msg).toContain('Speed limit shown: none. Speed: unknown.');
+    expect(msg).toContain('Message shown: Still finding where you are.');
   });
 });

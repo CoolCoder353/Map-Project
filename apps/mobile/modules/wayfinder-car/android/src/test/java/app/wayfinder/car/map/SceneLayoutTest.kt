@@ -35,6 +35,18 @@ class SceneLayoutTest {
     assertEquals(here, SceneLayout.drawing(MapScene.Following(line, here, 90.0)).position)
   }
 
+  @Test fun drawsTheRoadAlreadyDrivenWhileFollowing() {
+    val driven = listOf(LngLat(152.9, -27.4), here)
+    assertEquals(driven, SceneLayout.drawing(MapScene.Following(emptyList(), here, 90.0, driven)).travelled)
+    assertEquals(emptyList<LngLat>(), SceneLayout.drawing(MapScene.Overview(here)).travelled)
+  }
+
+  /** The marker sits where the camera keeps the car: middle across, low in the visible area. */
+  @Test fun theCarSitsLowInTheMiddleOfWhatIsVisible() {
+    // Visible area 100..900 across, 0..500 down: 40% kept above for the road ahead.
+    assertEquals(500f to 350f, SceneLayout.followPoint(100, 0, 900, 500))
+  }
+
   /** Car app quality SA-1: no animation on the car screen, except the map following the car. */
   @Test fun onlyFollowingTheCarMovesSmoothlyEverythingElseJumps() {
     val line = listOf(here, LngLat(153.1, -27.5))

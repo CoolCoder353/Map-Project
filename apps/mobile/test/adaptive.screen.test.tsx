@@ -34,12 +34,15 @@ const mockNav = {
   muted: false,
   setMuted: jest.fn(),
   position: null,
+  travelled: [],
+  ended: false,
   stop: jest.fn(),
 };
 let mockTakes = 0;
 jest.mock('../src/nav/useTurnByTurn', () => ({ useTurnByTurn: () => mockNav }));
 jest.mock('../src/lib/plannedStore', () => ({
   setRouteToNavigate: jest.fn(),
+  takeTripToPlan: () => null,
   takeRouteToNavigate: () => {
     mockTakes++;
     return require('./fakes').route();

@@ -54,6 +54,7 @@ beforeEach(() => {
   mockSignOut.mockResolvedValue(undefined);
   mockRequest.mockImplementation(async (path: string, init?: { body?: object }) => {
     if (path === 'api/planned-routes') return { items: [] };
+    if (path === 'api/saved-places') return { items: [] };
     if (path === 'api/me/settings') return { ...mockCurrent, settings: { ...mockCurrent.settings, ...init?.body } };
     throw new Error(`unexpected ${path}`);
   });
@@ -151,6 +152,7 @@ it('keeps a planned route listed, and says so, when removing it fails', async ()
   const planned = { id: 'p1', name: 'Coast loop', route: { distanceM: 5000, durationS: 600, geometry: [[153, -27], [153.1, -27.1]] } };
   mockRequest.mockImplementation(async (path: string, init?: { method?: string }) => {
     if (path === 'api/planned-routes') return { items: [planned] };
+    if (path === 'api/saved-places') return { items: [] };
     if (path === 'api/planned-routes/p1' && init?.method === 'DELETE') throw new Error('Try again shortly.');
     throw new Error(`unexpected ${path}`);
   });
@@ -158,6 +160,34 @@ it('keeps a planned route listed, and says so, when removing it fails', async ()
   await fireEvent.press(await screen.findByRole('button', { name: 'Remove' }));
   expect(await screen.findByText('Couldn’t remove that route. Try again shortly.')).toBeOnTheScreen();
   expect(screen.getByText('Coast loop')).toBeOnTheScreen();
+});
+
+it('lists saved places and removes one; says so when that fails', async () => {
+  let places = [
+    { id: 's1', name: 'Home', description: '27 Whitby Place, Thornlands', location: [153.26, -27.56], createdAt: '2026-10-08T00:00:00Z' },
+    { id: 's2', name: 'Work', description: '', location: [153.03, -27.47], createdAt: '2026-10-08T00:00:00Z' },
+  ];
+  let fail = false;
+  mockRequest.mockImplementation(async (path: string, init?: { method?: string }) => {
+    if (path === 'api/planned-routes') return { items: [] };
+    if (path === 'api/saved-places') return { items: places };
+    if (path === 'api/saved-places/s2' && init?.method === 'DELETE') {
+      if (fail) throw new Error('Try again shortly.');
+      places = places.filter((p) => p.id !== 's2');
+      return { ok: true };
+    }
+    throw new Error(`unexpected ${path}`);
+  });
+  await renderSettings();
+  expect(await screen.findByText('Home')).toBeOnTheScreen();
+  expect(screen.getByText('27 Whitby Place, Thornlands')).toBeOnTheScreen();
+  fail = true;
+  await fireEvent.press(screen.getAllByRole('button', { name: 'Remove' })[1]!);
+  expect(await screen.findByText('Couldn’t remove that place. Try again shortly.')).toBeOnTheScreen();
+  fail = false;
+  await fireEvent.press(screen.getAllByRole('button', { name: 'Remove' })[1]!);
+  await waitFor(() => expect(screen.queryByText('Work')).toBeNull());
+  expect(screen.getByText('Home')).toBeOnTheScreen();
 });
 
 it('won’t start a planned route with nothing to follow', async () => {
@@ -213,7 +243,7 @@ describe('delete account', () => {
   });
 
   it('deletes, then signs out and returns to sign-in', async () => {
-    mockRequest.mockImplementation(async (path: string) => (path === 'api/planned-routes' ? { items: [] } : {}));
+    mockRequest.mockImplementation(async (path: string) => (path === 'api/planned-routes' || path === 'api/saved-places' ? { items: [] } : {}));
     await startDelete();
     await fireEvent.changeText(screen.getByLabelText('Type your email to confirm'), ' Sam@example.com ');
     await fireEvent.press(screen.getByRole('button', { name: 'Delete my account' }));

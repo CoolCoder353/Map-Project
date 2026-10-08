@@ -11,6 +11,8 @@ export interface GhInstruction {
   exit_number?: number;
   /** Roundabouts: false when the path ends (at a stop) before leaving it. */
   exited?: boolean;
+  /** Roundabouts: how far round it the exit is, in radians (about π for straight on). */
+  turn_angle?: number;
 }
 
 export interface GhPath {

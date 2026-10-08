@@ -9,7 +9,15 @@ sealed interface MapScene {
   data class Overview(val here: LngLat?) : MapScene
   data class Places(val places: List<CarPlace>) : MapScene
   data class Routes(val options: List<RouteOption>, val selected: Int) : MapScene
-  data class Following(val line: List<LngLat>, val position: LngLat?, val headingDeg: Double?) : MapScene
+  /** Driving: the route ahead, the road already driven ([travelled], off the route too), and the speeds to show. */
+  data class Following(
+    val line: List<LngLat>,
+    val position: LngLat?,
+    val headingDeg: Double?,
+    val travelled: List<LngLat> = emptyList(),
+    val speedLimitKmh: Int? = null,
+    val speedKmh: Int? = null,
+  ) : MapScene
 }
 
 fun interface MapScenes {

@@ -15,6 +15,7 @@ jest.mock('../src/lib/contacts', () => ({ findContacts: async () => [] }));
 let mockHere: [number, number] | undefined;
 jest.mock('../src/lib/useApproxLocation', () => ({ useApproxLocation: () => mockHere }));
 jest.mock('expo-location', () => ({ requestForegroundPermissionsAsync: jest.fn(), getCurrentPositionAsync: jest.fn(), Accuracy: { Balanced: 3 } }));
+jest.mock('expo-linking', () => ({ openURL: jest.fn(async () => true) }));
 
 const explore = route({ id: 'r-exp', kind: 'explore', extraDurationS: 420, novelty: { totalKm: 14, newKm: 6.2, noveltyPct: 44 } });
 
@@ -151,3 +152,84 @@ it('keeps what you type over a chosen place', async () => {
 });
 
 afterEach(() => expect(fake.api.unhandled).toEqual([]));
+
+describe('handing over to Google Maps', () => {
+  it('offers it once there is a destination, with the start unless it is where you are', async () => {
+    const { openURL } = jest.requireMock<{ openURL: jest.Mock }>('expo-linking');
+    await renderScreen(<Plan />);
+    expect(screen.queryByRole('button', { name: 'Open in Google Maps' })).toBeNull();
+    await chooseDestination();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Open in Google Maps' }));
+    expect(openURL).toHaveBeenLastCalledWith('https://www.google.com/maps/dir/?api=1&destination=-27.49%2C153.15&travelmode=driving');
+    await fireEvent.press(screen.getByRole('radio', { name: 'Walk' }));
+    const box = screen.getByLabelText('Starting point');
+    await fireEvent(box, 'focus');
+    await fireEvent.changeText(box, 'gumdale');
+    await fireEvent.press(await screen.findByText('Gumdale State School'));
+    await fireEvent.press(screen.getByRole('button', { name: 'Open in Google Maps' }));
+    expect(openURL).toHaveBeenLastCalledWith('https://www.google.com/maps/dir/?api=1&origin=-27.49%2C153.15&destination=-27.49%2C153.15&travelmode=walking');
+  });
+
+  it('says so when nothing can open it', async () => {
+    const { openURL } = jest.requireMock<{ openURL: jest.Mock }>('expo-linking');
+    openURL.mockRejectedValueOnce(new Error('No activity'));
+    await renderScreen(<Plan />);
+    await chooseDestination();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Open in Google Maps' }));
+    expect(await screen.findByText(/Couldn’t open Google Maps/)).toBeOnTheScreen();
+  });
+});
+
+it('works out the trip to a place chosen in Discover, from where Discover searched', async () => {
+  const { setTripToPlan } = jest.requireActual<typeof import('../src/lib/plannedStore')>('../src/lib/plannedStore');
+  setTripToPlan({ from: { name: 'Gumdale State School', description: '', location: [153.15, -27.49] }, to: { name: 'Mt Coot-tha Lookout', description: 'Lookout', location: [152.95, -27.48] }, mode: 'foot' });
+  await renderScreen(<Plan />);
+  await waitFor(() => expect(fake.api.callsTo('POST api/routes/explore')).toHaveLength(1));
+  expect(fake.api.callsTo('POST api/routes/explore')[0]!.body).toMatchObject({ from: [153.15, -27.49], to: [152.95, -27.48], mode: 'foot' });
+  expect(screen.getByLabelText('Destination')).toHaveDisplayValue('Mt Coot-tha Lookout');
+  // Taken once: coming back to Plan later leaves what's there.
+  await act(async () => fake.focus());
+  expect(fake.api.callsTo('POST api/routes/explore')).toHaveLength(1);
+});
+
+describe('saving a destination', () => {
+  it('saves it as Home with one tap, under a name of your own, and says how to find it', async () => {
+    fake.api.on({ 'POST api/saved-places': (init) => ({ id: 's1', ...(init.body as object), createdAt: '2026-10-08T00:00:00Z' }) });
+    await renderScreen(<Plan />);
+    expect(screen.queryByRole('button', { name: 'Home' })).toBeNull();
+    await chooseDestination();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Home' }));
+    expect(await screen.findByText('Saved as Home. Type “Home” in any search to find it.')).toBeOnTheScreen();
+    expect(fake.api.callsTo('POST api/saved-places')[0]!.body).toEqual({ name: 'Home', description: expect.stringContaining('Gumdale State School'), location: [153.15, -27.49] });
+  });
+
+  it('takes a name of your own', async () => {
+    fake.api.on({ 'POST api/saved-places': (init) => ({ id: 's2', ...(init.body as object), createdAt: '2026-10-08T00:00:00Z' }) });
+    await renderScreen(<Plan />);
+    await chooseDestination();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Other…' }));
+    await fireEvent.changeText(screen.getByLabelText('Name for this place'), '  Gym ');
+    await fireEvent.press(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText(/Saved as Gym/)).toBeOnTheScreen();
+    expect((fake.api.callsTo('POST api/saved-places')[0]!.body as { name: string }).name).toBe('Gym');
+  });
+
+  it('says why it couldn’t save', async () => {
+    fake.api.on({ 'POST api/saved-places': () => apiError(409, 'You can save up to 50 places. Remove one in Settings first.') });
+    await renderScreen(<Plan />);
+    await chooseDestination();
+    await fireEvent.press(await screen.findByRole('button', { name: 'Work' }));
+    expect(await screen.findByText(/You can save up to 50 places/)).toBeOnTheScreen();
+  });
+
+  it('doesn’t offer to save a place that is already saved', async () => {
+    fake.api.on({ 'GET api/search': () => ({ results: [place({ id: 'saved:s1', name: 'Home', kind: 'saved', typeLabel: 'Saved place', context: '27 Whitby Place' })] }) });
+    await renderScreen(<Plan />);
+    const box = screen.getByLabelText('Destination');
+    await fireEvent(box, 'focus');
+    await fireEvent.changeText(box, 'home');
+    await fireEvent.press(await screen.findByText('Home'));
+    await waitFor(() => expect(screen.getByLabelText('Destination')).toHaveDisplayValue('Home'));
+    expect(screen.queryByRole('button', { name: 'Other…' })).toBeNull();
+  });
+});

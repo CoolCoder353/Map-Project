@@ -11,6 +11,11 @@ export const InstructionSchema = z.object({
   /** Index range into the route geometry this instruction covers. */
   interval: z.tuple([z.number().int(), z.number().int()]),
   exitNumber: z.number().int().optional(),
+  /**
+   * Roundabouts: how far round it the exit is, in degrees in the direction of travel (90 a left
+   * turn on Queensland's clockwise roundabouts, 180 straight on, 270 right). Absent when unknown.
+   */
+  exitAngleDeg: z.number().min(1).max(360).optional(),
 });
 export type Instruction = z.infer<typeof InstructionSchema>;
 

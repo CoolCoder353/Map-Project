@@ -4,9 +4,20 @@ import android.content.Context
 import androidx.car.app.model.CarIcon
 import androidx.core.graphics.drawable.IconCompat
 import app.wayfinder.car.R
+import app.wayfinder.car.bridge.CarManeuver
 
 class ManeuverIcons(private val context: Context) {
+  private val roundabouts = HashMap<Int, CarIcon>()
+
   fun iconFor(type: String): CarIcon = CarIcon.Builder(IconCompat.createWithResource(context, resFor(type))).build()
+
+  /** A roundabout whose exit is known is drawn with that exit (see [RoundaboutIcon]). */
+  fun iconFor(m: CarManeuver): CarIcon {
+    val angle = m.exitAngleDeg?.takeIf { m.type == "roundabout" && it in 1..360 } ?: return iconFor(m.type)
+    // Rounded to 5°: the same exit drawn again as the trip updates every second.
+    val key = ((angle + 2) / 5 * 5).coerceIn(5, 360)
+    return roundabouts.getOrPut(key) { CarIcon.Builder(IconCompat.createWithBitmap(RoundaboutIcon.draw(key))).build() }
+  }
 
   /** The drawable for a manoeuvre; also the small icon of the navigation notification. */
   fun resFor(type: String): Int =

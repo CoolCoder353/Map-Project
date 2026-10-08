@@ -15,7 +15,8 @@ data class RouteOption(
 )
 data class PlanResult(val options: List<RouteOption>, val note: String?)
 data class PlannedItem(val id: String, val name: String, val option: RouteOption)
-data class CarManeuver(val type: String, val exit: Int?)
+/** [exitAngleDeg]: roundabouts, how far round the exit is in the direction of travel (90 left, 180 straight on, 270 right). */
+data class CarManeuver(val type: String, val exit: Int?, val exitAngleDeg: Int? = null)
 data class NextStep(val maneuver: CarManeuver, val cue: String)
 enum class NavStatus { STARTING, NAVIGATING, OFF_ROUTE, ARRIVED }
 data class CarNav(
@@ -24,6 +25,8 @@ data class CarNav(
   val maneuver: CarManeuver?, val cue: String, val road: String, val distanceToManeuverM: Double?, val next: NextStep?,
   val remainingDistanceM: Double, val remainingDurationS: Double, val arrivalEpochMs: Long,
   val position: LngLat?, val headingDeg: Double?,
+  /** Only while on the route; [speedKmh] is how fast the phone says the car is going. */
+  val speedLimitKmh: Int? = null, val speedKmh: Int? = null,
 )
 
 /**
@@ -84,9 +87,12 @@ object Protocol {
     arrivalEpochMs = o.getLong("arrivalEpochMs"),
     position = if (o.isNull("position")) null else lngLat(o.getJSONArray("position")),
     headingDeg = o.doubleOrNull("headingDeg"),
+    speedLimitKmh = o.doubleOrNull("speedLimitKmh")?.let(Math::round)?.toInt(),
+    speedKmh = o.doubleOrNull("speedKmh")?.let(Math::round)?.toInt(),
   )
 
-  private fun maneuver(o: JSONObject) = CarManeuver(o.getString("type"), if (o.isNull("exit")) null else o.getInt("exit"))
+  private fun maneuver(o: JSONObject) =
+    CarManeuver(o.getString("type"), if (o.isNull("exit")) null else o.getInt("exit"), o.doubleOrNull("exitAngleDeg")?.let(Math::round)?.toInt())
   private fun lngLat(a: JSONArray) = LngLat(a.getDouble(0), a.getDouble(1))
   private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
   private fun JSONObject.doubleOrNull(k: String): Double? = if (isNull(k)) null else getDouble(k)

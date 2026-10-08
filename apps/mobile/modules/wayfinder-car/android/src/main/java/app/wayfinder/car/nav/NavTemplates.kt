@@ -2,6 +2,7 @@ package app.wayfinder.car.nav
 
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
+import androidx.car.app.model.CarIcon
 import androidx.car.app.model.DateTimeWithZone
 import androidx.car.app.navigation.model.Destination
 import androidx.car.app.navigation.model.Maneuver
@@ -17,20 +18,59 @@ import app.wayfinder.car.bridge.NavStatus
 import java.util.TimeZone
 import kotlin.math.roundToLong
 
+/**
+ * The buttons on the car map while driving (car API level 2 and up): pan, zoom, and once the
+ * driver has moved the map, back to following the car.
+ */
+class MapButtons(
+  val panned: Boolean,
+  val zoomIn: CarIcon,
+  val zoomOut: CarIcon,
+  val recentre: CarIcon,
+  val onZoom: (steps: Double) -> Unit,
+  val onRecentre: () -> Unit,
+)
+
 object NavTemplates {
-  fun navigation(nav: CarNav?, icons: ManeuverIcons, onEnd: () -> Unit, onMute: () -> Unit): NavigationTemplate {
+  /** What the driving screen says before the phone has its first position for the trip. */
+  const val FINDING_YOU = "Finding where you are…"
+
+  fun navigation(
+    nav: CarNav?,
+    icons: ManeuverIcons,
+    onEnd: () -> Unit,
+    onMute: () -> Unit,
+    onReport: (() -> Unit)? = null,
+    map: MapButtons? = null,
+  ): NavigationTemplate {
     val arrived = nav?.status == NavStatus.ARRIVED
     val strip = ActionStrip.Builder()
       .addAction(Action.Builder().setTitle(if (nav?.muted == true) "Unmute" else "Mute").setOnClickListener(onMute).build())
+      .apply { if (onReport != null && nav != null) addAction(Action.Builder().setTitle("Report").setOnClickListener(onReport).build()) }
       .addAction(Action.Builder().setTitle(if (arrived) "Done" else "End").setOnClickListener(onEnd).build())
       .build()
     val b = NavigationTemplate.Builder().setActionStrip(strip)
+    if (map != null) {
+      b.setMapActionStrip(
+        ActionStrip.Builder()
+          .addAction(Action.PAN)
+          .apply { if (map.panned) addAction(Action.Builder().setIcon(map.recentre).setOnClickListener(map.onRecentre).build()) }
+          .addAction(Action.Builder().setIcon(map.zoomIn).setOnClickListener { map.onZoom(1.0) }.build())
+          .addAction(Action.Builder().setIcon(map.zoomOut).setOnClickListener { map.onZoom(-1.0) }.build())
+          .build(),
+      )
+      // Lets the host send drags (onScroll) to the map; nothing else to do on entering pan mode.
+      b.setPanModeListener { }
+    }
     when {
       nav == null -> b.setNavigationInfo(RoutingInfo.Builder().setLoading(true).build())
       arrived -> b.setNavigationInfo(MessageInfo.Builder("You’ve arrived").apply { nav.destinationName?.let { setText(it) } }.build())
       nav.rerouting -> b.setNavigationInfo(MessageInfo.Builder("Finding a new route…").build())
       nav.error != null -> b.setNavigationInfo(MessageInfo.Builder(nav.error).build())
       nav.status == NavStatus.OFF_ROUTE -> b.setNavigationInfo(MessageInfo.Builder("Off route").build())
+      // Not a spinner: one that never stops reads as the car app hanging.
+      nav.status == NavStatus.STARTING && nav.maneuver == null ->
+        b.setNavigationInfo(MessageInfo.Builder(FINDING_YOU).apply { nav.destinationName?.let { setText("To $it") } }.build())
       nav.maneuver == null -> b.setNavigationInfo(RoutingInfo.Builder().setLoading(true).build())
       else -> b.setNavigationInfo(routingInfo(nav, nav.maneuver, icons))
     }
@@ -59,8 +99,13 @@ object NavTemplates {
     Step.Builder(cue.ifEmpty { "Continue" })
       .setManeuver(
         Maneuver.Builder(Maneuvers.typeOf(m))
-          .apply { if (Maneuvers.typeOf(m) == Maneuver.TYPE_ROUNDABOUT_ENTER_AND_EXIT_CW) setRoundaboutExitNumber(m.exit!!) }
-          .setIcon(icons.iconFor(m.type))
+          .apply {
+            when (Maneuvers.typeOf(m)) {
+              Maneuver.TYPE_ROUNDABOUT_ENTER_AND_EXIT_CW -> setRoundaboutExitNumber(m.exit!!)
+              Maneuver.TYPE_ROUNDABOUT_ENTER_AND_EXIT_CW_WITH_ANGLE -> setRoundaboutExitNumber(m.exit!!).setRoundaboutExitAngle(m.exitAngleDeg!!)
+            }
+          }
+          .setIcon(icons.iconFor(m))
           .build(),
       )
       .apply { if (road.isNotEmpty()) setRoad(road) }

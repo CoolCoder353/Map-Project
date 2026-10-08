@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { placeService, trackService } from '@wayfinder/core';
-import { destination } from '@wayfinder/shared';
+import { placeService, savedPlaceService, trackService } from '@wayfinder/core';
+import { MAX_SAVED_PLACES, destination } from '@wayfinder/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { type TestApp, createTestApp, makeUser, tokenFor } from '../helpers/app.js';
 
@@ -100,6 +100,59 @@ describe('search over HTTP', () => {
     expect((await ta.app.inject({ method: 'GET', url: '/api/planned-routes', headers: other })).json().items).toEqual([]);
     await ta.app.inject({ method: 'DELETE', url: `/api/planned-routes/${saved.id}`, headers: other });
     expect((await ta.app.inject({ method: 'GET', url: '/api/planned-routes', headers: auth })).json().items).toHaveLength(1);
+  });
+});
+
+describe('saved places over HTTP', () => {
+  const home = { name: 'Home', description: '27 Whitby Place, Thornlands', location: [153.26, -27.56] };
+
+  it('saves places under your own names and offers them first when a search starts with one', async () => {
+    const saved = await ta.app.inject({ method: 'POST', url: '/api/saved-places', headers: auth, payload: home });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json()).toMatchObject({ name: 'Home', description: '27 Whitby Place, Thornlands', location: [153.26, -27.56] });
+    // "ho" is enough, and it comes before every other place.
+    await placeService.upsertPlaces(ta.t.db, [
+      { id: 'n3', name: 'Home Hill', kind: 'town', category: null, description: 'Town', lon: 147.41, lat: -19.66, importance: 0.4, suburb: null, state: 'QLD' },
+    ]);
+    const found = (await ta.app.inject({ method: 'GET', url: '/api/search?q=ho&lon=153.25&lat=-27.56', headers: auth })).json();
+    expect(found.results[0]).toMatchObject({ id: `saved:${saved.json().id}`, name: 'Home', kind: 'saved', typeLabel: 'Saved place', context: '27 Whitby Place, Thornlands', location: [153.26, -27.56] });
+    expect(found.results[0].distanceM).toBeGreaterThan(900);
+    expect(found.results[0].distanceM).toBeLessThan(1100);
+    expect(found.results.map((r: { name: string }) => r.name)).toContain('Home Hill');
+    // Nobody else's Home.
+    const theirs = (await ta.app.inject({ method: 'GET', url: '/api/search?q=home', headers: other })).json();
+    expect(theirs.results.map((r: { kind: string }) => r.kind)).not.toContain('saved');
+    // Nothing saved matches "gum".
+    expect((await ta.app.inject({ method: 'GET', url: '/api/search?q=gum', headers: auth })).json().results[0].kind).not.toBe('saved');
+  });
+
+  it('moves a place saved again under the same name, lists and deletes them for their owner only', async () => {
+    const work = (await ta.app.inject({ method: 'POST', url: '/api/saved-places', headers: auth, payload: { name: 'Work', location: [153.03, -27.47] } })).json();
+    const moved = (await ta.app.inject({ method: 'POST', url: '/api/saved-places', headers: auth, payload: { ...home, name: 'home', location: [153.27, -27.57] } })).json();
+    const list = (await ta.app.inject({ method: 'GET', url: '/api/saved-places', headers: auth })).json();
+    expect(list.items.map((p: { name: string; location: number[] }) => [p.name, p.location])).toEqual([['home', [153.27, -27.57]], ['Work', [153.03, -27.47]]]);
+    expect(list.items[0].id).toBe(moved.id);
+    expect(list.items[1].description).toBe('');
+    expect((await ta.app.inject({ method: 'GET', url: '/api/saved-places', headers: other })).json().items).toEqual([]);
+    expect((await ta.app.inject({ method: 'DELETE', url: `/api/saved-places/${work.id}`, headers: other })).statusCode).toBe(404);
+    expect((await ta.app.inject({ method: 'DELETE', url: `/api/saved-places/${work.id}`, headers: auth })).json()).toEqual({ ok: true });
+    expect((await ta.app.inject({ method: 'DELETE', url: '/api/saved-places/not-an-id', headers: auth })).statusCode).toBe(404);
+    // Downloaded with the rest of your data.
+    const exported = (await ta.app.inject({ method: 'GET', url: '/api/me/export', headers: auth })).json();
+    expect(exported.savedPlaces.map((p: { name: string }) => p.name)).toEqual(['home']);
+  });
+
+  it('validates what is saved, and stops at the limit', async () => {
+    expect((await ta.app.inject({ method: 'POST', url: '/api/saved-places', headers: auth, payload: { name: ' ', location: [153, -27] } })).statusCode).toBe(400);
+    expect((await ta.app.inject({ method: 'POST', url: '/api/saved-places', headers: auth, payload: { name: 'Gym', location: [200, -27] } })).statusCode).toBe(400);
+    const u = await makeUser(ta.t.db, 'collector@example.com');
+    const many = { authorization: await tokenFor(ta, u, 'user') };
+    for (let i = 0; i < MAX_SAVED_PLACES; i++) await savedPlaceService.saveSavedPlace(ta.t.db, u.id, { name: `Place ${i}`, description: '', location: [153, -27] });
+    const over = await ta.app.inject({ method: 'POST', url: '/api/saved-places', headers: many, payload: { name: 'One more', location: [153, -27] } });
+    expect(over.statusCode).toBe(409);
+    expect(over.json().error.message).toMatch(/up to 50 places/);
+    // Moving one already saved is still fine.
+    expect((await ta.app.inject({ method: 'POST', url: '/api/saved-places', headers: many, payload: { name: 'place 3', location: [153.1, -27] } })).statusCode).toBe(200);
   });
 });
 

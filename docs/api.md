@@ -50,7 +50,10 @@ exactly what each field is.
 
 | Method | Path | Schema / notes |
 |---|---|---|
-| GET | `/api/search` | `SearchQuerySchema` (`q`, optional `lon`/`lat` to rank by distance, `limit`) → `{ results: Place[] }` |
+| GET | `/api/search` | `SearchQuerySchema` (`q`, optional `lon`/`lat` to rank by distance, `limit`) → `{ results: Place[] }`. Your own saved places whose name starts with `q` come first (`kind: "saved"`, id `saved:<id>`, `typeLabel` "Saved place") |
+| GET | `/api/saved-places` | Your saved places → `SavedPlaceListSchema`, by name |
+| POST | `/api/saved-places` | `SavedPlaceSaveSchema` (`name`, `description`, `location`) → the `SavedPlace`. A name already used (any capitals) moves that place. Up to 50 (`409 conflict` beyond) |
+| DELETE | `/api/saved-places/:id` | |
 | GET | `/api/reverse` | `ReverseQuerySchema` → `{ place }` |
 | GET | `/api/planned-routes` | Routes sent from the web to the phone → `PlannedRouteListSchema` |
 | POST | `/api/planned-routes` | `PlannedRouteCreateSchema` |
@@ -60,7 +63,7 @@ exactly what each field is.
 
 | Method | Path | Schema / notes |
 |---|---|---|
-| POST | `/api/routes/fastest` | `FastestRouteRequestSchema` (`from`, `to`, `mode`, `via`, optional `heading`) → one `Route`. The app sends `heading` (compass degrees) with a new route asked for mid-drive, so it starts the way the car is going |
+| POST | `/api/routes/fastest` | `FastestRouteRequestSchema` (`from`, `to`, `mode`, `via`, optional `heading`) → one `Route`. The app sends `heading` (compass degrees) with a new route asked for mid-drive, so it starts the way the car is going. Where it can't (a dead end), the first instruction says "Turn around when you can" instead of GraphHopper's "Make a U-turn onto …". A roundabout instruction carries `exitAngleDeg`, how far round the exit is (90 left, 180 straight on, 270 right), where GraphHopper gives it |
 | POST | `/api/routes/explore` | `ExploreRouteRequestSchema` (`budgetMin` defaults to the person's setting) → `{ fastest, explore: Route[] }` |
 | POST | `/api/routes/roundtrip` | `RoundTripRequestSchema` (`start`, `mode`, `targetMin`) → `{ routes }` |
 | GET | `/api/discover` | `DiscoverQuerySchema` (`lon`, `lat`, `mode`, `maxMinutes`, `categories`) → `{ items }`. The slow one: several seconds on a small server |
@@ -86,7 +89,7 @@ is always one instruction with the exit actually taken, even where a stop on a d
 
 | Method | Path | Schema / notes |
 |---|---|---|
-| POST | `/api/feedback` | `FeedbackCreateSchema` → `201 { id }`. `404 feedback_disabled` while an admin has it switched off. 5 an hour per person; screenshot up to 2 MB |
+| POST | `/api/feedback` | `FeedbackCreateSchema` → `201 { id }`. `404 feedback_disabled` while an admin has it switched off. 5 an hour per person; screenshot up to 2 MB. Android Auto's **Report** sends one too (`screen` "Android Auto: driving"), its message saying what the car showed |
 
 ## Map (no auth)
 

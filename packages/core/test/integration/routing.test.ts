@@ -70,6 +70,57 @@ describe('routing service (fake GraphHopper)', () => {
     expect(calls.at(-1)!.heading).toBeUndefined();
   });
 
+  it('says to turn around when you can, not here, when a new route on the move has to go back', async () => {
+    // A dead-end street: GraphHopper can only start the new route by turning round.
+    const u = await makeUser(t.db, 'dead-end@example.com');
+    const uTurnFirst = async (p: RouteParams) => {
+      calls.push(p);
+      const path = straightPath(p.points, SPEED);
+      path.instructions = [
+        { sign: -98, text: 'Make a U-turn onto Ironbark Street', street_name: 'Ironbark Street', interval: [0, 1], distance: 98, time: 9000 },
+        { sign: -2, text: 'Turn left onto Mahogany Street', street_name: 'Mahogany Street', interval: [1, 2], distance: 265, time: 20000 },
+        { sign: 4, text: 'Arrive at destination', interval: [2, 2], distance: 0, time: 0 },
+      ];
+      return [path];
+    };
+    const gh = { ...fakeGh, route: uTurnFirst } as GraphHopperClient;
+    const onTheMove = await routing.fastestRoute({ ...deps(), graphhopper: gh }, u.id, { from, to, mode: 'car', via: [], heading: 10 });
+    expect(onTheMove.instructions.map((i) => i.text)).toEqual([routing.TURN_AROUND_TEXT, 'Turn left onto Mahogany Street', 'Arrive at destination']);
+    expect(onTheMove.instructions[0]).toMatchObject({ sign: -98, streetName: 'Ironbark Street', distanceM: 98 });
+    // Planned from a standstill, GraphHopper's words stand.
+    const planned = await routing.fastestRoute({ ...deps(), graphhopper: gh }, u.id, { from, to, mode: 'car', via: [] });
+    expect(planned.instructions[0]!.text).toBe('Make a U-turn onto Ironbark Street');
+    // A U-turn later on is left alone.
+    const later = routing.turnAroundWhenYouCan({ ...planned, instructions: [planned.instructions[1]!, planned.instructions[0]!] });
+    expect(later.instructions.map((i) => i.text)).toEqual(['Turn left onto Mahogany Street', 'Make a U-turn onto Ironbark Street']);
+  });
+
+  it('gives each roundabout exit its angle round the roundabout', async () => {
+    const path = straightPath([from, to], SPEED);
+    const ins = (sign: number, text: string, interval: [number, number], extra: object = {}) => ({ sign, text, interval, distance: 10, time: 1000, street_name: '', ...extra });
+    path.instructions = [
+      ins(6, 'At roundabout, take exit 1 onto Boundary Road', [0, 3], { exit_number: 1, exited: true, turn_angle: 1.5 }),
+      ins(6, 'At roundabout, take exit 3 onto Redland Bay Road', [3, 5], { exit_number: 3, exited: true, turn_angle: 4.67 }),
+      ins(6, 'At roundabout, take exit 2', [5, 7], { exit_number: 2, exited: true, turn_angle: Number.NaN }),
+      ins(6, 'At roundabout, take exit 2', [7, 8], { exit_number: 2, exited: true }),
+      ins(4, 'Arrive at destination', [8, 8]),
+    ];
+    const route = routing.toRoute(path, { kind: 'fastest', mode: 'car', novelty: { totalKm: 8, newKm: 8, noveltyPct: 100 } as never, extraDurationS: 0, viaPoints: [] });
+    // Left (about 90°) and right (about 270°); none where GraphHopper gave none or nonsense.
+    expect(route.instructions.map((i) => i.exitAngleDeg)).toEqual([86, 268, undefined, undefined, undefined]);
+
+    // A roundabout split by a hidden stop: the half-way angle would be wrong, so there is none.
+    path.instructions = [
+      ins(6, 'Enter roundabout', [0, 5], { exit_number: 3, exited: false, turn_angle: 2 }),
+      ins(5, 'Waypoint 1', [5, 5]),
+      ins(6, 'At roundabout, take exit 1', [5, 9], { exit_number: 1, exited: true, turn_angle: 1.4 }),
+      ins(4, 'Arrive at destination', [9, 9]),
+    ];
+    const joined = routing.toRoute(path, { kind: 'explore', mode: 'car', novelty: { totalKm: 8, newKm: 8, noveltyPct: 100 } as never, extraDurationS: 0, viaPoints: [] });
+    expect(joined.instructions[0]).toMatchObject({ exitNumber: 4 });
+    expect(joined.instructions[0]!.exitAngleDeg).toBeUndefined();
+  });
+
   it('gives a roundabout one exit number even when a hidden stop on the detour lies on it', async () => {
     // GraphHopper splits the roundabout at the stop: "Enter roundabout" with the exits passed so
     // far, then "take exit 1" counted again from the stop. Going round to come back is exit 4.

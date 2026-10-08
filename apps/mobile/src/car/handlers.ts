@@ -1,13 +1,15 @@
 import { type CopyCatalog, copyFor } from '@wayfinder/shared/copy';
 import type { LngLat } from '@wayfinder/shared/geo';
 import { formatDistanceShort, formatDuration } from '@wayfinder/nav';
-import { DiscoverResponseSchema, ExploreRouteResponseSchema, type Place, PlannedRouteListSchema, PublicConfigSchema, type Route, SearchResponseSchema } from '@wayfinder/shared/schemas';
+import { DiscoverResponseSchema, ExploreRouteResponseSchema, type FeedbackCreate, type Place, PlannedRouteListSchema, PublicConfigSchema, type Route, SearchResponseSchema } from '@wayfinder/shared/schemas';
+import Constants from 'expo-constants';
 import * as Location from 'expo-location';
+import { Platform } from 'react-native';
 import { api, hasSavedSession } from '../lib/api';
 import { isServerUrl } from '../lib/apiClient';
 import { kindOf } from '../lib/categories';
 import { getServerUrl } from '../lib/server';
-import { navigation } from '../nav/navigationService';
+import { navigation, type NavSnapshot } from '../nav/navigationService';
 import type { CarHandlers } from './controller';
 import { DEMO_DESTINATION_NAME, demoRoute, startTestDrive } from './simulation';
 import { type CarPlace, CarParams, type CarRouteOption, type CarStatus } from './protocol';
@@ -158,8 +160,50 @@ export const carHandlers: CarHandlers = {
     return {};
   },
 
+  /**
+   * "Report" in the car: one tap files a bug report with what the car was showing, where, and how
+   * fast, for the driver to explain later. Typing or speaking a message can't be done while driving.
+   */
+  async report() {
+    const now = navigation.getSnapshot();
+    const position = now.position ?? (await here());
+    const body: FeedbackCreate = {
+      type: 'bug',
+      message: carReportMessage(now),
+      context: {
+        screen: now.active ? 'Android Auto: driving' : 'Android Auto',
+        platform: 'android',
+        appVersion: Constants.expoConfig?.version ?? 'unknown',
+        device: `Android ${String(Platform.Version)}${Constants.deviceName ? ` · ${Constants.deviceName}` : ''}`.slice(0, 400),
+        ...(position ? { mapView: { center: position, zoom: 17 } } : {}),
+      },
+    };
+    await api.request('api/feedback', { method: 'POST', body });
+    return {};
+  },
+
   async mute(params) {
     navigation.setMuted(CarParams.mute.parse(params).muted);
     return {};
   },
 };
+
+const STATUS_WORDS = { navigating: 'on the route', offRoute: 'off the route', arrived: 'arrived' } as const;
+
+/** What the car was showing when the driver pressed Report, in words an admin can act on. */
+export function carReportMessage(s: NavSnapshot, at: Date = new Date()): string {
+  const when = at.toLocaleString('en-AU', { timeZone: 'Australia/Brisbane', dateStyle: 'medium', timeStyle: 'medium' });
+  const lines = [`Reported from the car at ${when}, with one tap. When it's safe, the driver can send the details from Settings → Send feedback.`];
+  if (!s.active || !s.route) {
+    lines.push('No trip running.');
+  } else {
+    const st = s.state;
+    const ins = st?.nextInstruction ?? st?.currentInstruction;
+    lines.push(`Trip: ${s.route.kind} route${s.destinationName ? ` to ${s.destinationName}` : ''}, ${st ? STATUS_WORDS[st.status] : 'waiting for the first position'}${s.rerouting ? ', finding a new route' : ''}.`);
+    if (ins) lines.push(`Showing: "${ins.text}"${st?.distanceToNextManeuverM != null ? ` in ${formatDistanceShort(st.distanceToNextManeuverM)}` : ''}${ins.streetName ? ` (${ins.streetName})` : ''}.`);
+    lines.push(`Speed limit shown: ${st?.speedLimitKmh != null ? `${st.speedLimitKmh} km/h` : 'none'}. Speed: ${s.speedMps != null ? `${Math.round(s.speedMps * 3.6)} km/h` : 'unknown'}.`);
+    if (s.headingDeg != null) lines.push(`Heading: ${Math.round(s.headingDeg)}°.`);
+    if (s.error) lines.push(`Message shown: ${s.error}`);
+  }
+  return lines.join('\n');
+}

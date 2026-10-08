@@ -42,9 +42,11 @@ class ProtocolTest {
   @Test fun navigating() {
     val n = Protocol.nav(fixture("nav-navigating.json"))
     assertEquals(NavStatus.NAVIGATING, n.status)
-    assertEquals(CarManeuver("roundabout", 2), n.maneuver)
+    assertEquals(CarManeuver("roundabout", 2, 175), n.maneuver)
     assertEquals(NextStep(CarManeuver("left", null), "Turn left"), n.next)
     assertEquals(1790000000000L, n.arrivalEpochMs)
+    assertEquals(60, n.speedLimitKmh)
+    assertEquals(57, n.speedKmh)
   }
 
   @Test fun arrived() {
@@ -53,5 +55,15 @@ class ProtocolTest {
     assertNull(n.destinationName)
     assertNull(n.position)
     assertNull(n.distanceToManeuverM)
+    assertNull(n.speedLimitKmh)
+    assertNull(n.speedKmh)
+  }
+
+  /** A phone app one version behind sends none of the newer fields; the car still reads the rest. */
+  @Test fun navigatingFromAnOlderPhoneApp() {
+    val o = fixture("nav-navigating.json").apply { remove("speedLimitKmh"); remove("speedKmh"); getJSONObject("maneuver").remove("exitAngleDeg") }
+    val n = Protocol.nav(o)
+    assertEquals(CarManeuver("roundabout", 2, null), n.maneuver)
+    assertNull(n.speedLimitKmh)
   }
 }

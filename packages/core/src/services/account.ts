@@ -67,6 +67,7 @@ export async function exportUserData(db: DbClient, userId: string) {
     modes: [c.modes & 1 ? 'car' : null, c.modes & 2 ? 'foot' : null].filter(Boolean),
   }));
   const planned = (await db.query('SELECT id, name, created_at, route FROM planned_routes WHERE user_id = $1', [userId])).rows;
+  const saved = (await db.query('SELECT name, description, lon, lat, created_at FROM saved_places WHERE user_id = $1 ORDER BY lower(name)', [userId])).rows;
   return {
     exportedAt: new Date().toISOString(),
     user,
@@ -75,6 +76,7 @@ export async function exportUserData(db: DbClient, userId: string) {
     travelledRoads: { type: 'FeatureCollection', features: roads },
     visitedCells: cells,
     plannedRoutes: planned,
+    savedPlaces: saved,
     note: `Deleted items are kept for ${SOFT_DELETE_RETENTION_DAYS} days before permanent removal.`,
   };
 }

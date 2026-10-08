@@ -67,6 +67,7 @@ export function toRoute(
       durationS: i.time / 1000,
       interval: i.interval,
       ...(i.exit_number !== undefined ? { exitNumber: i.exit_number } : {}),
+      ...exitAngleOf(i),
     })),
     viaPoints: opts.viaPoints,
     speedLimits: speedLimitRuns(path.points.coordinates, path.details?.max_speed ?? []),
@@ -80,6 +81,14 @@ export function toRoute(
 
 const ROUNDABOUT = 6;
 const VIA_REACHED = 5;
+
+/** GraphHopper's turn_angle (radians round the roundabout) as degrees, where it gave a usable one. */
+function exitAngleOf(i: GhInstruction): { exitAngleDeg?: number } {
+  const a = i.turn_angle;
+  if (i.sign !== ROUNDABOUT || a === undefined || !Number.isFinite(a)) return {};
+  const deg = Math.round((Math.abs(a) * 180) / Math.PI);
+  return deg >= 1 && deg <= 360 ? { exitAngleDeg: deg } : {};
+}
 const roundaboutText = (exit: number, street: string | undefined) => `At roundabout, take exit ${exit}${street ? ` onto ${street}` : ''}`;
 
 /**
@@ -103,8 +112,9 @@ export function joinSplitRoundabouts(instructions: readonly GhInstruction[]): Gh
     // The stop where the roundabout is left: the exit counted on the way in is the one taken.
     const exit = (enter.exit_number ?? 0) + (sameRoundabout ? (after.exit_number ?? 0) : 0);
     const parts = sameRoundabout ? [enter, via, after] : [enter, via];
+    const { turn_angle: _partial, ...entered } = enter; // the angle of half the roundabout only
     out.push({
-      ...enter,
+      ...entered,
       text: roundaboutText(exit, after.street_name || undefined),
       exit_number: exit,
       exited: true,
@@ -253,13 +263,28 @@ export async function fastestRoute(
   if (!path) throw new AppError(422, 'no_route', 'No route found');
   const { set, ways } = await visitedSetFor(deps.db, userId, path.points.coordinates, 500);
   await recordRequest(deps.db, userId, 'fastest', req.mode);
-  return toRoute(path, {
+  const route = toRoute(path, {
     kind: 'fastest',
     mode: req.mode,
     novelty: noveltyOf(path, (c) => set.has(c), ways),
     extraDurationS: 0,
     viaPoints: req.via,
   });
+  return req.heading !== undefined ? turnAroundWhenYouCan(route) : route;
+}
+
+/** What a new route says when the only sensible way is back the way the car came. */
+export const TURN_AROUND_TEXT = 'Turn around when you can';
+
+/**
+ * A new route asked for on the move starts the way the car is going wherever it can. When it
+ * can't (a dead-end street, say), GraphHopper's first instruction is "Make a U-turn onto …" right
+ * where the car is, which reads as "turn round here, now". Say what the driver actually has to do.
+ */
+export function turnAroundWhenYouCan(route: Route): Route {
+  const first = route.instructions[0];
+  if (!first || !(first.sign === -98 || Math.abs(first.sign) === 8)) return route;
+  return { ...route, instructions: [{ ...first, text: TURN_AROUND_TEXT }, ...route.instructions.slice(1)] };
 }
 
 export async function exploreRoutes(

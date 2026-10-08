@@ -162,7 +162,12 @@ phone's Navigate screen and the car alike; a trip started on either shows on bot
 a location foreground service keeps directions coming with the phone locked; its starts and stops
 run one at a time, and one left over from a trip the app never ended (swiped away mid-trip) is
 stopped when the app starts. A request for a new route that hasn't answered within 20 s is given up
-on as the next fix arrives (timers don't run with the phone locked) and asked again later. Back on
+on as the next fix arrives (timers don't run with the phone locked) and asked again later. A new
+route that starts by turning around (the car is in a dead end) is said once, "Route updated. Turn
+around when you can", and not asked for again for a minute while the driver finds somewhere to
+turn; asking sooner only gave the same answer every few seconds. Arriving is said once, and the trip
+ends by itself 15 s later (on a timer, or the next fix with the phone locked); the phone's Navigate
+screen then closes. The session also keeps the road driven and the speed, for the maps. Back on
 the car's driving screen leaves the trip running, and Home offers "Back to directions". Spoken
 directions use the module's own `NavVoice`, which plays as navigation guidance and asks other audio
 to duck, so music dips and comes back; where the module isn't there, `expo-speech` speaks instead
@@ -201,5 +206,22 @@ the navigation service, which then records nothing, uploads nothing, starts no l
 ignores the phone's real position, so a test drive can never become a trip in someone's coverage.
 It ends with the trip (Done, or the car session closing).
 
-Templates are the ones every Android Auto version has (`minCarApiLevel` 1). Not yet: panning the
-car map, a speed-limit sign in the car, cars with Android built in (Android Automotive).
+**The map while driving.** The car's position is a view fixed where the camera keeps the car
+(`SceneLayout.followPoint`), not a dot on the map, so it stays still while the map glides under it
+from fix to fix. Beside it, the speed limit as Australian signs show it (on the route only) and the
+car's speed, red when over (`CarOverlays.kt`). The road driven so far is drawn too: the coordinator
+keeps it (`TripTrail`), since after a reroute the route line starts where the car is. On car API
+level 2 and up the map has pan, zoom and (once moved) re-centre buttons (`MapControls`,
+`FollowCamera`); a drag stops it following until Re-centre. The map's styles are asked for when
+the car connects (`MapStyles`), not only by Home: a trip already running puts the driving screen
+straight over Home, which used to leave the map black. Roundabouts are drawn with the exit taken
+(`RoundaboutIcon`, from the route's `exitAngleDeg`). Before the first fix the screen says "Finding
+where you are…" rather than spinning; after 30 s without one, why.
+
+**Report.** The driving screen's Report sends a bug report from the phone with one tap
+(`report` in `src/car/handlers.ts`): what the car showed, the speed limit and speed, the heading and
+where, as a feedback report with the map position. Typing or speaking can't be done while driving;
+the driver adds details later from the phone.
+
+Templates are the ones every Android Auto version has (`minCarApiLevel` 1). Not yet: cars with
+Android built in (Android Automotive).

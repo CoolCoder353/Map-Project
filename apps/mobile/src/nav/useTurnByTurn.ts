@@ -2,7 +2,7 @@ import type { NavState } from '@wayfinder/nav';
 import type { LngLat } from '@wayfinder/shared/geo';
 import type { Route } from '@wayfinder/shared/schemas';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { navigation } from './navigationService';
 
 export { REROUTE_RETRY_MS } from './navigationService';
@@ -15,6 +15,10 @@ export interface TurnByTurn {
   muted: boolean;
   setMuted(m: boolean): void;
   position: LngLat | null;
+  /** Where the trip has been so far, off the route too. */
+  travelled: LngLat[];
+  /** A trip was running while this screen showed, and has ended (arrived and closed by itself, say). */
+  ended: boolean;
   stop(): void;
 }
 
@@ -40,6 +44,8 @@ export function useTurnByTurn(initial: Route | null): TurnByTurn {
   // that doesn't look like a new route and restart the trip. (Not by content: that would turn the
   // whole route into text on every GPS fix.)
   const key = initial?.id ?? null;
+  const seenActive = useRef(false);
+  if (snap.active) seenActive.current = true;
   useEffect(() => {
     if (initial) navigation.start(initial, { askForNotifications: true });
     quietly(() => activateKeepAwakeAsync(KEEP_AWAKE_TAG));
@@ -57,6 +63,8 @@ export function useTurnByTurn(initial: Route | null): TurnByTurn {
     muted: snap.muted,
     setMuted: navigation.setMuted,
     position: snap.position,
+    travelled: snap.travelled,
+    ended: seenActive.current && !snap.active,
     stop: navigation.stop,
   };
 }

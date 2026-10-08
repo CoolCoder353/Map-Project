@@ -1,5 +1,5 @@
 /// <reference types="jest" />
-import { fireEvent, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
 import Navigate from '../app/navigate';
 import { setRouteToNavigate } from '../src/lib/plannedStore';
 import { fake, renderScreen, resetFakes, route } from './fakes';
@@ -15,6 +15,8 @@ const mockNav = {
   muted: false,
   setMuted: jest.fn(),
   position: null,
+  travelled: [] as unknown[],
+  ended: false,
   stop: jest.fn(),
 };
 jest.mock('../src/nav/useTurnByTurn', () => ({ useTurnByTurn: () => mockNav }));
@@ -25,7 +27,7 @@ jest.mock('../src/lib/plannedStore', () => {
 
 beforeEach(() => {
   resetFakes();
-  Object.assign(mockNav, { route: route(), state: null, rerouting: false, error: null, muted: false });
+  Object.assign(mockNav, { route: route(), state: null, rerouting: false, error: null, muted: false, travelled: [], ended: false });
   setRouteToNavigate(route());
 });
 
@@ -130,4 +132,28 @@ it('shows the speed limit of the road you are on, when it is known', async () =>
   mockNav.state = { ...(mockNav.state as object), status: 'offRoute', speedLimitKmh: 80 };
   await rerender(<Navigate />);
   expect(screen.queryByLabelText(/Speed limit/)).toBeNull();
+});
+
+it('draws the road already driven, off the route too, once there is some', async () => {
+  await renderScreen(<Navigate />);
+  expect(fake.map.props.track).toBeNull();
+  mockNav.travelled = [[153, -27.4], [153.001, -27.4]];
+  await renderScreen(<Navigate />);
+  expect(fake.map.props.track).toEqual([[153, -27.4], [153.001, -27.4]]);
+});
+
+it('closes by itself when the trip ends without it (arrived, or ended in the car)', async () => {
+  mockNav.ended = true;
+  await renderScreen(<Navigate />);
+  expect(fake.router.back).toHaveBeenCalled();
+  expect(mockNav.stop).not.toHaveBeenCalled();
+});
+
+it('goes back once on End, though the trip then reads as ended', async () => {
+  // The same screen re-rendered (renderScreen's rerender would wrap it afresh and remount it).
+  const view = await render(<Navigate />);
+  await fireEvent.press(screen.getByRole('button', { name: 'End' }));
+  mockNav.ended = true;
+  await view.rerender(<Navigate />);
+  expect(fake.router.back).toHaveBeenCalledTimes(1);
 });

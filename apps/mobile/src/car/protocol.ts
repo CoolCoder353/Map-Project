@@ -43,7 +43,12 @@ export const ManeuverTypeSchema = z.enum([
   'straight', 'slightLeft', 'left', 'sharpLeft', 'slightRight', 'right', 'sharpRight',
   'keepLeft', 'keepRight', 'uTurnLeft', 'uTurnRight', 'roundabout', 'roundaboutExit', 'waypoint', 'destination',
 ]);
-export const CarManeuverSchema = z.object({ type: ManeuverTypeSchema, exit: z.number().int().positive().nullable() });
+export const CarManeuverSchema = z.object({
+  type: ManeuverTypeSchema,
+  exit: z.number().int().positive().nullable(),
+  /** Roundabouts: how far round the exit is, degrees in the direction of travel (see InstructionSchema). */
+  exitAngleDeg: z.number().min(1).max(360).nullable(),
+});
 
 export const CarNavSchema = z.object({
   routeId: z.string(),
@@ -63,6 +68,10 @@ export const CarNavSchema = z.object({
   arrivalEpochMs: z.number().int(),
   position: LngLatSchema.nullable(),
   headingDeg: z.number().nullable(),
+  /** The limit where you are, only while on the route (off it, the road isn't the one it's for). */
+  speedLimitKmh: z.number().nullable(),
+  /** How fast the phone says you're going, km/h. */
+  speedKmh: z.number().nullable(),
 });
 
 /** What the car sends with each request. */

@@ -25,9 +25,10 @@ const BY_SIGN: Record<number, ManeuverType> = {
   8: 'uTurnRight',
 };
 
-export function maneuverOf(ins: Pick<Instruction, 'sign' | 'exitNumber'>): CarManeuver {
+export function maneuverOf(ins: Pick<Instruction, 'sign' | 'exitNumber' | 'exitAngleDeg'>): CarManeuver {
   const type = BY_SIGN[ins.sign] ?? 'straight';
-  return { type, exit: type === 'roundabout' && ins.exitNumber ? ins.exitNumber : null };
+  const roundabout = type === 'roundabout';
+  return { type, exit: roundabout && ins.exitNumber ? ins.exitNumber : null, exitAngleDeg: roundabout ? (ins.exitAngleDeg ?? null) : null };
 }
 
 /** What the car screen shows for a trip, or null when there isn't one. */
@@ -57,5 +58,7 @@ export function toCarNav(s: NavSnapshot, now: number): CarNav | null {
     arrivalEpochMs: Math.round(now + remainingS * 1000),
     position: s.position,
     headingDeg: s.headingDeg,
+    speedLimitKmh: st?.status === 'navigating' ? st.speedLimitKmh : null,
+    speedKmh: s.speedMps != null ? Math.round(s.speedMps * 3.6) : null,
   };
 }

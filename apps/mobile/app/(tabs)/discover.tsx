@@ -1,6 +1,7 @@
 import type { DiscoverItem, Mode } from '@wayfinder/shared/schemas';
 import { POI_CATEGORIES, type PoiCategory } from '@wayfinder/shared/schemas';
-import { Car, Compass, Footprints } from 'lucide-react-native';
+import { router } from 'expo-router';
+import { Car, ChevronRight, Compass, Footprints } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,6 +9,7 @@ import { api, errorMessage } from '../../src/lib/api';
 import { useAppConfig } from '../../src/lib/appConfig';
 import { CATEGORY_LABEL, kindOf } from '../../src/lib/categories';
 import { formatDistanceShort } from '../../src/lib/format';
+import { setTripToPlan } from '../../src/lib/plannedStore';
 import { splitStyles, useLayout } from '../../src/lib/layout';
 import { radius, space, useTheme } from '../../src/lib/theme';
 import { MapCanvas, type MapCanvasHandle } from '../../src/map/MapCanvas';
@@ -36,6 +38,12 @@ export default function Discover() {
     latest.current++;
     setItems(null);
     setBusy(false);
+  };
+
+  /** A place found is somewhere to go: Plan works out the trip there, from the same start. */
+  const planTrip = (i: DiscoverItem) => {
+    setTripToPlan({ from: origin, to: { name: i.name, description: kindOf(i.category), location: i.location }, mode });
+    router.navigate('/plan');
   };
 
   const search = async () => {
@@ -91,11 +99,17 @@ export default function Discover() {
         {error ? <Notice tone="error">{error}</Notice> : null}
         {items && items.length === 0 ? <Empty icon={Compass} text={copy.discoverEmpty} /> : null}
         {items?.map((i) => (
-          <Card key={i.id} onPress={() => map.current?.flyTo(i.location, 15)}>
-            <Text style={{ color: t.text, fontWeight: '700', fontSize: 16 }}>{i.name}</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2], alignItems: 'center', marginTop: 4 }}>
-              <Small>{kindOf(i.category)} · {formatDistanceShort(i.distanceM)} away</Small>
-              {i.areaUnexploredPct >= 50 ? <NewBadge text={`${i.areaUnexploredPct}% unexplored area`} /> : null}
+          <Card key={i.id} onPress={() => planTrip(i)}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: t.text, fontWeight: '700', fontSize: 16 }}>{i.name}</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2], alignItems: 'center', marginTop: 4 }}>
+                  <Small>{kindOf(i.category)} · {formatDistanceShort(i.distanceM)} away</Small>
+                  {i.areaUnexploredPct >= 50 ? <NewBadge text={`${i.areaUnexploredPct}% unexplored area`} /> : null}
+                </View>
+              </View>
+              <Small color={t.accent}>Directions</Small>
+              <ChevronRight size={18} color={t.accent} />
             </View>
           </Card>
         ))}

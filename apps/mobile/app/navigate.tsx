@@ -1,7 +1,7 @@
 import { formatDistanceShort, formatDuration } from '@wayfinder/nav';
 import { useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, ArrowRight, ArrowUp, Flag, RotateCcw, Volume2, VolumeX, X } from 'lucide-react-native';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { goBack } from '../src/lib/goBack';
@@ -47,6 +47,15 @@ export default function Navigate() {
   const initial = useMemo(() => (resume === '1' ? null : takeRouteToNavigate()), [resume]);
   const nav = useTurnByTurn(initial);
   const { sideBySide } = useLayout();
+  // The trip ended without this screen (arrived and closed by itself, or ended in the car). Not
+  // after End here, which goes back itself.
+  const leaving = useRef(false);
+  useEffect(() => {
+    if (nav.ended && !leaving.current) {
+      leaving.current = true;
+      goBack();
+    }
+  }, [nav.ended]);
 
   if (!initial && !(resume === '1' && nav.route)) {
     return (
@@ -86,7 +95,7 @@ export default function Navigate() {
       </View>
       <View style={sideBySide ? { position: 'absolute', top: 0, bottom: 0, left: PANEL_WIDTH, right: 0 } : { flex: 1 }}>
         {/* Follows you close up. No fitting to the whole route: that zooms out of the drive. */}
-        <MapCanvas style={{ flex: 1 }} routes={nav.route ? [nav.route] : []} selectedRouteId={nav.route?.id ?? null} followUser />
+        <MapCanvas style={{ flex: 1 }} routes={nav.route ? [nav.route] : []} selectedRouteId={nav.route?.id ?? null} track={nav.travelled.length >= 2 ? nav.travelled : null} followUser />
         {/* Only while on the route: off it, the road you are on isn't the one the limit is for. */}
         {s?.status === 'navigating' && s.speedLimitKmh != null ? <SpeedSign kmh={s.speedLimitKmh} /> : null}
       </View>
@@ -98,7 +107,7 @@ export default function Navigate() {
         <Press accessibilityRole="button" accessibilityLabel={nav.muted ? 'Unmute voice' : 'Mute voice'} onPress={() => nav.setMuted(!nav.muted)} style={({ hovered }) => ({ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: hovered ? t.surface3 : 'transparent' })}>
           {nav.muted ? <VolumeX size={24} color={t.text2} /> : <Volume2 size={24} color={t.text} />}
         </Press>
-        <Button label={arrived ? 'Done' : 'End'} kind={arrived ? 'primary' : 'secondary'} icon={X} onPress={() => { nav.stop(); goBack(); }} compact />
+        <Button label={arrived ? 'Done' : 'End'} kind={arrived ? 'primary' : 'secondary'} icon={X} onPress={() => { leaving.current = true; nav.stop(); goBack(); }} compact />
       </View>
     </SafeAreaView>
   );

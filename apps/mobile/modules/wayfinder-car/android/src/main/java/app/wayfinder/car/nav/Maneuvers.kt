@@ -16,7 +16,11 @@ object Maneuvers {
     "keepRight" -> Maneuver.TYPE_KEEP_RIGHT
     "uTurnLeft" -> Maneuver.TYPE_U_TURN_LEFT
     "uTurnRight" -> Maneuver.TYPE_U_TURN_RIGHT
-    "roundabout" -> if ((m.exit ?: 0) > 0) Maneuver.TYPE_ROUNDABOUT_ENTER_AND_EXIT_CW else Maneuver.TYPE_ROUNDABOUT_ENTER_CW
+    "roundabout" -> when {
+      (m.exit ?: 0) <= 0 -> Maneuver.TYPE_ROUNDABOUT_ENTER_CW
+      m.exitAngleDeg in 1..360 -> Maneuver.TYPE_ROUNDABOUT_ENTER_AND_EXIT_CW_WITH_ANGLE
+      else -> Maneuver.TYPE_ROUNDABOUT_ENTER_AND_EXIT_CW
+    }
     "roundaboutExit" -> Maneuver.TYPE_ROUNDABOUT_EXIT_CW
     // Android Auto has no waypoint manoeuvre; the cue says "waypoint".
     "waypoint", "destination" -> Maneuver.TYPE_DESTINATION
