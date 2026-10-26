@@ -13,20 +13,13 @@ Tick each line when it's done in Play Console for **Wayfinder** (`app.wayfinder.
 details skip review). The privacy policy URL, the Data safety form's deletion URL and 0.5.1
 (versionCode 7, on the closed and internal tracks with the release notes below) went to review
 together, in place of the first submission (versionCode 5, old address) that was still in review.
-The WAF items below are still open, so the review may fail on Google's URL check.
+Nothing blocks Google's reviewers (below).
 
 ## Before anything else: let Google reach the pages
 
-- [ ] **Cloudflare WAF, not Play Console.** The block rule lets in Australian visitors only.
-      Google's reviewers and URL checkers are mostly outside Australia, so Play would see the
-      privacy policy and deletion page as broken. Add this to the block rule's expression:
-      `and not http.request.uri.path in {"/privacy" "/delete-account"}`.
-      Check from outside Australia (a VPN, or a URL checker) that both pages load.
-- [ ] **Decide about reviewers testing the app.** The rule above still blocks the app's own
-      requests (sign-in, maps, search) from outside Australia, so a reviewer signing in with the
-      reviewer account from the US gets "Can't reach". Either let the reviewer through (for example
-      skip the rule for `/api/*` too, or for Google's ranges), or expect a rejection on App access.
-      This is a separate decision from the pages.
+- [x] **Google can reach the pages and the app.** The migration notes said Cloudflare lets in
+      Australian visitors only, but there is no such rule. Checked 2026-10-26: coolcodertech.com has no WAF custom rules, IP access rules or Cloudflare Access policies (its only rule is the `/api/` rate limit "api flood guard"), no blocked requests in the day's security events, and `/privacy` answers 200 from the US, UK, Europe, Japan and Singapore (check-host.net). Keep it that way: a
+      country block would stop Play's URL checks and reviewers signing in from abroad.
 
 ## Change in Play Console
 

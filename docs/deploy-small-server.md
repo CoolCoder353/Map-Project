@@ -154,9 +154,6 @@ Found on the live server and not yet dealt with (checked 2026-09-27):
   everyone has an APK built for `maps.coolcodertech.com`: older builds talk to it. After that,
   retire it step by step outside this repo, and here publish port 8080 on `127.0.0.1` only
   (`cloudflared` is on the same host) so nothing on the LAN bypasses the tunnel.
-- **Cloudflare's WAF blocks visitors outside Australia.** That includes Google's Play reviewers
-  and its URL checks for `/privacy` and `/delete-account`; see
-  [play-store-android-auto.md](play-store-android-auto.md#things-that-will-bite).
 
 - **No backups.** There is no cron entry for `infra/scripts/backup.sh`, so the database (accounts,
   trips, feedback) exists only on this VM. Set one up as in
