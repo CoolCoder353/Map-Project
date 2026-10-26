@@ -43,7 +43,10 @@ The whole gate, about 5 minutes (Playwright and the Android Auto tests take most
 | `pnpm test:e2e` | Playwright against a real stack it starts itself: `apps/web/e2e` |
 
 Run the Kotlin tests as `CI=true pnpm test:android`: without `CI=true`, pnpm stops at a
-node_modules prompt after the first run. Don't run Jest, Vitest or pnpm while it runs, because it
+node_modules prompt after the first run. Run one class with
+`CI=true pnpm test:android -- --tests '*HomeScreenTest'` (a filter that matches nothing fails). The
+install and prebuild only repeat when `pnpm-lock.yaml`, `apps/mobile/app.json` or the car module's
+`build.gradle` changed since the last run (`apps/mobile/android/.prepare-stamp`). Don't run Jest, Vitest or pnpm while it runs, because it
 swaps node_modules and the other runs fail for no reason. `pnpm check` runs it last.
 
 Run one file: `npx vitest run apps/web/test/directions.test.tsx`, or
