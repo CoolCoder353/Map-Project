@@ -1,6 +1,6 @@
 # Deploying to a small server
 
-For a server too small to build images or map data itself: about 2 GB RAM and 10 GB disk, behind a proxy that terminates HTTPS. The live example is `maps.paulsjones.com` (host `maps`), serving **Queensland only**.
+For a server too small to build images or map data itself: about 2 GB RAM and 10 GB disk, behind a proxy that terminates HTTPS. The live example is `maps.coolcodertech.com` (host `maps`, Proxmox CT 112), serving **Queensland only**. HTTPS ends at Cloudflare, and a Cloudflare Tunnel (`cloudflared`, running on the CT itself) brings requests to Caddy on port 8080. Until 2026-10-26 it was `maps.paulsjones.com`, through an nginx proxy at 192.168.50.34; that path stays up until everyone has an APK built for the new address (see [Open items](#open-items)).
 
 Everything heavy happens on a bigger machine: Docker images, the OSM import (graph, tiles, places). `infra/scripts/deploy-small.sh` streams the results over SSH.
 
@@ -27,7 +27,7 @@ Disk: about 2.2 GB of images, 0.6 GB of map data (Queensland graph 355 MB, tiles
 `infra/.env` on the server (created with generated secrets; readable by root only):
 
 ```
-PUBLIC_URL=https://maps.paulsjones.com
+PUBLIC_URL=https://maps.coolcodertech.com
 SITE_ADDRESS=http://:8080
 HTTP_PORT=8080
 ACME_EMAIL=admin@localhost          # unused behind the proxy
@@ -115,8 +115,8 @@ release that changes the API's shape — the coverage switch from hexagons to ro
 the new APK, because an older build reads fields that no longer exist.
 
 ```bash
-EXPO_PUBLIC_API_URL=https://maps.paulsjones.com infra/scripts/build-apk.sh
-VERIFY_REGION=qld API_URL=https://maps.paulsjones.com EMAIL=… PASSWORD=… pnpm verify:mobile
+EXPO_PUBLIC_API_URL=https://maps.coolcodertech.com infra/scripts/build-apk.sh
+VERIFY_REGION=qld API_URL=https://maps.coolcodertech.com EMAIL=… PASSWORD=… pnpm verify:mobile
 ```
 
 The address is baked into the APK at build time and is what the app talks to, so pass the real
@@ -127,16 +127,18 @@ checks before a build, and how to test the file before sharing it, are in
 
 ## What is deployed now
 
-Queensland (OSM 2026-09-16), 892,695 places, on a 2 GB / 14 GB VM: about 1.5 GB RAM and 5.6 GB disk in use. Code from 2026-10-08 (`330316f`: the 5–7 October feedback fixes; migration 008, saved places), deployed with `deploy-small.sh images` and `git pull` on the server. Checked read-only against the live graph: a new route from Ironbark Street heading north (the dead end of the 5 October reroute loop) starts "Turn around when you can", and the Boundary Road roundabout's exit 1 carries its angle (154°); `/api/health` reports database and routing up and `/api/saved-places` asks for a sign-in. `verify:stack` and `verify:mobile` were not run (they need an admin and a throwaway account's passwords). Before that, code from 2026-10-04 (`84f250e`: the public contact WeaponryAndResourcesGame@gmail.com on `/privacy` and `/delete-account`), deployed through a git bundle; checked that both pages show the new address and `/api/health` reports database and routing up. `verify:stack` and `verify:mobile` were not run for this deploy, which changed only the web pages. Before that, code from 2026-10-01 (the 28-29 September feedback fixes: one trip per drive, every stretch of a road kept, roundabout exits, reroutes that start the way you're going, addresses found in their suburb; migration 007), deployed through a git bundle and checked read-only against the live graph and places: a U-turn round the Waterloo Street roundabout reads "exit 4" wherever a detour's stop lands on it, a reroute heading north carries on to the roundabout instead of turning back, and contact-style addresses resolve in the named suburb. The reporter's 14 duplicate trips were soft-deleted and coverage rebuilt for every user; a database dump from before is at `/root/wayfinder-before-2026-10-01-fixes.sql.gz` (all but `places`). Before that, code from 2026-09-28 (explore without U-turns, speed limits on routes), checked by running the deployed routing against the live graph and places, read-only: detours on four Brisbane-area trips with no U-turns, and car loops offered from Cleveland, Carindale and Toowoomba at 20, 30 and 60 minutes, except Toowoomba at 30 (no loop there fits the time). Caddy sees the proxy at 192.168.50.34 and takes the forwarded client IP and `https` from it.
+On 2026-10-26 the public address moved from `maps.paulsjones.com` to `maps.coolcodertech.com` (a Cloudflare Tunnel in place of the nginx proxy and router port 443). The server, its database and its map data did not move: both addresses reach the same containers, so nothing was copied. `PUBLIC_URL` in `infra/.env` is the new address, so CORS allows only the web app there, and tile and style URLs point there. A full database dump from before the docs and app changed is at `/root/wayfinder-2026-10-26-host-migration.sql.gz` (3 users, 206 trips, 33 feedback items; the newest trip is from 2026-10-25). Checked: `/api/health`, `/privacy` and `/delete-account` answer on both addresses. `verify:stack` and `verify:mobile` were not run against the new address (they need an admin and a throwaway account's passwords).
+
+Queensland (OSM 2026-09-16), 892,695 places, on a 2 GB / 14 GB VM: about 1.5 GB RAM and 5.6 GB disk in use. Code from 2026-10-08 (`330316f`: the 5–7 October feedback fixes; migration 008, saved places), deployed with `deploy-small.sh images` and `git pull` on the server. Checked read-only against the live graph: a new route from Ironbark Street heading north (the dead end of the 5 October reroute loop) starts "Turn around when you can", and the Boundary Road roundabout's exit 1 carries its angle (154°); `/api/health` reports database and routing up and `/api/saved-places` asks for a sign-in. `verify:stack` and `verify:mobile` were not run (they need an admin and a throwaway account's passwords). Before that, code from 2026-10-04 (`84f250e`: the public contact WeaponryAndResourcesGame@gmail.com on `/privacy` and `/delete-account`), deployed through a git bundle; checked that both pages show the new address and `/api/health` reports database and routing up. `verify:stack` and `verify:mobile` were not run for this deploy, which changed only the web pages. Before that, code from 2026-10-01 (the 28-29 September feedback fixes: one trip per drive, every stretch of a road kept, roundabout exits, reroutes that start the way you're going, addresses found in their suburb; migration 007), deployed through a git bundle and checked read-only against the live graph and places: a U-turn round the Waterloo Street roundabout reads "exit 4" wherever a detour's stop lands on it, a reroute heading north carries on to the roundabout instead of turning back, and contact-style addresses resolve in the named suburb. The reporter's 14 duplicate trips were soft-deleted and coverage rebuilt for every user; a database dump from before is at `/root/wayfinder-before-2026-10-01-fixes.sql.gz` (all but `places`). Before that, code from 2026-09-28 (explore without U-turns, speed limits on routes), checked by running the deployed routing against the live graph and places, read-only: detours on four Brisbane-area trips with no U-turns, and car loops offered from Cleveland, Carindale and Toowoomba at 20, 30 and 60 minutes, except Toowoomba at 30 (no loop there fits the time). Caddy sees `cloudflared` on the CT, which reaches the published port through the Docker bridge (172.18.0.1, a private address), and takes the forwarded client IP (`X-Forwarded-For`, the same as `Cf-Connecting-Ip`) and `https` from it. Requests still arriving through the old host come from the nginx proxy at 192.168.50.34.
 
 ## Checking it
 
 ```bash
-VERIFY_REGION=qld API_URL=https://maps.paulsjones.com ADMIN_EMAIL=… ADMIN_PASSWORD=… pnpm verify:stack
+VERIFY_REGION=qld API_URL=https://maps.coolcodertech.com ADMIN_EMAIL=… ADMIN_PASSWORD=… pnpm verify:stack
 ```
 
 ```bash
-VERIFY_REGION=qld API_URL=https://maps.paulsjones.com EMAIL=… PASSWORD=… pnpm verify:mobile
+VERIFY_REGION=qld API_URL=https://maps.coolcodertech.com EMAIL=… PASSWORD=… pnpm verify:mobile
 ```
 
 `VERIFY_REGION=qld` matters: the default tests Canberra, which this server has no map for. `verify:mobile` records a short trip and a feedback item, so use a throwaway account and delete it afterwards.
@@ -146,6 +148,15 @@ Live on 2026-09-23 against `https://maps.paulsjones.com`: all 19 `verify:stack` 
 ## Open items
 
 Found on the live server and not yet dealt with (checked 2026-09-27):
+
+- **The old address is still up** (2026-10-26). `maps.paulsjones.com` runs through the nginx
+  proxy (NPM proxy host 8), the AdGuard rewrite, cPanel DDNS and router port 443. Keep it until
+  everyone has an APK built for `maps.coolcodertech.com`: older builds talk to it. After that,
+  retire it step by step outside this repo, and here publish port 8080 on `127.0.0.1` only
+  (`cloudflared` is on the same host) so nothing on the LAN bypasses the tunnel.
+- **Cloudflare's WAF blocks visitors outside Australia.** That includes Google's Play reviewers
+  and its URL checks for `/privacy` and `/delete-account`; see
+  [play-store-android-auto.md](play-store-android-auto.md#things-that-will-bite).
 
 - **No backups.** There is no cron entry for `infra/scripts/backup.sh`, so the database (accounts,
   trips, feedback) exists only on this VM. Set one up as in

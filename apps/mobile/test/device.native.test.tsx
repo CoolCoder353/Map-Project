@@ -71,6 +71,15 @@ describe('server address', () => {
     mockStore.set('wf.serverUrl', 'maps.example.test');
     expect(await getServerUrl()).toBe('https://maps.example.test');
   });
+
+  it('moves an address saved before the server moved to its new one, keeping the sign-in', async () => {
+    mockStore.set('wf.serverUrl', 'https://maps.paulsjones.com');
+    mockStore.set('wf.refreshToken', 'saved');
+    expect(await getServerUrl()).toBe('https://maps.coolcodertech.com');
+    expect(mockStore.get('wf.serverUrl')).toBe('https://maps.coolcodertech.com');
+    expect(mockStore.get('wf.refreshToken')).toBe('saved');
+    expect(await setServerUrl('maps.paulsjones.com/')).toBe('https://maps.coolcodertech.com');
+  });
 });
 
 describe('contacts search', () => {

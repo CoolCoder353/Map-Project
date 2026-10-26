@@ -36,7 +36,7 @@ that file. You need Docker and nothing else: the Android SDK lives in a build im
 For the live server:
 
 ```bash
-EXPO_PUBLIC_API_URL=https://maps.paulsjones.com infra/scripts/build-apk.sh
+EXPO_PUBLIC_API_URL=https://maps.coolcodertech.com infra/scripts/build-apk.sh
 ```
 
 For another deployment, use the address its people will use, for example
@@ -56,7 +56,7 @@ What happens:
 - It refuses documentation addresses (`example.com`, `your-server`), refuses `http://` unless
   `ALLOW_HTTP=1`, and reads the address back out of the finished APK. The last line confirms it:
   ```
-  APK: /…/dist/wayfinder.apk (server: https://maps.paulsjones.com)
+  APK: /…/dist/wayfinder.apk (server: https://maps.coolcodertech.com)
   Bundle for Google Play: /…/dist/wayfinder.aab
   ```
 
@@ -78,7 +78,7 @@ Every build setting is listed in [configuration.md](configuration.md#android-bui
 2. **The server answers everything the app asks for**, checked against the app's schemas. Use a
    throwaway account: it records five points and one feedback item.
    ```bash
-   VERIFY_REGION=qld API_URL=https://maps.paulsjones.com EMAIL=… PASSWORD=… pnpm verify:mobile
+   VERIFY_REGION=qld API_URL=https://maps.coolcodertech.com EMAIL=… PASSWORD=… pnpm verify:mobile
    ```
 
 To try a change end to end without touching real data, build against the local stack instead.

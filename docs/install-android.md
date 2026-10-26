@@ -4,7 +4,7 @@ Wayfinder isn't in the Play Store, so you install it from a file (an APK). This 
 
 **You need:** an Android phone on **Android 8.0 or newer**, about **400 MB** free, and an **invite code** from whoever runs the server.
 
-The app is set up for **https://maps.paulsjones.com** and covers **Queensland**.
+The app is set up for **https://maps.coolcodertech.com** and covers **Queensland**.
 
 ## 1. Get the file onto your phone
 
@@ -25,7 +25,7 @@ Android 8 and 9 put the same setting under **Settings → Security → Unknown s
 
 ## 3. Sign in
 
-Open **Wayfinder**. The **Server** box is already filled in with `https://maps.paulsjones.com` — leave it as it is.
+Open **Wayfinder**. The **Server** box is already filled in with `https://maps.coolcodertech.com` — leave it as it is.
 
 - **Have an account?** Enter your email and password and tap **Sign in**.
 - **New?** Tap **Create an account with an invite code**, paste the code, and pick a password.
@@ -88,8 +88,9 @@ If you see **"App not installed"** while updating, the new file was signed with 
 **"App not installed" on a first install** — usually not enough free space, or a part-downloaded file. Free some space and copy the file again.
 
 **"Can't reach …"** — the message names the address the app tried. If it isn't
-`maps.paulsjones.com`, the app is pointed at the wrong server: sign out, correct the **Server**
-box on the sign-in screen, and sign in again. (Signed in, the address is shown at the top of
+`maps.coolcodertech.com`, the app is pointed at the wrong server: sign out, correct the **Server**
+box on the sign-in screen, and sign in again. (The server used to be `maps.paulsjones.com`; an
+up-to-date app moves a phone from that address by itself.) (Signed in, the address is shown at the top of
 **Settings**.) If the address is right, check the phone has internet.
 
 **"No server address set"** — the file you installed was built without a server address. Ask for

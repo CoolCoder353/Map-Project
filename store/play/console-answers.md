@@ -5,6 +5,9 @@ What to type into each Play Console form for **Wayfinder** (`app.wayfinder.maps`
 submitting. The plan and status are in
 [docs/play-store-android-auto.md](../../docs/play-store-android-auto.md).
 
+The server moved to `https://maps.coolcodertech.com` on 2026-10-26; what to change in Play Console
+for that is in [console-changes-2026-10-26.md](console-changes-2026-10-26.md).
+
 ## Store listing
 
 - **App name, short and full description:** in [listing/en-AU/](listing/en-AU/); `pnpm play listing`
@@ -12,7 +15,7 @@ submitting. The plan and status are in
 - **Category:** Maps & Navigation. **Tags:** Navigation, Maps.
 - **Contact email:** WeaponryAndResourcesGame@gmail.com (Play shows it publicly; the privacy page uses it too).
   Sent with the website by `pnpm play listing` from [details.json](details.json).
-- **Privacy policy URL:** `https://maps.paulsjones.com/privacy`
+- **Privacy policy URL:** `https://maps.coolcodertech.com/privacy`
 - **Graphics:** `store/play/icon-512.png`, `store/play/feature-graphic.png`. Phone screenshots
   in `store/play/screenshots/phone/` (five). Android Auto screenshots are still to take ([README.md](README.md)).
 
@@ -63,7 +66,7 @@ Expected rating: Everyone / PEGI 3.
 ## Data safety
 
 Data is encrypted in transit: **Yes**. Users can request deletion: **Yes** (in the app, and at
-`https://maps.paulsjones.com/delete-account`). Data is shared with third parties: **No**.
+`https://maps.coolcodertech.com/delete-account`). Data is shared with third parties: **No**.
 
 | Data type                       | Collected      | Optional?                                              | Purpose                            | Notes                                                                                                                                                  |
 | ------------------------------- | -------------- | ------------------------------------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |

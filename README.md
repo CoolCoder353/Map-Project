@@ -13,7 +13,7 @@ is the OpenStreetMap extract.
 - **Server** (Node): Fastify API, a job worker, PostgreSQL, self-hosted GraphHopper, PMTiles
   vector tiles.
 
-Live at **https://maps.paulsjones.com** (Queensland only, invite-only).
+Live at **https://maps.coolcodertech.com** (Queensland only, invite-only).
 
 ## Documentation
 

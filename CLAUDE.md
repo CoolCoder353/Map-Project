@@ -43,7 +43,7 @@ routing engine, live checks).
 | Building, checking and sharing the Android APK           | [docs/build-android.md](docs/build-android.md)                                         |
 | Getting onto Google Play and through Android Auto review | [docs/play-store-android-auto.md](docs/play-store-android-auto.md)                     |
 | What falls short of Google's Android quality guidelines  | [docs/quality-gaps.md](docs/quality-gaps.md)                                           |
-| The live server (`maps.paulsjones.com`, Queensland)      | [docs/deploy-small-server.md](docs/deploy-small-server.md)                             |
+| The live server (`maps.coolcodertech.com`, Queensland)      | [docs/deploy-small-server.md](docs/deploy-small-server.md)                             |
 | What's verified and what's open                          | [docs/verification.md](docs/verification.md)                                           |
 | Why things are the way they are                          | [docs/adr](docs/adr)                                                                   |
 | Web look and feel                                        | [apps/web/PRODUCT.md](apps/web/PRODUCT.md), [apps/web/DESIGN.md](apps/web/DESIGN.md)   |

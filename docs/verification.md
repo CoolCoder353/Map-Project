@@ -23,8 +23,8 @@ What has been checked, how to repeat it, and what is still open. Update this whe
 | Web production build | `pnpm --filter @wayfinder/web build` | builds; smoke-tested under `vite preview` |
 | Design detector | `impeccable detect --json src` (in `apps/web`) | no findings |
 | Docker images | `cd infra && docker compose build` | api, worker, web, graphhopper all build |
-| Deployment smoke test | `pnpm verify:stack` | 19/19 against `maps.paulsjones.com` (Queensland), 2026-09-23 |
-| App against server | `pnpm verify:mobile` | 15/15 against `maps.paulsjones.com`, 2026-09-23: every endpoint the Android app calls, validated against the app's schemas |
+| Deployment smoke test | `pnpm verify:stack` | 19/19 against the live server (then `maps.paulsjones.com`, Queensland), 2026-09-23; not yet run at `maps.coolcodertech.com` |
+| App against server | `pnpm verify:mobile` | 15/15 against the live server (then `maps.paulsjones.com`), 2026-09-23; not yet run at `maps.coolcodertech.com`: every endpoint the Android app calls, validated against the app's schemas |
 | APK points at the right server | `infra/scripts/build-apk.sh` | checked on every build: the address is read back out of the finished APK |
 | Explore performance | `pnpm bench:explore 50000 20` | explore p95 1.05 s, round trip p95 0.19 s (targets 2 s / 3 s) |
 
@@ -192,7 +192,8 @@ emulators are enough.
 - **Android on a device.** Install the APK (`infra/scripts/build-apk.sh`) and check: background tracking survives the app being killed and Doze; a real walk appears as new coverage on the web; turn-by-turn with a deliberate wrong turn triggers a reroute; the offline queue uploads when connectivity returns.
 - **The native map itself.** Every Android screen is tested in Jest with the map faked, and the map component with MapLibre Native mocked; MapLibre Native on a device is covered only by device testing.
 - **Restore drill.** `infra/scripts/backup.sh` and `restore.sh` are written but a full restore has not been rehearsed on this machine.
-- **The live server has no backups yet.** Nothing is scheduled on `maps.paulsjones.com`; see [deploy-small-server.md](deploy-small-server.md#open-items).
+- **The live server's new address, `maps.coolcodertech.com` (2026-10-26).** Same server and data, now through a Cloudflare Tunnel. Checked: `/api/health` (database and routing up), `/privacy` and `/delete-account` answer there; Caddy logs the real client address. App 0.5.1 (versionCode 7) moves an address saved by an older build to the new one, keeping the sign-in (Jest). Still to do: `verify:stack` and `verify:mobile` against the new address, an APK and bundle built for it installed over 0.5.0, and the Play Console URLs ([store/play/console-changes-2026-10-26.md](../store/play/console-changes-2026-10-26.md)).
+- **The live server has no backups yet.** Nothing is scheduled on `maps.coolcodertech.com`; see [deploy-small-server.md](deploy-small-server.md#open-items).
 - **"The app crashes when I start the map"** (a user report, 2026-09-22) is unconfirmed. The likely causes were closed in code, but it has not been reproduced on a device; a logcat from an affected phone would settle it:
   ```bash
   adb logcat -c && adb logcat | grep -iE "wayfinder|AndroidRuntime|maplibre"

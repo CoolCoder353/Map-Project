@@ -172,7 +172,7 @@ Each feature a person can use, and where its tests are. Paths are relative to th
 
 | Feature | Unit / integration | Web components | Android | End to end |
 |---|---|---|---|---|
-| Sign in, register with an invite, reset a password, sign out | `packages/core/test/integration/auth.test.ts`, `apps/api/test/integration/auth-api.test.ts` | `auth-pages.test.tsx`, `app.test.tsx` (guards, deep links, sign-out) | `sign-in.screen.test.tsx`, `screens.screen.test.tsx` (Register, start-up), `device.native.test.tsx` (session) | `account.spec.ts`, `admin.spec.ts` |
+| Sign in, register with an invite, reset a password, sign out | `packages/core/test/integration/auth.test.ts`, `apps/api/test/integration/auth-api.test.ts` | `auth-pages.test.tsx`, `app.test.tsx` (guards, deep links, sign-out) | `sign-in.screen.test.tsx`, `screens.screen.test.tsx` (Register, start-up), `device.native.test.tsx` (session; server address, including one saved before the server moved) | `account.spec.ts`, `admin.spec.ts` |
 | Fastest and explore routes, including no U-turns on driving detours and one exit number per roundabout | `routing.test.ts`, `novelty.test.ts`, `graphhopper.test.ts`, `app-api.test.ts`, `trips-places-api.test.ts` | `directions.test.tsx` | `plan.screen.test.tsx`, `route-card.screen.test.tsx` | `planner.spec.ts` |
 | Round trips | `routing.test.ts`, `novelty.test.ts`, `app-api.test.ts` | `panels.test.tsx` | `plan.screen.test.tsx` | `planner.spec.ts` |
 | Discover (a place found opens Plan with directions there) | `routing.test.ts`, `app-api.test.ts` | `panels.test.tsx` | `screens.screen.test.tsx`, `plan.screen.test.tsx` | `planner.spec.ts` |
