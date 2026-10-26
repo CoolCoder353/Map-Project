@@ -156,6 +156,44 @@ describe('saved places over HTTP', () => {
   });
 });
 
+describe('saved places and search together', () => {
+  const place = (id: string, name: string, lon: number, lat: number) => ({ id, name, kind: 'cafe', category: null, description: 'Cafe', lon, lat, importance: 0.3, suburb: 'Thornlands', state: 'QLD' });
+  const save = (headers: { authorization: string }, name: string, location: number[]) => ta.app.inject({ method: 'POST', url: '/api/saved-places', headers, payload: { name, location } });
+
+  it('doesn’t show the place a saved place was saved from a second time', async () => {
+    const u = await makeUser(ta.t.db, 'dedupe@example.com');
+    const mine = { authorization: await tokenFor(ta, u, 'user') };
+    await placeService.upsertPlaces(ta.t.db, [place('d1', 'Quillon Cafe', 153.5, -27.9), place('d2', 'Quillan Depot', 153.6, -27.95)]);
+    await save(mine, 'Quillbody', [153.5, -27.9]);
+    const names = (await ta.app.inject({ method: 'GET', url: '/api/search?q=quill', headers: mine })).json().results.map((r: { name: string }) => r.name);
+    // The cafe is the place that was saved, about 0 m away; the depot is somewhere else.
+    expect(names).toEqual(['Quillbody', 'Quillan Depot']);
+  });
+
+  it('leaves room for the real results however many saved places match', async () => {
+    const u = await makeUser(ta.t.db, 'roomy@example.com');
+    const mine = { authorization: await tokenFor(ta, u, 'user') };
+    await placeService.upsertPlaces(ta.t.db, [place('r1', 'Roomhouse Cafe', 153.7, -27.1), place('r2', 'Roomside Cafe', 153.71, -27.1)]);
+    for (const [i, n] of ['Room A', 'Room B', 'Room C', 'Room D'].entries()) await save(mine, n, [152 + i, -26]);
+    const results = (await ta.app.inject({ method: 'GET', url: '/api/search?q=room&limit=4', headers: mine })).json().results as { name: string; kind: string }[];
+    expect(results).toHaveLength(4);
+    // At most half are the person's own, the rest are real places.
+    expect(results.filter((r) => r.kind === 'saved')).toHaveLength(2);
+    expect(results.map((r) => r.name)).toEqual(expect.arrayContaining(['Roomhouse Cafe', 'Roomside Cafe']));
+    // Even a limit of one still leads with a saved place.
+    expect((await ta.app.inject({ method: 'GET', url: '/api/search?q=room&limit=1', headers: mine })).json().results.map((r: { name: string }) => r.name)).toEqual(['Room A']);
+  });
+
+  it('can’t be pushed past the limit by saving at the same moment', async () => {
+    const u = await makeUser(ta.t.db, 'racer@example.com');
+    const mine = { authorization: await tokenFor(ta, u, 'user') };
+    for (let i = 0; i < MAX_SAVED_PLACES - 1; i++) await savedPlaceService.saveSavedPlace(ta.t.db, u.id, { name: `Spot ${i}`, description: '', location: [153, -27] });
+    const answers = await Promise.all(['Race A', 'Race B', 'Race C', 'Race D'].map((n) => save(mine, n, [153, -27])));
+    expect(answers.map((r) => r.statusCode).sort()).toEqual([200, 409, 409, 409]);
+    expect((await ta.app.inject({ method: 'GET', url: '/api/saved-places', headers: mine })).json().items).toHaveLength(MAX_SAVED_PLACES);
+  });
+});
+
 describe('explore budget', () => {
   it('accepts a request without a budget, falling back to the saved one', async () => {
     await ta.t.db.query(`UPDATE users SET settings = settings || '{"exploreBudgetMin": 40}' WHERE email = 'trips@example.com'`);

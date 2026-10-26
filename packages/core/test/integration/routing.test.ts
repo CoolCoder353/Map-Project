@@ -109,7 +109,8 @@ describe('routing service (fake GraphHopper)', () => {
     // Left (about 90°) and right (about 270°); none where GraphHopper gave none or nonsense.
     expect(route.instructions.map((i) => i.exitAngleDeg)).toEqual([86, 268, undefined, undefined, undefined]);
 
-    // A roundabout split by a hidden stop: the half-way angle would be wrong, so there is none.
+    // A roundabout split by a hidden stop: each half has the angle of its own part, so the exit is
+    // the two together (2 + 1.4 radians, about 195°), and with only one half's angle there is none.
     path.instructions = [
       ins(6, 'Enter roundabout', [0, 5], { exit_number: 3, exited: false, turn_angle: 2 }),
       ins(5, 'Waypoint 1', [5, 5]),
@@ -118,7 +119,15 @@ describe('routing service (fake GraphHopper)', () => {
     ];
     const joined = routing.toRoute(path, { kind: 'explore', mode: 'car', novelty: { totalKm: 8, newKm: 8, noveltyPct: 100 } as never, extraDurationS: 0, viaPoints: [] });
     expect(joined.instructions[0]).toMatchObject({ exitNumber: 4 });
-    expect(joined.instructions[0]!.exitAngleDeg).toBeUndefined();
+    expect(joined.instructions[0]!.exitAngleDeg).toBe(195);
+    path.instructions = [
+      ins(6, 'Enter roundabout', [0, 5], { exit_number: 3, exited: false, turn_angle: 2 }),
+      ins(5, 'Waypoint 1', [5, 5]),
+      ins(6, 'At roundabout, take exit 1', [5, 9], { exit_number: 1, exited: true }),
+      ins(4, 'Arrive at destination', [9, 9]),
+    ];
+    const oneHalf = routing.toRoute(path, { kind: 'explore', mode: 'car', novelty: { totalKm: 8, newKm: 8, noveltyPct: 100 } as never, extraDurationS: 0, viaPoints: [] });
+    expect(oneHalf.instructions[0]!.exitAngleDeg).toBeUndefined();
   });
 
   it('gives a roundabout one exit number even when a hidden stop on the detour lies on it', async () => {

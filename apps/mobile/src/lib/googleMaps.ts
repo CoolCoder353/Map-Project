@@ -8,6 +8,6 @@ import type { ChosenPlace } from '../ui/PlaceSearch';
 export function googleMapsUrl(from: ChosenPlace | null, to: ChosenPlace, mode: Mode): string {
   // By hand: React Native's URLSearchParams can't set values.
   const at = (p: ChosenPlace) => encodeURIComponent(`${p.location[1]},${p.location[0]}`);
-  const origin = from && from.name !== 'Your location' ? `&origin=${at(from)}` : '';
+  const origin = from && !from.current ? `&origin=${at(from)}` : '';
   return `https://www.google.com/maps/dir/?api=1${origin}&destination=${at(to)}&travelmode=${mode === 'foot' ? 'walking' : 'driving'}`;
 }

@@ -38,7 +38,7 @@ export default function Plan() {
   useEffect(() => {
     if (!here || filledStart.current || from) return;
     filledStart.current = true;
-    setFrom({ name: 'Your location', description: '', location: here });
+    setFrom({ name: 'Your location', description: '', location: here, current: true });
   }, [here, from]);
   const [to, setTo] = useState<ChosenPlace | null>(null);
   const [budget, setBudget] = useState(user?.settings.exploreBudgetMin ?? 15);

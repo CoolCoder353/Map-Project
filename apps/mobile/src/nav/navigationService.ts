@@ -31,6 +31,10 @@ export const TURNAROUND_GRACE_MS = 60_000;
 export const FIRST_FIX_WAIT_MS = 30_000;
 /** How far apart points of the road already driven are kept, in metres. */
 const TRAVELLED_STEP_M = 10;
+/** The most points of the road driven kept; past it every other point goes and the step doubles. */
+export const TRAVELLED_MAX_POINTS = 1500;
+/** Once this far along a turn-around route the driver has turned, and normal rerouting resumes. */
+const TURNAROUND_DONE_M = 50;
 const NO_FIX_YET = 'Still finding where you are. When it’s safe, check that location is on for Wayfinder on your phone.';
 /** Below this the phone's compass heading is noise; the direction comes from movement instead. */
 const MOVING_MPS = 2;
@@ -153,6 +157,7 @@ export function createNavigationService(): NavigationService {
   let arrivedAt: number | null = null;
   /** When a new route that starts by turning around was given (see [TURNAROUND_GRACE_MS]). */
   let turnaroundSince: number | null = null;
+  let travelledStepM = TRAVELLED_STEP_M;
   let timers: ReturnType<typeof setTimeout>[] = [];
 
   const set = (patch: Partial<NavSnapshot>) => {
@@ -185,7 +190,9 @@ export function createNavigationService(): NavigationService {
       pendingReroute = null;
       set({ route: next, error: null });
       const first = next.instructions[0];
-      const turnaround = current.mode === 'car' && isTurnaround(first?.sign);
+      // Only a route asked for with the car's heading says "turn around when you can"; without one a
+      // U-turn is just the best way from here, and the driver may do it at once.
+      const turnaround = 'heading' in heading && isTurnaround(first?.sign);
       turnaroundSince = turnaround ? Date.now() : null;
       speak(turnaround ? `Route updated. ${first!.text}` : 'Route updated');
     } catch {
@@ -272,6 +279,7 @@ export function createNavigationService(): NavigationService {
       return; // one odd fix; the next one carries on
     }
     set({ position: here, headingDeg: fix.headingDeg ?? snap.headingDeg, speedMps, travelled: withTravelled(snap.travelled, here), state: result.state, ...firstFix });
+    if (turnaroundSince !== null && result.state.status === 'navigating' && result.state.progressM >= TURNAROUND_DONE_M) turnaroundSince = null;
     handleEvents(result.events);
     if (reroutingNow && Date.now() - reroutingSince >= REROUTE_TIMEOUT_MS) abandonReroute();
     // Still off route after a failed attempt: ask again from here, now and then.
@@ -295,10 +303,18 @@ export function createNavigationService(): NavigationService {
       .catch(() => undefined);
   }
 
-  /** The road driven so far, a point every [TRAVELLED_STEP_M] or so (the same array when it hasn't grown). */
+  /**
+   * The road driven so far, a point every [TRAVELLED_STEP_M] or so (the same array when it hasn't
+   * grown). Capped at [TRAVELLED_MAX_POINTS]: on a long drive the older road is drawn more coarsely
+   * rather than the trail growing, and being copied on every fix, without limit.
+   */
   function withTravelled(line: LngLat[], here: LngLat): LngLat[] {
     const last = line[line.length - 1];
-    return last && haversineM(last, here) < TRAVELLED_STEP_M ? line : [...line, here];
+    if (last && haversineM(last, here) < travelledStepM) return line;
+    const next = [...line, here];
+    if (next.length <= TRAVELLED_MAX_POINTS) return next;
+    travelledStepM *= 2;
+    return next.filter((_, i) => i % 2 === 0 || i === next.length - 1);
   }
 
   function followHeading(fix: { lon: number; lat: number; speedMps?: number | null; headingDeg?: number | null }) {
@@ -356,6 +372,7 @@ export function createNavigationService(): NavigationService {
     lastServiceFixTs = -Infinity;
     travelHeading = null;
     movedFrom = null;
+    travelledStepM = TRAVELLED_STEP_M;
     const gen = generation;
     set({ ...IDLE, active: true, route, destinationName: opts.destinationName ?? null });
     // A test drive is fed its fixes by the caller and saves nothing.

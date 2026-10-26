@@ -221,7 +221,15 @@ where you are…" rather than spinning; after 30 s without one, why.
 **Report.** The driving screen's Report sends a bug report from the phone with one tap
 (`report` in `src/car/handlers.ts`): what the car showed, the speed limit and speed, the heading and
 where, as a feedback report with the map position. Typing or speaking can't be done while driving;
-the driver adds details later from the phone.
+the driver adds details later from the phone. It sends one a minute at most (the hour's five are
+shared with the phone's own form) and says so when an admin has feedback switched off or the hour's
+limit is used up.
+
+**A new route that starts by turning round.** Only a route asked for with the car's heading says
+"Turn around when you can"; the phone then waits a minute before asking again, until the driver is
+50 m along the new route or back on it. A U-turn on a route asked for without a heading is just the
+best way from there, so it isn't waited on. The road driven is kept to 1,500 points: past that it
+is drawn more coarsely further back, rather than growing for the whole trip.
 
 Templates are the ones every Android Auto version has (`minCarApiLevel` 1). Not yet: cars with
 Android built in (Android Automotive).

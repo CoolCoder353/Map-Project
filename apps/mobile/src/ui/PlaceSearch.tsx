@@ -15,6 +15,8 @@ export interface ChosenPlace {
   name: string;
   description: string;
   location: LngLat;
+  /** The phone's own position, taken when it was chosen, rather than a place picked by name. */
+  current?: boolean;
 }
 
 /** What a chosen place keeps: its type and suburb (distance depends on where you start). */
@@ -101,7 +103,7 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
         // none cached; ask for a fresh one
       }
       pos ??= await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      choose({ name: 'Your location', description: '', location: [pos.coords.longitude, pos.coords.latitude] });
+      choose({ name: 'Your location', description: '', location: [pos.coords.longitude, pos.coords.latitude], current: true });
     } catch {
       setError('Couldn’t find where you are. Check that location is switched on, or search for a place instead.');
     } finally {

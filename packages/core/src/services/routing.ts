@@ -112,9 +112,13 @@ export function joinSplitRoundabouts(instructions: readonly GhInstruction[]): Gh
     // The stop where the roundabout is left: the exit counted on the way in is the one taken.
     const exit = (enter.exit_number ?? 0) + (sameRoundabout ? (after.exit_number ?? 0) : 0);
     const parts = sameRoundabout ? [enter, via, after] : [enter, via];
-    const { turn_angle: _partial, ...entered } = enter; // the angle of half the roundabout only
+    // Each half has the angle of its own part of the roundabout; the exit is where the two end.
+    // Without the second half there is only half the angle, which would draw the wrong exit.
+    const { turn_angle: _partial, ...entered } = enter;
+    const angle = sameRoundabout && enter.turn_angle !== undefined && after.turn_angle !== undefined ? Math.abs(enter.turn_angle) + Math.abs(after.turn_angle) : undefined;
     out.push({
       ...entered,
+      ...(angle !== undefined ? { turn_angle: angle } : {}),
       text: roundaboutText(exit, after.street_name || undefined),
       exit_number: exit,
       exited: true,

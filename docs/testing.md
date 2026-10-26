@@ -176,7 +176,7 @@ Each feature a person can use, and where its tests are. Paths are relative to th
 | Fastest and explore routes, including no U-turns on driving detours and one exit number per roundabout | `routing.test.ts`, `novelty.test.ts`, `graphhopper.test.ts`, `app-api.test.ts`, `trips-places-api.test.ts` | `directions.test.tsx` | `plan.screen.test.tsx`, `route-card.screen.test.tsx` | `planner.spec.ts` |
 | Round trips | `routing.test.ts`, `novelty.test.ts`, `app-api.test.ts` | `panels.test.tsx` | `plan.screen.test.tsx` | `planner.spec.ts` |
 | Discover (a place found opens Plan with directions there) | `routing.test.ts`, `app-api.test.ts` | `panels.test.tsx` | `screens.screen.test.tsx`, `plan.screen.test.tsx` | `planner.spec.ts` |
-| Saved places ("Home", "Work"): save from Plan, found first in search, listed and removed in Settings, downloaded with your data | `trips-places-api.test.ts` | — | `plan.screen.test.tsx`, `settings.screen.test.tsx` | — |
+| Saved places ("Home", "Work"): save from Plan, found first in search, listed and removed in Settings, downloaded with your data | `trips-places-api.test.ts` | — | `plan.screen.test.tsx`, `settings.screen.test.tsx`, `googleMaps.test.ts` (Open in Google Maps start) | — |
 | Open the trip in Google Maps | — | — | `plan.screen.test.tsx` | — |
 | Place search (including postal addresses, "12 Smith St, Suburb QLD 4000") and reverse lookup | `search.test.ts`, `places-context.test.ts`, `hours.test.ts`, `osm-places.test.ts`, `boundaries.test.ts`, `trips-places-api.test.ts` | `search-field.test.tsx`, `map-shell.test.tsx` | `contacts.screen.test.tsx` | `feedback.spec.ts` (suggestions) |
 | Contacts search (Android) | — | — | `contacts.screen.test.tsx`, `device.native.test.tsx`, `settings.screen.test.tsx` | — |

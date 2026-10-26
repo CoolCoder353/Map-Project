@@ -103,7 +103,7 @@ describe('Your location', () => {
     jest.mocked(Location.getLastKnownPositionAsync).mockResolvedValue({ coords: { longitude: 153, latitude: -27.5 } } as never);
     const onChange = await open();
     await fireEvent.press(screen.getByText('Your location'));
-    expect(onChange).toHaveBeenCalledWith({ name: 'Your location', description: '', location: [153, -27.5] });
+    expect(onChange).toHaveBeenCalledWith({ name: 'Your location', description: '', location: [153, -27.5], current: true });
     expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled();
   });
 

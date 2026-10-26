@@ -50,7 +50,7 @@ exactly what each field is.
 
 | Method | Path | Schema / notes |
 |---|---|---|
-| GET | `/api/search` | `SearchQuerySchema` (`q`, optional `lon`/`lat` to rank by distance, `limit`) → `{ results: Place[] }`. Your own saved places whose name starts with `q` come first (`kind: "saved"`, id `saved:<id>`, `typeLabel` "Saved place") |
+| GET | `/api/search` | `SearchQuerySchema` (`q`, optional `lon`/`lat` to rank by distance, `limit`) → `{ results: Place[] }`. Your own saved places whose name starts with `q` come first (`kind: "saved"`, id `saved:<id>`, `typeLabel` "Saved place"): at most half of `limit`, and not repeated as the place they were saved from (a found place within 30 m of one) |
 | GET | `/api/saved-places` | Your saved places → `SavedPlaceListSchema`, by name |
 | POST | `/api/saved-places` | `SavedPlaceSaveSchema` (`name`, `description`, `location`) → the `SavedPlace`. A name already used (any capitals) moves that place. Up to 50 (`409 conflict` beyond) |
 | DELETE | `/api/saved-places/:id` | |
@@ -63,7 +63,7 @@ exactly what each field is.
 
 | Method | Path | Schema / notes |
 |---|---|---|
-| POST | `/api/routes/fastest` | `FastestRouteRequestSchema` (`from`, `to`, `mode`, `via`, optional `heading`) → one `Route`. The app sends `heading` (compass degrees) with a new route asked for mid-drive, so it starts the way the car is going. Where it can't (a dead end), the first instruction says "Turn around when you can" instead of GraphHopper's "Make a U-turn onto …". A roundabout instruction carries `exitAngleDeg`, how far round the exit is (90 left, 180 straight on, 270 right), where GraphHopper gives it |
+| POST | `/api/routes/fastest` | `FastestRouteRequestSchema` (`from`, `to`, `mode`, `via`, optional `heading`) → one `Route`. The app sends `heading` (compass degrees) with a new route asked for mid-drive, so it starts the way the car is going. Where it can't (a dead end), the first instruction says "Turn around when you can" instead of GraphHopper's "Make a U-turn onto …". A roundabout instruction carries `exitAngleDeg`, how far round the exit is (90 left, 180 straight on, 270 right), where GraphHopper gives it (for a roundabout split by a stop, the angles of its two halves added) |
 | POST | `/api/routes/explore` | `ExploreRouteRequestSchema` (`budgetMin` defaults to the person's setting) → `{ fastest, explore: Route[] }` |
 | POST | `/api/routes/roundtrip` | `RoundTripRequestSchema` (`start`, `mode`, `targetMin`) → `{ routes }` |
 | GET | `/api/discover` | `DiscoverQuerySchema` (`lon`, `lat`, `mode`, `maxMinutes`, `categories`) → `{ items }`. The slow one: several seconds on a small server |

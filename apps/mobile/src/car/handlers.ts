@@ -6,7 +6,7 @@ import Constants from 'expo-constants';
 import * as Location from 'expo-location';
 import { Platform } from 'react-native';
 import { api, hasSavedSession } from '../lib/api';
-import { isServerUrl } from '../lib/apiClient';
+import { ApiError, isServerUrl } from '../lib/apiClient';
 import { kindOf } from '../lib/categories';
 import { getServerUrl } from '../lib/server';
 import { navigation, type NavSnapshot } from '../nav/navigationService';
@@ -44,6 +44,16 @@ export const MAX_ROWS = 6;
 // Shown in the car: anything that sends the driver to the phone says to wait until it's safe (VI-1).
 const NO_LOCATION = 'Can’t tell where you are. When it’s safe, check that location is on for Wayfinder on your phone.';
 
+export const REPORT_COOLDOWN_MS = 60_000;
+export const REPORT_JUST_SENT = 'Already reported. Wait a minute before reporting again.';
+export const REPORT_LIMIT = 'Too many reports this hour. When it’s safe, use Send feedback on your phone later.';
+export const REPORT_OFF = 'Reporting is switched off for now.';
+let lastReportAt = -Infinity;
+/** For tests: forget the last report sent. */
+export const resetReportCooldown = () => {
+  lastReportAt = -Infinity;
+};
+
 /** Routes the car has been offered, so "Go" can start one by id. The newest 30 are kept. */
 const offered = new Map<string, Route>();
 function remember(r: Route) {
@@ -71,6 +81,7 @@ function toOption(r: Route, title: string, c: CopyCatalog): CarRouteOption {
 export function resetCarHandlers() {
   copyCache = null;
   offered.clear();
+  resetReportCooldown();
 }
 
 export const carHandlers: CarHandlers = {
@@ -165,21 +176,19 @@ export const carHandlers: CarHandlers = {
    * fast, for the driver to explain later. Typing or speaking a message can't be done while driving.
    */
   async report() {
-    const now = navigation.getSnapshot();
-    const position = now.position ?? (await here());
-    const body: FeedbackCreate = {
-      type: 'bug',
-      message: carReportMessage(now),
-      context: {
-        screen: now.active ? 'Android Auto: driving' : 'Android Auto',
-        platform: 'android',
-        appVersion: Constants.expoConfig?.version ?? 'unknown',
-        device: `Android ${String(Platform.Version)}${Constants.deviceName ? ` · ${Constants.deviceName}` : ''}`.slice(0, 400),
-        ...(position ? { mapView: { center: position, zoom: 17 } } : {}),
-      },
-    };
-    await api.request('api/feedback', { method: 'POST', body });
-    return {};
+    // Sends are limited to five an hour, shared with the phone's own feedback form: one tap each
+    // minute at most, so a driver tapping in frustration doesn't use them all up.
+    if (Date.now() - lastReportAt < REPORT_COOLDOWN_MS) throw new Error(REPORT_JUST_SENT);
+    // Taken now, before anything is awaited, so a second tap while this one is on its way is turned
+    // away too; given back below if nothing was sent.
+    const previous = lastReportAt;
+    lastReportAt = Date.now();
+    try {
+      return await sendReport();
+    } catch (e) {
+      lastReportAt = previous;
+      throw e;
+    }
   },
 
   async mute(params) {
@@ -187,6 +196,34 @@ export const carHandlers: CarHandlers = {
     return {};
   },
 };
+
+/** Files the report for [carHandlers.report]; the minute's wait is kept by the caller. */
+async function sendReport(): Promise<Record<string, never>> {
+  // Feedback is switched on and off by an admin; say so rather than show a failure.
+  const enabled = await api.request('api/config', { schema: PublicConfigSchema }).then((c) => c.feedbackEnabled, () => true);
+  if (!enabled) throw new Error(REPORT_OFF);
+  const now = navigation.getSnapshot();
+  const position = now.position ?? (await here());
+  const body: FeedbackCreate = {
+    type: 'bug',
+    message: carReportMessage(now),
+    context: {
+      screen: now.active ? 'Android Auto: driving' : 'Android Auto',
+      platform: 'android',
+      appVersion: Constants.expoConfig?.version ?? 'unknown',
+      device: `Android ${String(Platform.Version)}${Constants.deviceName ? ` · ${Constants.deviceName}` : ''}`.slice(0, 400),
+      ...(position ? { mapView: { center: position, zoom: 17 } } : {}),
+    },
+  };
+  try {
+    await api.request('api/feedback', { method: 'POST', body });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 429) throw new Error(REPORT_LIMIT, { cause: e });
+    if (e instanceof ApiError && e.code === 'feedback_disabled') throw new Error(REPORT_OFF, { cause: e });
+    throw e;
+  }
+  return {};
+}
 
 const STATUS_WORDS = { navigating: 'on the route', offRoute: 'off the route', arrived: 'arrived' } as const;
 

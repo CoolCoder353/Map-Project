@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 import { waitFor } from '@testing-library/react-native';
 import * as Speech from 'expo-speech';
-import { ARRIVED_END_MS, FIRST_FIX_WAIT_MS, navigation, REROUTE_RETRY_MS, REROUTE_TIMEOUT_MS, TURNAROUND_GRACE_MS } from '../src/nav/navigationService';
+import { ARRIVED_END_MS, FIRST_FIX_WAIT_MS, navigation, REROUTE_RETRY_MS, REROUTE_TIMEOUT_MS, TRAVELLED_MAX_POINTS, TURNAROUND_GRACE_MS } from '../src/nav/navigationService';
 import { isNavigationRecording } from '../src/tracking/navigationRecording';
 import { fake, resetFakes, route } from './fakes';
 
@@ -472,4 +472,57 @@ it('once turned round and back on the route, goes off it again and is rerouted s
   mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.22, -27.56], to: [153.25, -27.56], remainingVia: [] }] });
   mockOnFix!(fix(153.22, -27.56, 3000));
   await waitFor(() => expect(fake.api.callsTo('POST api/routes/fastest')).toHaveLength(2));
+});
+
+it('without the car’s heading, a U-turn is just the best way: no waiting, no “turn around when you can”', async () => {
+  const uturn = route({ id: 'r-uturn', instructions: [{ sign: -98, text: 'Make a U-turn onto Ironbark Street', streetName: 'Ironbark Street', distanceM: 98, durationS: 9, interval: [0, 1] }] });
+  fake.api.on({ 'POST api/routes/fastest': () => uturn });
+  navigation.start(route());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  // Parked: no speed, no direction, so the request has no heading to send.
+  const still = (lon: number, ts: number) => ({ timestamp: ts, coords: { longitude: lon, latitude: -27.56, accuracy: 5, speed: 0, heading: -1 } });
+  mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2, -27.56], to: [153.25, -27.56], remainingVia: [] }] });
+  mockOnFix!(still(153.2, 1000));
+  await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-uturn'));
+  expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).not.toHaveProperty('heading');
+  expect(Speech.speak).toHaveBeenLastCalledWith('Route updated', expect.anything());
+  mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2, -27.56], to: [153.25, -27.56], remainingVia: [] }] });
+  mockOnFix!(still(153.2001, 2000));
+  await waitFor(() => expect(fake.api.callsTo('POST api/routes/fastest')).toHaveLength(2));
+});
+
+it('ends the wait to turn around once the driver is well along the new route, even with no back-on-route event', async () => {
+  const turnaround = route({ id: 'r-back', instructions: [{ sign: -98, text: 'Turn around when you can', streetName: '', distanceM: 98, durationS: 9, interval: [0, 1] }] });
+  fake.api.on({ 'POST api/routes/fastest': () => turnaround });
+  navigation.start(route());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2, -27.56], to: [153.25, -27.56], remainingVia: [] }] });
+  mockOnFix!(fix(153.2, -27.56, 1000));
+  await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-back'));
+  // Turned round and on its way along the new route (no off-route spell in between)...
+  mockResults.push({ state: { status: 'navigating', progressM: 60 }, events: [] });
+  mockOnFix!(fix(153.199, -27.56, 2000));
+  // ...so a wrong turn a moment later is rerouted at once, not held for the minute.
+  mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.198, -27.56], to: [153.25, -27.56], remainingVia: [] }] });
+  mockOnFix!(fix(153.198, -27.56, 3000));
+  await waitFor(() => expect(fake.api.callsTo('POST api/routes/fastest')).toHaveLength(2));
+});
+
+it('keeps the road driven to a bounded number of points on a long drive, coarser the further back', async () => {
+  navigation.start(route());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  const total = TRAVELLED_MAX_POINTS * 2;
+  for (let i = 0; i < total; i++) mockOnFix!(fix(153 + i * 0.0002, -27.4, 1000 + i));
+  const line = navigation.getSnapshot().travelled;
+  expect(line.length).toBeLessThanOrEqual(TRAVELLED_MAX_POINTS);
+  expect(line.length).toBeGreaterThan(TRAVELLED_MAX_POINTS / 4);
+  expect(line[0]).toEqual([153, -27.4]);
+  // Up to date to within one (coarser) step of where the car is now.
+  expect(153 + (total - 1) * 0.0002 - line.at(-1)![0]).toBeLessThan(0.0002 * 8);
+  navigation.start(route({ id: 'again' }));
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockOnFix!(fix(153, -27.4, 1));
+  mockOnFix!(fix(153.0002, -27.4, 2));
+  // A new trip starts fine-grained again (about 20 m apart is kept).
+  expect(navigation.getSnapshot().travelled).toHaveLength(2);
 });

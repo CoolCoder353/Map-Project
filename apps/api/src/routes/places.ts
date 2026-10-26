@@ -4,10 +4,14 @@ import {
   ReverseQuerySchema,
   SavedPlaceSaveSchema,
   SearchQuerySchema,
+  haversineM,
 } from '@wayfinder/shared';
 import { parse, placeService, savedPlaceService } from '@wayfinder/core';
 import type { AppDeps } from '../deps.js';
 import { authenticate, currentUser } from '../plugins/auth.js';
+
+/** A found place this close to a saved one is taken to be the same place. */
+const SAME_PLACE_M = 30;
 
 export const placeRoutes =
   (deps: AppDeps): FastifyPluginAsync =>
@@ -22,8 +26,11 @@ export const placeRoutes =
         savedPlaceService.matchingSavedPlaces(db, currentUser(req).id, q.q, near),
         metrics.time('search', 'forward', () => placeService.searchPlaces(db, q.q, near, q.limit)),
       ]);
-      // Your own "Home" before every other place called home.
-      return { results: [...saved, ...found].slice(0, q.limit) };
+      // Your own "Home" before every other place called home, but never all of the room, and not
+      // alongside the very place it was saved from.
+      const mine = saved.slice(0, Math.max(1, Math.floor(q.limit / 2)));
+      const others = found.filter((f) => !mine.some((m) => haversineM(m.location, f.location) < SAME_PLACE_M));
+      return { results: [...mine, ...others].slice(0, q.limit) };
     });
 
     app.get('/reverse', async (req) => {

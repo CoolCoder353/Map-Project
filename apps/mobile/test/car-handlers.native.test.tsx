@@ -1,7 +1,9 @@
 /// <reference types="jest" />
+import { waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
 import { formatDistanceShort } from '@wayfinder/nav';
-import { carHandlers, carReportMessage, resetCarHandlers } from '../src/car/handlers';
+import { carHandlers, carReportMessage, REPORT_COOLDOWN_MS, REPORT_JUST_SENT, REPORT_LIMIT, REPORT_OFF, resetCarHandlers } from '../src/car/handlers';
+import { ApiError } from '../src/lib/apiClient';
 import { getServerUrl } from '../src/lib/server';
 import { fake, place, resetFakes, route } from './fakes';
 
@@ -22,7 +24,7 @@ jest.mock('../src/nav/navigationService', () => ({ get navigation() { return moc
 beforeEach(() => {
   resetFakes();
   resetCarHandlers();
-  fake.api.on({ 'GET api/config': () => ({ ...fake.config, voice: 'plain' }) });
+  fake.api.on({ 'GET api/config': () => ({ ...fake.config, voice: 'plain', feedbackEnabled: true }) });
 });
 
 describe('status', () => {
@@ -293,6 +295,66 @@ describe('report', () => {
     fake.api.on({ 'POST api/feedback': () => { throw new Error('Feedback is switched off.'); } });
     mockNavigation.getSnapshot.mockReturnValueOnce({ active: false, route: null, error: null, position: [153, -27] } as never);
     await expect(carHandlers.report!({})).rejects.toThrow('Feedback is switched off.');
+  });
+});
+
+describe('report limits', () => {
+  const idle = () => mockNavigation.getSnapshot.mockReturnValue({ active: false, route: null, error: null, position: [153, -27] } as never);
+  afterEach(() => mockNavigation.getSnapshot.mockReturnValue({ route: null, active: true, error: null } as never));
+
+  it('says so, and sends nothing, while feedback is switched off', async () => {
+    fake.api.on({ 'GET api/config': () => ({ ...fake.config, feedbackEnabled: false }) });
+    idle();
+    await expect(carHandlers.report!({})).rejects.toThrow(REPORT_OFF);
+    expect(fake.api.callsTo('POST api/feedback')).toHaveLength(0);
+  });
+
+  it('still tries when the switch can’t be read, and says so if the server then refuses', async () => {
+    fake.api.on({ 'GET api/config': () => { throw new Error('offline'); }, 'POST api/feedback': () => { throw new ApiError(404, 'feedback_disabled', 'Feedback is turned off'); } });
+    idle();
+    await expect(carHandlers.report!({})).rejects.toThrow(REPORT_OFF);
+  });
+
+  it('turns the hourly limit into something short for the car', async () => {
+    fake.api.on({ 'POST api/feedback': () => { throw new ApiError(429, 'rate_limited', 'a long sentence'); } });
+    idle();
+    await expect(carHandlers.report!({})).rejects.toThrow(REPORT_LIMIT);
+  });
+
+  it('sends one report a minute, so tapping again doesn’t use up the hour’s five', async () => {
+    fake.api.on({ 'POST api/feedback': () => ({ id: 'f1' }) });
+    idle();
+    expect(await carHandlers.report!({})).toEqual({});
+    await expect(carHandlers.report!({})).rejects.toThrow(REPORT_JUST_SENT);
+    expect(fake.api.callsTo('POST api/feedback')).toHaveLength(1);
+    const real = Date.now.bind(Date);
+    const now = jest.spyOn(Date, 'now').mockImplementation(() => real() + REPORT_COOLDOWN_MS);
+    try {
+      expect(await carHandlers.report!({})).toEqual({});
+    } finally {
+      now.mockRestore();
+    }
+    expect(fake.api.callsTo('POST api/feedback')).toHaveLength(2);
+  });
+
+  it('turns away a second tap while the first is still on its way', async () => {
+    let release: (() => void) | null = null;
+    fake.api.on({ 'POST api/feedback': () => new Promise((resolve) => { release = () => resolve({ id: 'f1' }); }) });
+    idle();
+    const first = carHandlers.report!({});
+    await expect(carHandlers.report!({})).rejects.toThrow(REPORT_JUST_SENT);
+    await waitFor(() => expect(release).not.toBeNull());
+    release!();
+    expect(await first).toEqual({});
+    expect(fake.api.callsTo('POST api/feedback')).toHaveLength(1);
+  });
+
+  it('a failed send doesn’t count against the minute', async () => {
+    fake.api.on({ 'POST api/feedback': () => { throw new Error('offline'); } });
+    idle();
+    await expect(carHandlers.report!({})).rejects.toThrow('offline');
+    fake.api.on({ 'POST api/feedback': () => ({ id: 'f1' }) });
+    expect(await carHandlers.report!({})).toEqual({});
   });
 });
 
