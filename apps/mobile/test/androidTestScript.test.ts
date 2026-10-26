@@ -76,7 +76,7 @@ describe('test-android-device.sh', () => {
   const device = resolve(__dirname, '../../../infra/scripts/test-android-device.sh');
   const deviceText = readFileSync(device, 'utf8');
   const run = (env: Record<string, string>) =>
-    execFileSync('sh', [device], { env: { PATH: process.env.PATH ?? '', HOME: '/nonexistent', ...env }, stdio: 'pipe' }).toString();
+    execFileSync('sh', [device], { env: { ...process.env, HOME: '/nonexistent', ANDROID_HOME: '/nonexistent', ...env }, stdio: 'pipe' }).toString();
 
   it('is valid shell', () => {
     expect(() => execFileSync('sh', ['-n', device])).not.toThrow();
