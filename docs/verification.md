@@ -207,6 +207,7 @@ emulators are enough.
   `maps.paulsjones.com` on 2026-09-28: it installs over the old build, opens on the emulator with no
   crash, and its sign-in screen reaches the server. It hasn't been shared with testers yet. This
   is likely what the crash reports were.
+- **App 0.5.2 (versionCode 8, 2026-10-26)**: fixes from a review of the October changes (car Report says why and sends one a minute; the wait after a turn-around route ends once you're along it, and only applies to routes asked for with a heading; the road driven is bounded; saved places and search; Google Maps start flag). Passed `pnpm check`. Built for `maps.coolcodertech.com`, rolled out to internal testing with `pnpm play upload`; server deployed the same day. Not yet tried on a device or head unit.
 - **2026-10-08 feedback fixes** (reports from 5–7 October; app 0.5.0, versionCode 6, server
   changes for routes and saved places). Checked by tests, and on the live server's data where noted:
   the car map black when a trip was already running (the styles were only asked for by Home);
