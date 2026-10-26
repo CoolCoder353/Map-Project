@@ -28,4 +28,24 @@ class ManeuversTest {
   }
 
   @Test fun anythingNewIsStraightOn() = assertEquals(Maneuver.TYPE_STRAIGHT, Maneuvers.typeOf(CarManeuver("hover", null)))
+
+  @Test fun everyTurnKindHasItsOwnType() {
+    mapOf(
+      "slightLeft" to Maneuver.TYPE_TURN_SLIGHT_LEFT,
+      "sharpLeft" to Maneuver.TYPE_TURN_SHARP_LEFT,
+      "slightRight" to Maneuver.TYPE_TURN_SLIGHT_RIGHT,
+      "right" to Maneuver.TYPE_TURN_NORMAL_RIGHT,
+      "keepRight" to Maneuver.TYPE_KEEP_RIGHT,
+      "uTurnLeft" to Maneuver.TYPE_U_TURN_LEFT,
+      "waypoint" to Maneuver.TYPE_DESTINATION,
+    ).forEach { (kind, type) -> assertEquals(kind, type, Maneuvers.typeOf(CarManeuver(kind, null))) }
+  }
+
+  @Test fun aRoundaboutExitAngleIsPassedOn() =
+    assertEquals(Maneuver.TYPE_ROUNDABOUT_ENTER_AND_EXIT_CW_WITH_ANGLE, Maneuvers.typeOf(CarManeuver("roundabout", 2, 175)))
+
+  @Test fun aRoundaboutExitAngleOutsideACircleIsIgnored() {
+    assertEquals(Maneuver.TYPE_ROUNDABOUT_ENTER_AND_EXIT_CW, Maneuvers.typeOf(CarManeuver("roundabout", 2, 0)))
+    assertEquals(Maneuver.TYPE_ROUNDABOUT_ENTER_AND_EXIT_CW, Maneuvers.typeOf(CarManeuver("roundabout", 2, 361)))
+  }
 }

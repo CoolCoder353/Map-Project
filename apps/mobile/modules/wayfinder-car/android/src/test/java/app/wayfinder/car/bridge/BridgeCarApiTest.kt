@@ -1,6 +1,8 @@
 package app.wayfinder.car.bridge
 
+import app.wayfinder.car.Samples
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -37,5 +39,57 @@ class BridgeCarApiTest {
     assertEquals(listOf("c0 simulate"), sent)
     b.resolve("c0", "{}")
     assertEquals(true, r!!.isSuccess)
+  }
+
+  @Test fun sendsEachRequestToThePhoneWithItsDetails() {
+    val sent = mutableListOf<String>()
+    val b = CarBridge(post = { it.run() }, postDelayed = { _, _ -> }).also { it.connect { _, method, params -> sent += "$method $params" } }
+    val phone = BridgeCarApi(b)
+    phone.search("coot") { }
+    phone.discover { }
+    phone.plan(Samples.place()) { }
+    phone.planned { }
+    phone.routeLine("r-fast") { }
+    phone.start("r-fast", "Mt Coot-tha Lookout") { }
+    phone.stop()
+    phone.setMuted(true)
+    phone.report { }
+    assertEquals(
+      listOf(
+        """search {"q":"coot"}""",
+        "discover {}",
+        """plan {"to":[152.957,-27.4846]}""",
+        "planned {}",
+        """routeLine {"routeId":"r-fast"}""",
+        """start {"routeId":"r-fast","destinationName":"Mt Coot-tha Lookout"}""",
+        "stop {}",
+        """mute {"muted":true}""",
+        "report {}",
+      ),
+      sent,
+    )
+  }
+
+  @Test fun readsPlacesAndRouteLinesFromTheAnswers() {
+    var places: Result<List<CarPlace>>? = null
+    var line: Result<List<LngLat>>? = null
+    api.search("coot") { places = it }
+    api.routeLine("r-fast") { line = it }
+    bridge.resolve("c0", fixture("places.json").toString())
+    bridge.resolve("c1", fixture("route-line.json").toString())
+    assertEquals("Mt Coot-tha Lookout", places!!.getOrThrow().first().name)
+    assertEquals(LngLat(152.957, -27.4846), line!!.getOrThrow().last())
+  }
+
+  @Test fun givesNavigationOnlyWhenItCanBeRead() {
+    var seen: CarNav? = null
+    api.onNavigation { seen = it }
+    bridge.setNavigation(fixture("nav-navigating.json").toString())
+    assertEquals(NavStatus.NAVIGATING, seen!!.status)
+    assertEquals(NavStatus.NAVIGATING, api.navigation!!.status)
+    seen = null
+    bridge.setNavigation("{}")
+    assertNull(seen)
+    assertNull(api.navigation)
   }
 }

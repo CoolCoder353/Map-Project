@@ -66,4 +66,18 @@ class ProtocolTest {
     assertEquals(CarManeuver("roundabout", 2, null), n.maneuver)
     assertNull(n.speedLimitKmh)
   }
+
+  @Test fun statusKnowsSignedOutAndOffline() {
+    fun account(name: String) = Protocol.status(JSONObject().put("account", name).put("styleUrl", JSONObject.NULL).put("searchHint", "").put("here", JSONObject.NULL)).account
+    assertEquals(Account.OFFLINE, account("offline"))
+    assertEquals(Account.SIGNED_OUT, account("signedOut"))
+    assertEquals(Account.SIGNED_OUT, account("something new"))
+  }
+
+  @Test fun navigationStatesTheAppHasButTheCarDoesntKnowAreStarting() {
+    fun status(name: String) = Protocol.nav(fixture("nav-navigating.json").put("status", name)).status
+    assertEquals(NavStatus.OFF_ROUTE, status("offRoute"))
+    assertEquals(NavStatus.STARTING, status("starting"))
+    assertEquals(NavStatus.STARTING, status("something new"))
+  }
 }

@@ -100,4 +100,15 @@ class HomeScreenTest {
     ((home.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.items[0] as Row).click()
     assertEquals(1, drives)
   }
+
+  @Test fun tryAgainAsksTheAppAgain() {
+    open()
+    api.answer("status", Samples.status(Account.OFFLINE))
+    (screen.onGetTemplate() as MessageTemplate).actions.single().onClickDelegate!!.sendClick(object : androidx.car.app.OnDoneCallback {})
+    org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+    assertEquals(listOf("status", "status"), api.calls)
+    assertTrue("waits for the new answer", (screen.onGetTemplate() as PlaceListNavigationTemplate).isLoading)
+    api.answer("status", Samples.status())
+    assertEquals(listOf("Search", "Planned routes", "Discover nearby"), titles(screen.onGetTemplate()))
+  }
 }
