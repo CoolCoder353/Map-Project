@@ -37,6 +37,11 @@ class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared))
     val styles = MapStyles(api, map::setStyles)
     styles.ensure()
     val coordinator = NavigationCoordinator(carContext, api, map, ManeuverIcons(carContext), map, styles::ensure)
+    // The car's own position, for when the phone's goes quiet (see CarLocation).
+    val stopLocation = CarLocation(HardwareFixSource(carContext), api).start()
+    lifecycle.addObserver(object : DefaultLifecycleObserver {
+      override fun onDestroy(owner: LifecycleOwner) = stopLocation()
+    })
     // After Home is on the stack, so a trip already running goes on top of it.
     Handler(Looper.getMainLooper()).post {
       if (lifecycle.currentState == Lifecycle.State.DESTROYED) return@post // ended before this ran: nothing to detach later
@@ -49,7 +54,7 @@ class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared))
     requests = navigate
     // "Navigate to ..." that opened the app: once Home is on the stack, so the preview goes on top of it.
     Handler(Looper.getMainLooper()).post { navigate.handle(intent) }
-    return HomeScreen(carContext, api, map, onDrive = coordinator::showDrive, onStatus = styles::use)
+    return HomeScreen(carContext, api, map, onDrive = coordinator::showDrive, onTestDrive = coordinator::startTestDrive, onStatus = styles::use)
   }
 
   /** "Navigate to ..." while the car app is already open. */

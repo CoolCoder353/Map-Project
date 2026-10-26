@@ -15,6 +15,12 @@ class BridgeCarApi(private val bridge: CarBridge) : CarApi {
     ask("routeLine", JSONObject().put("routeId", routeId), { Protocol.line(it.getJSONArray("geometry")) }, done)
   override fun start(routeId: String, destinationName: String, done: (Result<Unit>) -> Unit) =
     ask("start", JSONObject().put("routeId", routeId).put("destinationName", destinationName), { }, done)
+  override fun location(fix: CarFix) = bridge.call(
+    "location",
+    JSONObject().put("lon", fix.lon).put("lat", fix.lat)
+      .put("accuracyM", fix.accuracyM ?: JSONObject.NULL).put("speedMps", fix.speedMps ?: JSONObject.NULL)
+      .put("headingDeg", fix.headingDeg ?: JSONObject.NULL).put("timeMs", fix.timeMs),
+  ) { }
   override fun stop() = bridge.call("stop", JSONObject()) { }
   override fun setMuted(muted: Boolean) = bridge.call("mute", JSONObject().put("muted", muted)) { }
   override fun simulate(done: (Result<Unit>) -> Unit) = ask("simulate", JSONObject(), { }, done)

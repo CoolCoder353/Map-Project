@@ -133,6 +133,8 @@ and adaptive quality gaps, in
 - [ ] Wrong turn: "Off route", then "Finding a new route…", then new directions and route line
 - [ ] Wrong turn with no signal and the phone locked: "Finding a new route…" gives way within about 20 s to "Couldn’t get a new route…", and a new route comes once there is signal again
 - [ ] Back on the driving screen goes to Home with "Back to directions" first, which returns to the directions; the trip keeps going meanwhile
+- [ ] The cluster behind the wheel shows the step after the current one with its distance (even when it is far off), and the Test drive row on Home starts a pretend trip that shows the same
+- [ ] Phone locked and the phone app closed, open Wayfinder from the car: Planned routes and Go work (the car's own location is used), and directions follow the car, not "Still finding where you are"
 - [ ] Roundabout icons turn clockwise (both kinds of roundabout)
 - [ ] Music dips for each spoken direction and comes back after; Mute silences them
 - [ ] Phone locked for the whole drive: directions keep coming

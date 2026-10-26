@@ -7,6 +7,7 @@ import app.wayfinder.car.map.MapScenes
 /** Plays the JavaScript side: each request waits until the test answers it. */
 class FakeCarApi : CarApi {
   val calls = mutableListOf<String>()
+  val fixes = mutableListOf<CarFix>()
   private val waiting = mutableMapOf<String, ArrayDeque<(Result<Any?>) -> Unit>>()
   private val navListeners = mutableSetOf<(CarNav?) -> Unit>()
   override var navigation: CarNav? = null
@@ -35,6 +36,7 @@ class FakeCarApi : CarApi {
   override fun routeLine(routeId: String, done: (Result<List<LngLat>>) -> Unit) = hold("routeLine $routeId", done)
   override fun start(routeId: String, destinationName: String, done: (Result<Unit>) -> Unit) = hold("start $routeId $destinationName", done)
   override fun stop() { calls += "stop" }
+  override fun location(fix: CarFix) { fixes += fix }
   override fun setMuted(muted: Boolean) { calls += "mute $muted" }
   override fun simulate(done: (Result<Unit>) -> Unit) = hold("simulate", done)
   override fun report(done: (Result<Unit>) -> Unit) = hold("report", done)

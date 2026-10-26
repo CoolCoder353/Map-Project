@@ -153,7 +153,11 @@ late answer never repaints the map under the screen that took over.
 The car screens hold no data of their own. They ask the JavaScript side through a small bridge
 (`CarBridge` in Kotlin, `src/car/controller.ts` in JS): `status`, `search`, `discover`, `plan`,
 `planned`, `routeLine`, `start`, `stop` and `mute`, and JS pushes every navigation change back
-(`src/car/navModel.ts`). The messages are defined in `src/car/protocol.ts` and `bridge/Protocol.kt`,
+(`src/car/navModel.ts`). The car also sends its own position once a second (`location`, from the car's
+GNSS via `CarLocation.kt`): the phone's navigation follows it only when the phone's own fixes have
+been silent for 5 s (a locked phone with the app started from the car), and planning uses it when the
+phone can't say where it is. The trip handed to the car's cluster carries the current step and the
+one after it. The messages are defined in `src/car/protocol.ts` and `bridge/Protocol.kt`,
 pinned by fixtures both test suites read. Another test (`carModule.test.ts`) checks that every
 request `BridgeCarApi.kt` sends has a handler in `src/car/handlers.ts`.
 

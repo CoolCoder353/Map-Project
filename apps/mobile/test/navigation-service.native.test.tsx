@@ -424,6 +424,47 @@ it('says so when it still can’t find where you are, and stops saying it once i
   }
 });
 
+describe('the car’s own location', () => {
+  const realNow = Date.now.bind(Date);
+  let ahead = 0;
+  beforeEach(() => {
+    ahead = 0;
+    jest.spyOn(Date, 'now').mockImplementation(() => realNow() + ahead);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('is followed when the phone gives no location at all, and ends “still finding where you are”', async () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'Date'] });
+    try {
+      navigation.start(route());
+      await waitFor(() => expect(mockOnFix).not.toBeNull());
+      jest.advanceTimersByTime(FIRST_FIX_WAIT_MS);
+      expect(navigation.getSnapshot().error).toMatch(/Still finding where you are/);
+      navigation.handleFix(fix(153, -27.4, 1000) as never, 'car');
+      expect(navigation.getSnapshot()).toMatchObject({ position: [153, -27.4], error: null });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('is ignored while the phone’s own fixes keep coming, and taken up when they stop', async () => {
+    navigation.start(route());
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    mockOnFix!(fix(153, -27.4, 1000));
+    navigation.handleFix(fix(153.001, -27.4, 2000) as never, 'car');
+    expect(navigation.getSnapshot().position).toEqual([153, -27.4]);
+    ahead = 6_000;
+    navigation.handleFix(fix(153.002, -27.4, 3000) as never, 'car');
+    expect(navigation.getSnapshot().position).toEqual([153.002, -27.4]);
+  });
+
+  it('is not followed by a test drive', async () => {
+    navigation.start(route(), { simulated: true });
+    navigation.handleFix(fix(153, -27.4, 1000) as never, 'car');
+    expect(navigation.getSnapshot().position).toBeNull();
+  });
+});
+
 it('in a dead end, says to turn around once and lets you find somewhere to do it before asking again', async () => {
   const turnaround = route({ id: 'r-back', instructions: [{ sign: -98, text: 'Turn around when you can', streetName: 'Ironbark Street', distanceM: 98, durationS: 9, interval: [0, 1] }] });
   fake.api.on({ 'POST api/routes/fastest': () => turnaround });

@@ -29,6 +29,9 @@ export const ARRIVED_END_MS = 15_000;
 export const TURNAROUND_GRACE_MS = 60_000;
 /** How long to wait for the first fix before saying the phone can't find where it is. */
 export const FIRST_FIX_WAIT_MS = 30_000;
+/** The car's location is followed once the phone's has been silent this long. */
+export const CAR_FIX_AFTER_MS = 5_000;
+export type FixSource = 'watch' | 'service' | 'simulation' | 'car';
 /** How far apart points of the road already driven are kept, in metres. */
 const TRAVELLED_STEP_M = 10;
 /** The most points of the road driven kept; past it every other point goes and the step doubles. */
@@ -75,8 +78,11 @@ export interface NavigationService {
   start(route: Route, opts?: StartOptions): void;
   stop(): void;
   setMuted(muted: boolean): void;
-  /** `source` 'simulation' is the test drive's own fixes: the only ones a test drive follows. */
-  handleFix(loc: Location.LocationObject, source?: 'watch' | 'service' | 'simulation'): void;
+  /**
+   * `source` 'simulation' is the test drive's own fixes: the only ones a test drive follows. 'car' is
+   * the car's own location, followed only while the phone's has been silent for [CAR_FIX_AFTER_MS].
+   */
+  handleFix(loc: Location.LocationObject, source?: FixSource): void;
   getSnapshot(): NavSnapshot;
   subscribe(listener: () => void): () => void;
 }
@@ -153,6 +159,8 @@ export function createNavigationService(): NavigationService {
   let movedFrom: LngLat | null = null;
   /** The trip being followed is a test drive: nothing about it is saved. */
   let simulated = false;
+  /** When the phone last gave a fix, by this clock. */
+  let lastPhoneFixAt = -Infinity;
   /** When the destination was reached; the trip ends by itself [ARRIVED_END_MS] later. */
   let arrivedAt: number | null = null;
   /** When a new route that starts by turning around was given (see [TURNAROUND_GRACE_MS]). */
@@ -252,7 +260,7 @@ export function createNavigationService(): NavigationService {
     if (arrivedAt !== null && Date.now() - arrivedAt >= ARRIVED_END_MS) stop();
   }
 
-  function handleFix(loc: Location.LocationObject, source: 'watch' | 'service' | 'simulation' = 'watch') {
+  function handleFix(loc: Location.LocationObject, source: FixSource = 'watch') {
     const nav = session;
     if (!nav) return;
     endIfArrived();
@@ -261,9 +269,14 @@ export function createNavigationService(): NavigationService {
     if (simulated !== (source === 'simulation')) return;
     const { longitude: lon, latitude: lat } = loc.coords;
     if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+    // The car's location is for when the phone can't say where it is (locked and in a pocket, or
+    // GPS not started from the background); the phone's own fixes win while they come.
+    if (source === 'car') {
+      if (Date.now() - lastPhoneFixAt < CAR_FIX_AFTER_MS) return;
+    } else if (source !== 'simulation') lastPhoneFixAt = Date.now();
     // The location service and the GPS watch deliver the same fixes; follow each once. Only the
     // service's are compared with every fix so far: the watch alone may repeat a timestamp.
-    if (loc.timestamp <= (source === 'service' ? lastFixTs : lastServiceFixTs)) return;
+    if (loc.timestamp <= (source === 'service' || source === 'car' ? lastFixTs : lastServiceFixTs)) return;
     lastFixTs = Math.max(lastFixTs, loc.timestamp);
     if (source === 'service') lastServiceFixTs = loc.timestamp;
     const fix = { ts: loc.timestamp, lon, lat, accuracyM: loc.coords.accuracy, speedMps: loc.coords.speed, headingDeg: loc.coords.heading };
@@ -370,6 +383,7 @@ export function createNavigationService(): NavigationService {
     sessionId = Crypto.randomUUID();
     lastFixTs = -Infinity;
     lastServiceFixTs = -Infinity;
+    lastPhoneFixAt = -Infinity;
     travelHeading = null;
     movedFrom = null;
     travelledStepM = TRAVELLED_STEP_M;

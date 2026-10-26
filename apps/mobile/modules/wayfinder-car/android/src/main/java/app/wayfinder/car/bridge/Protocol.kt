@@ -18,6 +18,18 @@ data class PlannedItem(val id: String, val name: String, val option: RouteOption
 /** [exitAngleDeg]: roundabouts, how far round the exit is in the direction of travel (90 left, 180 straight on, 270 right). */
 data class CarManeuver(val type: String, val exit: Int?, val exitAngleDeg: Int? = null)
 data class NextStep(val maneuver: CarManeuver, val cue: String)
+/** One position from the car's GNSS; what the phone's navigation follows when its own location is silent. */
+data class CarFix(val lon: Double, val lat: Double, val accuracyM: Double?, val speedMps: Double?, val headingDeg: Double?, val timeMs: Long) {
+  companion object {
+    fun from(l: android.location.Location) = CarFix(
+      l.longitude, l.latitude,
+      l.accuracy.toDouble().takeIf { l.hasAccuracy() },
+      l.speed.toDouble().takeIf { l.hasSpeed() },
+      l.bearing.toDouble().takeIf { l.hasBearing() },
+      l.time,
+    )
+  }
+}
 /** The step after the next one and how far it is from here, for the car's cluster. */
 data class FollowingStep(val maneuver: CarManeuver, val cue: String, val road: String, val distanceM: Double)
 enum class NavStatus { STARTING, NAVIGATING, OFF_ROUTE, ARRIVED }

@@ -54,6 +54,7 @@ class BridgeCarApiTest {
     phone.stop()
     phone.setMuted(true)
     phone.report { }
+    phone.location(CarFix(153.05, -27.45, 4.0, 13.5, 90.0, 1790000000000L))
     assertEquals(
       listOf(
         """search {"q":"coot"}""",
@@ -65,6 +66,7 @@ class BridgeCarApiTest {
         "stop {}",
         """mute {"muted":true}""",
         "report {}",
+        """location {"lon":153.05,"lat":-27.45,"accuracyM":4,"speedMps":13.5,"headingDeg":90,"timeMs":1790000000000}""",
       ),
       sent,
     )

@@ -9,6 +9,8 @@ interface CarApi {
   fun planned(done: (Result<List<PlannedItem>>) -> Unit)
   fun routeLine(routeId: String, done: (Result<List<LngLat>>) -> Unit)
   fun start(routeId: String, destinationName: String, done: (Result<Unit>) -> Unit)
+  /** The car's own position, from its GNSS: for when the phone can't say where it is. Nothing comes back. */
+  fun location(fix: CarFix)
   fun stop()
   fun setMuted(muted: Boolean)
   /** "Report" while driving: files a bug report with what the car is showing (see src/car/handlers.ts). */

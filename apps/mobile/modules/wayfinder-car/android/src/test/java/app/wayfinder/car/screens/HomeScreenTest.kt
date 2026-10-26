@@ -31,7 +31,7 @@ class HomeScreenTest {
     assertTrue((screen.onGetTemplate() as PlaceListNavigationTemplate).isLoading)
     api.answer("status", Samples.status())
     val t = screen.onGetTemplate() as PlaceListNavigationTemplate
-    assertEquals(listOf("Search", "Planned routes", "Discover nearby"), t.itemList!!.items.map { (it as Row).title.text() })
+    assertEquals(listOf("Search", "Planned routes", "Discover nearby", "Test drive"), t.itemList!!.items.map { (it as Row).title.text() })
     assertEquals(MapScene.Overview(Samples.status().here), scenes.shown.last())
     assertNotNull(status)
   }
@@ -81,7 +81,7 @@ class HomeScreenTest {
     api.pushNav(Samples.nav().copy(remainingDistanceM = 3000.0))
     assertEquals("not redrawn on every fix", shown, controller.templatesReturned.size)
     api.pushNav(null)
-    assertEquals(listOf("Search", "Planned routes", "Discover nearby"), titles(controller.templatesReturned.last()))
+    assertEquals(listOf("Search", "Planned routes", "Discover nearby", "Test drive"), titles(controller.templatesReturned.last()))
   }
 
   @Test fun offersTheWayBackEvenWhenTheServerCantBeReached() {
@@ -109,6 +109,22 @@ class HomeScreenTest {
     assertEquals(listOf("status", "status"), api.calls)
     assertTrue("waits for the new answer", (screen.onGetTemplate() as PlaceListNavigationTemplate).isLoading)
     api.answer("status", Samples.status())
-    assertEquals(listOf("Search", "Planned routes", "Discover nearby"), titles(screen.onGetTemplate()))
+    assertEquals(listOf("Search", "Planned routes", "Discover nearby", "Test drive"), titles(screen.onGetTemplate()))
+  }
+
+  @Test fun theTestDriveRowStartsAPretendTrip() {
+    var drives = 0
+    val home = HomeScreen(carContext, api, scenes, onTestDrive = { drives++ }) { }
+    ScreenController(home).moveToState(Lifecycle.State.STARTED)
+    api.answer("status", Samples.status())
+    ((home.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.items.last() as Row).click()
+    assertEquals(1, drives)
+  }
+
+  @Test fun noTestDriveRowWhileARealTripIsRunning() {
+    api.navigation = Samples.nav()
+    open()
+    api.answer("status", Samples.status())
+    assertFalse("Test drive" in titles(screen.onGetTemplate()))
   }
 }

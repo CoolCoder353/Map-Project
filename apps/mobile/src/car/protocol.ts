@@ -86,6 +86,15 @@ export const CarParams = {
   routeLine: z.object({ routeId: z.string() }),
   start: z.object({ routeId: z.string(), destinationName: z.string().max(200) }),
   mute: z.object({ muted: z.boolean() }),
+  /** The car's own location (its GNSS), sent by the car app on every fix. */
+  location: z.object({
+    lon: z.number().min(-180).max(180),
+    lat: z.number().min(-90).max(90),
+    accuracyM: z.number().nonnegative().nullable(),
+    speedMps: z.number().nullable(),
+    headingDeg: z.number().nullable(),
+    timeMs: z.number().int(),
+  }),
 };
 
 export type CarStatus = z.infer<typeof CarStatusSchema>;

@@ -27,8 +27,13 @@ async function copy(): Promise<CopyCatalog> {
   }
 }
 
+/** The car's own last position, which Android Auto gives us from the car's GNSS. [at] is when it arrived, by this phone's clock. */
+let lastCarFix: { at: number; position: LngLat } | null = null;
+/** A car position older than this isn't where you are any more. */
+const CAR_FIX_MAX_AGE_MS = 60_000;
+
 /** Where the phone is, or null without permission or any fix. Never prompts: the car can't. */
-async function here(fresh = false): Promise<LngLat | null> {
+async function phoneHere(fresh: boolean): Promise<LngLat | null> {
   try {
     if (!(await Location.getForegroundPermissionsAsync()).granted) return null;
     const last = await Location.getLastKnownPositionAsync({ maxAge: fresh ? 60_000 : 10 * 60_000 });
@@ -37,6 +42,16 @@ async function here(fresh = false): Promise<LngLat | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Where you are: the phone's position, else the car's. The phone says nothing when it is locked in
+ * a pocket or has not been given location; the car always knows where it is.
+ */
+async function here(fresh = false): Promise<LngLat | null> {
+  const phone = await phoneHere(fresh);
+  if (phone) return phone;
+  return lastCarFix && Date.now() - lastCarFix.at <= CAR_FIX_MAX_AGE_MS ? lastCarFix.position : null;
 }
 
 /** Android Auto shows about six rows while driving; never send more. */
@@ -81,6 +96,7 @@ function toOption(r: Route, title: string, c: CopyCatalog): CarRouteOption {
 export function resetCarHandlers() {
   copyCache = null;
   offered.clear();
+  lastCarFix = null;
   resetReportCooldown();
 }
 
@@ -189,6 +205,17 @@ export const carHandlers: CarHandlers = {
       lastReportAt = previous;
       throw e;
     }
+  },
+
+  /** The car's own location, once a second: remembered for planning, and followed by a trip the phone can't locate. */
+  async location(params) {
+    const f = CarParams.location.parse(params);
+    lastCarFix = { at: Date.now(), position: [f.lon, f.lat] };
+    navigation.handleFix(
+      { coords: { longitude: f.lon, latitude: f.lat, accuracy: f.accuracyM, speed: f.speedMps, heading: f.headingDeg, altitude: null, altitudeAccuracy: null }, timestamp: f.timeMs },
+      'car',
+    );
+    return {};
   },
 
   async mute(params) {

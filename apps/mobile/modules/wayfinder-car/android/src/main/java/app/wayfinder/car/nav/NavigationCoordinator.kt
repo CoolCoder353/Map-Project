@@ -43,17 +43,7 @@ class NavigationCoordinator(
       override fun onStopNavigation() = api.stop()
 
       /** Google's reviewers and the Desktop Head Unit switch this on to see a trip without driving one (NF-7). */
-      override fun onAutoDriveEnabled() {
-        testDrive = true
-        testDriveStarting = true
-        api.simulate { r ->
-          testDriveStarting = false
-          r.onFailure {
-            testDrive = false
-            CarToast.makeText(carContext, it.message ?: "Couldn’t start a test drive. Try again.", CarToast.LENGTH_LONG).show()
-          }
-        }
-      }
+      override fun onAutoDriveEnabled() = startTestDrive()
     })
     val off = api.onNavigation(::update)
     update(api.navigation)
@@ -66,6 +56,19 @@ class NavigationCoordinator(
       if (navigating) navManager.navigationEnded()
       navigating = false
       navManager.clearNavigationManagerCallback()
+    }
+  }
+
+  /** A pretend trip: along the running one, else a built-in route. Records nothing. Also what the car's "auto drive" starts. */
+  fun startTestDrive() {
+    testDrive = true
+    testDriveStarting = true
+    api.simulate { r ->
+      testDriveStarting = false
+      r.onFailure {
+        testDrive = false
+        CarToast.makeText(carContext, it.message ?: "Couldn’t start a test drive. Try again.", CarToast.LENGTH_LONG).show()
+      }
     }
   }
 

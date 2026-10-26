@@ -18,13 +18,15 @@ import app.wayfinder.car.map.MapScenes
 
 /**
  * Where the car starts: search, planned routes and Discover, over the map. During a trip it also
- * offers the way back to directions ([onDrive]), for a driver who pressed Back on them.
+ * offers the way back to directions ([onDrive]), for a driver who pressed Back on them. Otherwise it
+ * offers a test drive ([onTestDrive]).
  */
 class HomeScreen(
   carContext: CarContext,
   private val api: CarApi,
   private val map: MapScenes,
   private val onDrive: () -> Unit = {},
+  private val onTestDrive: () -> Unit = {},
   private val onStatus: (CarStatus) -> Unit,
 ) : Screen(carContext) {
   private var status: Result<CarStatus>? = null
@@ -85,6 +87,8 @@ class HomeScreen(
             .addItem(row("Search", browsable = true) { screenManager.push(SearchScreen(carContext, api, map, s.searchHint)) })
             .addItem(row("Planned routes", browsable = true) { screenManager.push(PickScreens.planned(carContext, api, map)) })
             .addItem(row("Discover nearby", browsable = true) { screenManager.push(PickScreens.discover(carContext, api, map)) })
+            // A pretend trip for trying the car app without driving; not offered over a real one.
+            .apply { if (!backToDirections) addItem(row("Test drive", "Follow a pretend trip, nothing is recorded", browsable = true) { onTestDrive() }) }
             .build(),
         )
         .build()

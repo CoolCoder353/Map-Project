@@ -266,6 +266,15 @@ class NavigationCoordinatorTest {
     assertEquals(1, nav.navigationStartedCount)
   }
 
+  @Test fun aTestDriveCanBeStartedFromTheScreenToo() {
+    coordinator.attach()
+    coordinator.startTestDrive()
+    assertEquals(listOf("simulate"), api.calls)
+    api.answer("simulate", Unit)
+    api.pushNav(Samples.nav())
+    assertTrue(screens.screensPushed.last() is NavigationScreen)
+  }
+
   @Test fun theTestDriveEndsWithTheTripAndTheCarIsToldSo() {
     coordinator.attach()
     nav.navigationManagerCallback!!.onAutoDriveEnabled()

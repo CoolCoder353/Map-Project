@@ -34,7 +34,7 @@ Gaps 1 to 11 below were fixed or decided in one change. What each did, and what 
 
 - **Navigation requests (NF-6, VC-1):** the car service takes `androidx.car.app.action.NAVIGATE` with `geo:` links, in `onCreateScreen` and `onNewIntent`. Signed-out and closed-app cases are handled. Not tried with Assistant on a head unit.
 - **Navigation notifications (NF-3):** one ongoing navigation notification with `CarAppExtender`, cancelled on end, stop and detach. The phone's own "Navigating to …" notification still shows too. Not seen on a head unit.
-- **Test drive (NF-7):** `onAutoDriveEnabled` runs a ~90 s simulation of the running trip, or a built-in 2 km route when none is running. It records and uploads nothing. Not tried on the Desktop Head Unit.
+- **Test drive (NF-7):** a "Test drive" row on Home, and `onAutoDriveEnabled`, run a ~90 s simulation of the running trip, or a built-in 2 km route when none is running. It records and uploads nothing. Not tried on the Desktop Head Unit.
 - **EP-2 (restore state on relaunch):** judged met. The car picks up a running trip on connect and Home offers "Back to directions".
 - **Large screens:** the manifest portrait lock is gone; `useOrientationPolicy` locks portrait at runtime under 600 dp. Forms cap their width, and screens use a side panel from 840 dp. State is kept across resize (tested in Jest). Nothing has run on a tablet, foldable or Chromebook; the sizes are on the checklist in [verification.md](verification.md).
 - **Touch targets:** buttons, compact buttons, segments and the small controls are 48 dp.
@@ -102,10 +102,10 @@ weather) don't apply.
 | NF-1 | met | Turn-by-turn on `NavigationTemplate` |
 | NF-2 | met, needs device | Surface draws only map, route and position within the visible area |
 | NF-3 | met (now with permission asked), needs device | One ongoing `CarAppExtender` notification |
-| NF-4 | met | `updateTrip` with step, road and destination estimates |
+| NF-4 | fixed 2026-10-27, needs device | `updateTrip` with the current step, the step after it (always, with its distance: the cluster shows it; Google's review of version 7 found it missing), road and destination estimates |
 | NF-5 | met, needs device | `onStopNavigation` ends the trip: voice, notification and `updateTrip` stop |
 | NF-6 | fixed, needs device | `geo:` points and queries, from onCreateScreen and onNewIntent |
-| NF-7 | met | `onAutoDriveEnabled` test drive, records nothing |
+| NF-7 | met, made visible 2026-10-27 | `onAutoDriveEnabled` test drive, records nothing; Google's review of version 7 said there was none, so Home also has a "Test drive" row (not while a real trip runs) |
 | MR-1 | met | `isDarkMode` picks the dark style; redrawn on configuration change |
 | NF-9 (Tier 1) | open | Cluster map; optional |
 

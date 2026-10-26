@@ -15,7 +15,7 @@ jest.mock('expo-location', () => ({
   getLastKnownPositionAsync: jest.fn(async () => ({ coords: { longitude: 153.02, latitude: -27.47 } })),
   getCurrentPositionAsync: jest.fn(async () => ({ coords: { longitude: 153.03, latitude: -27.48 } })),
 }));
-const mockNavigation = { start: jest.fn(), stop: jest.fn(), setMuted: jest.fn(), getSnapshot: jest.fn(() => ({ route: null, active: true, error: null as string | null })) };
+const mockNavigation = { start: jest.fn(), stop: jest.fn(), handleFix: jest.fn(), setMuted: jest.fn(), getSnapshot: jest.fn(() => ({ route: null, active: true, error: null as string | null })) };
 // Read lazily: the handlers import this before the const above is initialised.
 jest.mock('../src/car/simulation', () => ({ ...jest.requireActual('../src/car/simulation'), startTestDrive: jest.fn() }));
 import { DEMO_DESTINATION_NAME, DEMO_ORIGIN, startTestDrive } from '../src/car/simulation';
@@ -25,6 +25,65 @@ beforeEach(() => {
   resetFakes();
   resetCarHandlers();
   fake.api.on({ 'GET api/config': () => ({ ...fake.config, voice: 'plain', feedbackEnabled: true }) });
+});
+
+describe('the car’s own location', () => {
+  const fixFromCar = (over: object = {}) => ({ lon: 153.05, lat: -27.45, accuracyM: 4, speedMps: 13.5, headingDeg: 90, timeMs: 1_790_000_000_000, ...over });
+
+  it('goes to navigation as a fix from the car', async () => {
+    expect(await carHandlers.location!(fixFromCar())).toEqual({});
+    expect(mockNavigation.handleFix).toHaveBeenCalledWith(
+      { coords: { longitude: 153.05, latitude: -27.45, accuracy: 4, speed: 13.5, heading: 90, altitude: null, altitudeAccuracy: null }, timestamp: 1_790_000_000_000 },
+      'car',
+    );
+  });
+
+  it('takes a car that can’t say how fast or which way', async () => {
+    await carHandlers.location!(fixFromCar({ accuracyM: null, speedMps: null, headingDeg: null }));
+    expect(mockNavigation.handleFix).toHaveBeenCalledWith(expect.objectContaining({ coords: expect.objectContaining({ accuracy: null, speed: null, heading: null }) }), 'car');
+  });
+
+  it('refuses a position that isn’t one', async () => {
+    await expect(carHandlers.location!(fixFromCar({ lat: 'north' }))).rejects.toThrow();
+    expect(mockNavigation.handleFix).not.toHaveBeenCalled();
+  });
+
+  it('says where you are for the status when the phone can’t', async () => {
+    jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValue({ granted: false } as never);
+    try {
+      await carHandlers.location!(fixFromCar());
+      expect(await carHandlers.status!({})).toMatchObject({ here: [153.05, -27.45] });
+    } finally {
+      jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    }
+  });
+
+  it('lets Discover and planning start from the car’s position when the phone has none', async () => {
+    jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValue({ granted: false } as never);
+    fake.api.on({ 'GET api/discover': () => ({ items: [] }) });
+    try {
+      await expect(carHandlers.discover!({})).rejects.toThrow(/Can’t tell where you are/);
+      await carHandlers.location!(fixFromCar());
+      await expect(carHandlers.discover!({})).resolves.toEqual({ places: [] });
+      expect(fake.api.callsTo('GET api/discover')[0]!.query).toMatchObject({ lon: 153.05, lat: -27.45 });
+    } finally {
+      jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    }
+  });
+
+  it('prefers the phone’s position, and forgets the car’s after a minute', async () => {
+    await carHandlers.location!(fixFromCar());
+    expect(await carHandlers.status!({})).toMatchObject({ here: [153.02, -27.47] });
+    jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValue({ granted: false } as never);
+    const realNow = Date.now.bind(Date);
+    const now = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + 61_000);
+    try {
+      expect(await carHandlers.status!({})).toMatchObject({ here: null });
+    } finally {
+      now.mockRestore();
+      jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    }
+  });
 });
 
 describe('status', () => {
