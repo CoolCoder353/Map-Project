@@ -40,6 +40,7 @@ The whole gate, about 5 minutes (Playwright and the Android Auto tests take most
 | `pnpm test:mobile` | Android screens and device code in Jest: `apps/mobile/test/*.{screen,native}.test.tsx` |
 | `pnpm test:mobile:coverage` | The same, failing below the Android floors |
 | `pnpm test:android` | The Android Auto module's Kotlin tests (Robolectric), in the Android build image, and their coverage floor; takes over node_modules while it prepares |
+| `pnpm test:android:device` | Not in `pnpm check`. The built APK (`dist/wayfinder.apk`) on the local emulator: it installs, the car app service and the geo: "navigate to" filter resolve as Android Auto looks for them, and the app is still running 5 s after it opens with no crash. Prints `skipped: …` and exits 0 without `/dev/kvm`, an APK or `android-emulator.sh setup` |
 | `pnpm test:e2e` | Playwright against a real stack it starts itself: `apps/web/e2e` |
 
 Run the Kotlin tests as `CI=true pnpm test:android`: without `CI=true`, pnpm stops at a

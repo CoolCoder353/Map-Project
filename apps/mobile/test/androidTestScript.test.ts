@@ -71,3 +71,47 @@ describe('wayfinder-car build.gradle', () => {
     expect(excluded).toEqual(['**/R.class', '**/R$*.class', '**/BuildConfig.*', '**/bridge/ReactBoot*']);
   });
 });
+
+describe('test-android-device.sh', () => {
+  const device = resolve(__dirname, '../../../infra/scripts/test-android-device.sh');
+  const deviceText = readFileSync(device, 'utf8');
+  const run = (env: Record<string, string>) =>
+    execFileSync('sh', [device], { env: { PATH: process.env.PATH ?? '', HOME: '/nonexistent', ...env }, stdio: 'pipe' }).toString();
+
+  it('is valid shell', () => {
+    expect(() => execFileSync('sh', ['-n', device])).not.toThrow();
+  });
+
+  it('skips with exit 0 when there is no /dev/kvm', () => {
+    expect(run({ WF_KVM_PATH: '/nonexistent' })).toContain('skipped: no KVM');
+  });
+
+  it('skips with exit 0 when the emulator has not been set up', () => {
+    expect(run({ WF_KVM_PATH: '/dev/null', WF_APK: '/dev/null', ANDROID_DIR: '/nonexistent' })).toContain('skipped: emulator not set up');
+  });
+
+  it('skips with exit 0 when there is no APK to install', () => {
+    const out = run({ WF_KVM_PATH: '/dev/null', WF_APK: '/nonexistent.apk' });
+    expect(out).toContain('skipped: no APK');
+  });
+
+  it('checks the car service, the navigate filter and that the app starts without crashing', () => {
+    expect(deviceText).toContain('androidx.car.app.CarAppService');
+    expect(deviceText).toContain('androidx.car.app.category.NAVIGATION');
+    expect(deviceText).toContain('app.wayfinder.car.WayfinderCarAppService');
+    expect(deviceText).toContain('androidx.car.app.action.NAVIGATE');
+    expect(deviceText).toContain('app.wayfinder.car.nav.NavigateActivity');
+    expect(deviceText).toContain('FATAL EXCEPTION');
+  });
+
+  it('stops an emulator it started, and only that one', () => {
+    expect(deviceText).toMatch(/trap [^\n]*stop[^\n]*EXIT/);
+    expect(deviceText).toContain('STARTED_IT');
+  });
+
+  it('is not part of pnpm check', () => {
+    const pkg = JSON.parse(readFileSync(resolve(__dirname, '../../../package.json'), 'utf8')).scripts;
+    expect(pkg['test:android:device']).toBe('sh infra/scripts/test-android-device.sh');
+    expect(pkg.check).not.toContain('test:android:device');
+  });
+});

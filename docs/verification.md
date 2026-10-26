@@ -113,6 +113,11 @@ Results are recorded in [live-stack-results.md](live-stack-results.md).
 has been ticked. Run it against a release APK on a real phone (build-android.md, "Trying it in a
 car"), tick each item as it passes, and record the date. Fix anything that fails, with a test.
 
+`pnpm test:android:device` checks the part of this that needs no head unit: the release APK installs on the
+local emulator, Android resolves the car app service and the geo: navigate filter, and the app runs 5 s
+after opening (last run 2026-10-27, passed). It can't draw Home, because the emulator image has no
+Android Auto app for the head unit to talk to, so none of the boxes below are ticked by it.
+
 Known gaps against Google's car app quality guidelines (navigation requests from other apps and
 Assistant, navigation notifications, a test-drive mode) are written up, with the phone app's core
 and adaptive quality gaps, in
