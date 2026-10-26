@@ -9,6 +9,12 @@ address.
 
 Tick each line when it's done in Play Console for **Wayfinder** (`app.wayfinder.maps`).
 
+**Done 2026-10-26:** items 1, 2, 3, 5, 6 and 7. The website was published straight away (contact
+details skip review). The privacy policy URL, the Data safety form's deletion URL and 0.5.1
+(versionCode 7, on the closed and internal tracks with the release notes below) went to review
+together, in place of the first submission (versionCode 5, old address) that was still in review.
+The WAF items below are still open, so the review may fail on Google's URL check.
+
 ## Before anything else: let Google reach the pages
 
 - [ ] **Cloudflare WAF, not Play Console.** The block rule lets in Australian visitors only.
@@ -32,7 +38,7 @@ Tick each line when it's done in Play Console for **Wayfinder** (`app.wayfinder.
 | 4 | Policy and programs → App content → App access | Instructions ("Other information") | Unchanged text | No change needed | The notes say "the server address is already filled in", which is true for a build made for the new address (item 5) |
 | 5 | Test and release → Testing (internal / closed) | New release | Bundles up to versionCode 6 are built for the old address | Upload `dist/wayfinder.aab` 0.5.1 (versionCode 7), built with `EXPO_PUBLIC_API_URL=https://maps.coolcodertech.com` | `pnpm play upload` ([play-store-android-auto.md](../../docs/play-store-android-auto.md#publishing-from-this-machine)) |
 | 6 | Same release | Release notes | — | "Points at the server's new address. If you signed in before, you stay signed in." | With the upload |
-| 7 | Publishing overview | Send changes for review | — | Send items 1–3 and 5 together | Changes to App content go to review with the next submission |
+| 7 | Publishing overview | Send changes for review | — | Send items 2, 3 and 5 together | Managed publishing is off, so `pnpm play upload` sends everything saved for review when it commits (`--no-review` is refused) |
 
 ## Not affected
 

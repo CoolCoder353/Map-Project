@@ -114,6 +114,8 @@ describe('hints for Play errors', () => {
     ['Only releases with status draft may be created on draft app.', 400, /without --rollout/],
     ['Package not found: app.wayfinder.maps.', 404, /upload the first bundle there by hand/],
     ['Changes cannot be sent for review automatically. Please set the query parameter changesNotSentForReview to true.', 400, /--no-review/],
+    ['Changes are sent for review automatically. The query parameter changesNotSentForReview must not be set.', 400, /without --no-review/],
+    ['The following APK version codes could not be found: [7].', 404, /isn't on Play.*pnpm play status/],
     ['APK specifies a version code that has already been used.', 403, /Bump versionCode/],
     ['The caller does not have permission', 403, /Users and permissions/],
     [

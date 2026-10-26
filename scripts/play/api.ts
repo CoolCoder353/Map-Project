@@ -85,8 +85,14 @@ export function hintFor(error: PlayApiError): string | undefined {
   if (/only releases with status draft/i.test(m)) {
     return 'The app has never been published, so Play only takes draft releases. Run again without --rollout, then roll the draft out in Play Console.';
   }
+  if (/version codes? .*could not be found/i.test(m)) {
+    return 'That versionCode isn\'t on Play: upload it first (`pnpm play upload`), or pick one from `pnpm play status`.';
+  }
   if (/package not found/i.test(m) || error.status === 404) {
     return 'Play does not know this app yet. Create it in Play Console and upload the first bundle there by hand; the API can only update an app after that.';
+  }
+  if (/changesNotSentForReview must not be set/i.test(m)) {
+    return 'Play sends this app\'s changes for review by itself. Run again without --no-review.';
   }
   if (/changesNotSentForReview/i.test(m)) {
     return 'Play will not send these changes for review automatically. Run again with --no-review, then press "Send for review" on the Publishing overview page.';
