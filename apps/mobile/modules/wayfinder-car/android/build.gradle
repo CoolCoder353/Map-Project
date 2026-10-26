@@ -1,6 +1,7 @@
 plugins {
   id 'com.android.library'
   id 'expo-module-gradle-plugin'
+  id 'jacoco'
 }
 
 group = 'app.wayfinder.car'
@@ -21,6 +22,13 @@ android {
   testOptions {
     unitTests {
       includeAndroidResources = true
+      all {
+        // Robolectric loads classes through its own loader; without these JaCoCo sees none of them.
+        jacoco {
+          includeNoLocationClasses = true
+          excludes = ['jdk.internal.*']
+        }
+      }
     }
   }
 }
@@ -34,4 +42,41 @@ dependencies {
   testImplementation 'junit:junit:4.13.2'
   testImplementation 'org.robolectric:robolectric:4.14.1'
   testImplementation 'androidx.test:core:1.6.1'
+}
+
+// Coverage of the car module's own code by its unit tests (docs/testing.md#android-auto-coverage).
+// Run after testDebugUnitTest by infra/scripts/test-android-native.sh.
+def carClasses = fileTree("$buildDir/tmp/kotlin-classes/debug") {
+  exclude '**/R.class', '**/R$*.class', '**/BuildConfig.*',
+          // The thin glue that boots React Native in the car process: needs a real React runtime.
+          '**/bridge/ReactBoot*'
+}
+
+tasks.register('jacocoCarCoverageReport', JacocoReport) {
+  dependsOn 'testDebugUnitTest'
+  classDirectories.setFrom(carClasses)
+  sourceDirectories.setFrom(files('src/main/java'))
+  executionData.setFrom(fileTree(buildDir) { include 'jacoco/testDebugUnitTest.exec' })
+  reports {
+    html.required = true
+    xml.required = true
+  }
+}
+
+tasks.register('jacocoCarCoverageVerification', JacocoCoverageVerification) {
+  dependsOn 'jacocoCarCoverageReport'
+  classDirectories.setFrom(carClasses)
+  executionData.setFrom(fileTree(buildDir) { include 'jacoco/testDebugUnitTest.exec' })
+  violationRules {
+    rule {
+      limit {
+        counter = 'LINE'
+        minimum = 0.72
+      }
+      limit {
+        counter = 'BRANCH'
+        minimum = 0.65
+      }
+    }
+  }
 }

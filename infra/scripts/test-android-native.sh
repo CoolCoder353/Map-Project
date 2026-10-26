@@ -36,7 +36,19 @@ docker run --rm -t \
       echo "$STAMP" > apps/mobile/android/.prepare-stamp
     fi
     cd apps/mobile/android
-    ./gradlew :wayfinder-car:testDebugUnitTest "$@"
+    rc=0
+    if [ "$#" -eq 0 ]; then
+      # A full run also checks the coverage floor (wayfinder-car/android/build.gradle).
+      ./gradlew :wayfinder-car:testDebugUnitTest :wayfinder-car:jacocoCarCoverageVerification || rc=$?
+    else
+      ./gradlew :wayfinder-car:testDebugUnitTest "$@" || rc=$?
+    fi
+    report=/workspace/apps/mobile/modules/wayfinder-car/android/build/reports/jacoco/jacocoCarCoverageReport/html
+    if [ -d "$report" ]; then
+      rm -rf /workspace/apps/mobile/coverage-android
+      cp -r "$report" /workspace/apps/mobile/coverage-android
+    fi
+    exit "$rc"
   ' _ "$@" || status=$?
 
 # The container installed node_modules against its own store; put this machine's back.

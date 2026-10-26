@@ -11,8 +11,8 @@
   every push to `master` and every pull request.
 - A failing test is fixed, never skipped or deleted to get a change through. When a test is
   wrong, correct it, and say so in the commit.
-- Coverage floors only go up. When tests are added, raise the floors in `vitest.config.ts` and
-  `apps/mobile/jest.config.js` to just under the new figures. Never lower one to make a change
+- Coverage floors only go up. When tests are added, raise the floors in `vitest.config.ts`,
+  `apps/mobile/jest.config.js` and the car module's `build.gradle` to just under the new figures. Never lower one to make a change
   pass.
 - Tests must be deterministic. A test that sometimes fails is a bug in the test (usually a
   timing assumption); fix it the day it is seen.
@@ -39,7 +39,7 @@ The whole gate, about 5 minutes (Playwright and the Android Auto tests take most
 | `pnpm test:coverage` | All Vitest projects, failing below the coverage floors |
 | `pnpm test:mobile` | Android screens and device code in Jest: `apps/mobile/test/*.{screen,native}.test.tsx` |
 | `pnpm test:mobile:coverage` | The same, failing below the Android floors |
-| `pnpm test:android` | The Android Auto module's Kotlin tests (Robolectric), in the Android build image; takes over node_modules while it runs |
+| `pnpm test:android` | The Android Auto module's Kotlin tests (Robolectric), in the Android build image, and their coverage floor; takes over node_modules while it prepares |
 | `pnpm test:e2e` | Playwright against a real stack it starts itself: `apps/web/e2e` |
 
 Run the Kotlin tests as `CI=true pnpm test:android`: without `CI=true`, pnpm stops at a
@@ -54,6 +54,16 @@ Run one file: `npx vitest run apps/web/test/directions.test.tsx`, or
 
 Coverage reports land in `coverage/` (Vitest) and `apps/mobile/coverage/` (Jest). Open
 `index.html` to see the uncovered lines.
+
+### Android Auto coverage
+
+A full `pnpm test:android` also runs JaCoCo over the car module's Kotlin and fails below the floors in
+`apps/mobile/modules/wayfinder-car/android/build.gradle` (`jacocoCarCoverageVerification`: 72% of
+lines, 65% of branches). The HTML report is copied to `apps/mobile/coverage-android/`, even when the
+floor fails. A run with a test filter skips the floor, since a few classes can't meet it. Left out of
+the measure: generated code (`R`, `BuildConfig`) and `bridge/ReactBoot`, the glue that starts React
+Native in the car process and needs a real React runtime (the head unit checks it,
+[verification.md](verification.md#android-auto-desktop-head-unit)).
 
 On a fresh machine the Playwright suite needs a browser first:
 
