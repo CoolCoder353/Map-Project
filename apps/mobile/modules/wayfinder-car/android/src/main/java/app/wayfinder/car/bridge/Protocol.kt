@@ -18,11 +18,13 @@ data class PlannedItem(val id: String, val name: String, val option: RouteOption
 /** [exitAngleDeg]: roundabouts, how far round the exit is in the direction of travel (90 left, 180 straight on, 270 right). */
 data class CarManeuver(val type: String, val exit: Int?, val exitAngleDeg: Int? = null)
 data class NextStep(val maneuver: CarManeuver, val cue: String)
+/** The step after the next one and how far it is from here, for the car's cluster. */
+data class FollowingStep(val maneuver: CarManeuver, val cue: String, val road: String, val distanceM: Double)
 enum class NavStatus { STARTING, NAVIGATING, OFF_ROUTE, ARRIVED }
 data class CarNav(
   val routeId: String, val destinationName: String?, val status: NavStatus,
   val rerouting: Boolean, val muted: Boolean, val error: String?,
-  val maneuver: CarManeuver?, val cue: String, val road: String, val distanceToManeuverM: Double?, val next: NextStep?,
+  val maneuver: CarManeuver?, val cue: String, val road: String, val distanceToManeuverM: Double?, val next: NextStep?, val following: FollowingStep?,
   val remainingDistanceM: Double, val remainingDurationS: Double, val arrivalEpochMs: Long,
   val position: LngLat?, val headingDeg: Double?,
   /** Only while on the route; [speedKmh] is how fast the phone says the car is going. */
@@ -82,6 +84,9 @@ object Protocol {
     road = o.getString("road"),
     distanceToManeuverM = o.doubleOrNull("distanceToManeuverM"),
     next = if (o.isNull("next")) null else o.getJSONObject("next").let { NextStep(maneuver(it.getJSONObject("maneuver")), it.getString("cue")) },
+    following = if (o.isNull("following")) null else o.getJSONObject("following").let {
+      FollowingStep(maneuver(it.getJSONObject("maneuver")), it.getString("cue"), it.getString("road"), it.getDouble("distanceM"))
+    },
     remainingDistanceM = o.getDouble("remainingDistanceM"),
     remainingDurationS = o.getDouble("remainingDurationS"),
     arrivalEpochMs = o.getLong("arrivalEpochMs"),

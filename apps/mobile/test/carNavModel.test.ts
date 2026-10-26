@@ -47,6 +47,24 @@ describe('toCarNav', () => {
     expect(CarNavSchema.safeParse(n).success).toBe(true);
   });
 
+  it('always gives the cluster the manoeuvre after the next, with how far away it is', () => {
+    const n = toCarNav(snap({
+      route: r, position: [153, -27.4],
+      state: { status: 'navigating', snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: instructions[1]!, nextInstruction: instructions[2]!, nextInstructionIndex: 2, distanceToNextManeuverM: 50, speedLimitKmh: null },
+    }), 0)!;
+    expect(n.next).toBeNull();
+    expect(n.following).toEqual({ maneuver: { type: 'destination', exit: null, exitAngleDeg: null }, cue: 'Arrive', road: '', distanceM: 850 });
+    expect(CarNavSchema.safeParse(n).success).toBe(true);
+  });
+
+  it('has nothing after the last manoeuvre', () => {
+    const n = toCarNav(snap({
+      route: r,
+      state: { status: 'navigating', snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 40, remainingDurationS: 4, currentInstruction: instructions[2]!, nextInstruction: instructions[3]!, nextInstructionIndex: 3, distanceToNextManeuverM: 40, speedLimitKmh: null },
+    }), 0)!;
+    expect(n.following).toBeNull();
+  });
+
   it('leaves out a manoeuvre that is still far behind the next one', () => {
     const n = toCarNav(snap({
       route: r,

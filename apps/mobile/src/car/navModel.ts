@@ -53,6 +53,10 @@ export function toCarNav(s: NavSnapshot, now: number): CarNav | null {
     road: ins?.streetName ?? '',
     distanceToManeuverM: st?.distanceToNextManeuverM ?? null,
     next: after && gap != null && gap <= THEN_WITHIN_M ? { maneuver: maneuverOf(after), cue: after.text } : null,
+    following:
+      after && gap != null && st?.distanceToNextManeuverM != null
+        ? { maneuver: maneuverOf(after), cue: after.text, road: after.streetName, distanceM: st.distanceToNextManeuverM + gap }
+        : null,
     remainingDistanceM: st?.remainingDistanceM ?? s.route.distanceM,
     remainingDurationS: remainingS,
     arrivalEpochMs: Math.round(now + remainingS * 1000),

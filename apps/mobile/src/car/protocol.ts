@@ -63,6 +63,11 @@ export const CarNavSchema = z.object({
   distanceToManeuverM: z.number().nullable(),
   /** A manoeuvre close after the next one, shown as "then …". */
   next: z.object({ maneuver: CarManeuverSchema, cue: z.string() }).nullable(),
+  /**
+   * The manoeuvre after the next one however far behind it is, and how far from here, for the car's
+   * cluster, which shows the step after this one (Google's NF-4).
+   */
+  following: z.object({ maneuver: CarManeuverSchema, cue: z.string(), road: z.string(), distanceM: z.number() }).nullable(),
   remainingDistanceM: z.number(),
   remainingDurationS: z.number(),
   arrivalEpochMs: z.number().int(),

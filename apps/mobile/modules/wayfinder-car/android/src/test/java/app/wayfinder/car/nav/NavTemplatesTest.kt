@@ -6,6 +6,7 @@ import androidx.car.app.navigation.model.RoutingInfo
 import androidx.test.core.app.ApplicationProvider
 import app.wayfinder.car.Samples
 import app.wayfinder.car.bridge.CarManeuver
+import app.wayfinder.car.bridge.FollowingStep
 import app.wayfinder.car.bridge.NavStatus
 import app.wayfinder.car.bridge.NextStep
 import app.wayfinder.car.text
@@ -70,6 +71,19 @@ class NavTemplatesTest {
     assertEquals(4.0, trip.destinationTravelEstimates.single().remainingDistance!!.displayDistance, 0.0)
     assertEquals(500L, trip.stepTravelEstimates.single().remainingTimeSeconds)
   }
+
+  /** The cluster shows the step after this one, however far off it is (Google's "next-turn information"). */
+  @Test fun theCarsClusterGetsTheStepAfterTheNextTurnToo() {
+    val following = FollowingStep(CarManeuver("right", null), "Turn right onto Moggill Rd", "Moggill Rd", 900.0)
+    val trip = NavTemplates.trip(Samples.nav(following = following), icons)
+    assertEquals(listOf("Turn left onto Main St", "Turn right onto Moggill Rd"), trip.steps.map { it.cue.text() })
+    assertEquals(Maneuver.TYPE_TURN_NORMAL_RIGHT, trip.steps[1].maneuver!!.type)
+    assertEquals("Moggill Rd", trip.steps[1].road!!.text())
+    assertEquals(listOf(250.0, 900.0), trip.stepTravelEstimates.map { it.remainingDistance!!.displayDistance })
+  }
+
+  @Test fun theClusterGetsOnlyTheCurrentStepWhenNothingFollowsIt() =
+    assertEquals(1, NavTemplates.trip(Samples.nav(following = null), icons).steps.size)
 
   private fun maneuverOf(nav: app.wayfinder.car.bridge.CarNav) =
     ((template(nav).navigationInfo as RoutingInfo).currentStep!!.maneuver!!)

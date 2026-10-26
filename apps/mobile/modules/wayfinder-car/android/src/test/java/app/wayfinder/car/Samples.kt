@@ -19,9 +19,10 @@ object Samples {
     error: String? = null,
     muted: Boolean = false,
     routeId: String = "r-fast",
+    following: FollowingStep? = null,
   ) = CarNav(
     routeId, "Mt Coot-tha Lookout", status, rerouting, muted, error,
-    maneuver, "Turn left onto Main St", "Main St", 250.0, null,
+    maneuver, "Turn left onto Main St", "Main St", 250.0, null, following,
     4000.0, 500.0, 1790000000000L, LngLat(153.0, -27.4), 90.0,
   )
 }

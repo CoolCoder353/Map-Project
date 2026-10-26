@@ -84,8 +84,11 @@ object NavTemplates {
     .apply {
       if (nav.road.isNotEmpty()) setCurrentRoad(nav.road)
       val m = nav.maneuver
-      if (m != null && nav.status == NavStatus.NAVIGATING) addStep(step(m, nav.cue, nav.road, icons), estimate(nav, nav.distanceToManeuverM ?: 0.0))
-      else setLoading(nav.status == NavStatus.STARTING)
+      if (m != null && nav.status == NavStatus.NAVIGATING) {
+        addStep(step(m, nav.cue, nav.road, icons), estimate(nav, nav.distanceToManeuverM ?: 0.0))
+        // The cluster shows the step after this one, so it is always sent (not only when close, like the "then" hint).
+        nav.following?.let { addStep(step(it.maneuver, it.cue, it.road, icons), estimate(nav, it.distanceM)) }
+      } else setLoading(nav.status == NavStatus.STARTING)
     }
     .build()
 
