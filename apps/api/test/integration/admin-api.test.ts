@@ -148,6 +148,23 @@ describe('dashboard flow (API level)', () => {
     for (const action of ['invite.create', 'user.role_change', 'trip.delete', 'trip.restore']) expect(audit).toContain(action);
   });
 
+  it('answers a malformed user or trip id with not found, not a server error', async () => {
+    const adminAuth = { authorization: await tokenFor(ta, admin, 'admin') };
+    const bad = '-'.repeat(36);
+    const requests: Array<{ method: 'GET' | 'POST' | 'DELETE'; url: string; payload?: { confirm: string } }> = [
+      { method: 'GET', url: `/api/admin/users/${bad}` },
+      { method: 'GET', url: `/api/admin/users/nobody/trips/${tripId}` },
+      { method: 'POST', url: '/api/admin/users/nobody/restore' },
+      { method: 'POST', url: `/api/admin/trips/${bad}/restore` },
+      { method: 'DELETE', url: `/api/admin/users/nobody/trips/${tripId}`, payload: { confirm: 'DELETE' } },
+    ];
+    for (const r of requests) {
+      const res = await ta.app.inject({ ...r, headers: adminAuth });
+      expect(res.statusCode, `${r.method} ${r.url}`).toBe(404);
+    }
+    expect((await ta.app.inject({ method: 'GET', url: '/api/admin/audit?before=latest', headers: adminAuth })).statusCode).toBe(400);
+  });
+
   it('pipeline refresh requires REFRESH confirmation and queues one run', async () => {
     const adminAuth = { authorization: await tokenFor(ta, admin, 'admin') };
     const ok = await ta.app.inject({ method: 'POST', url: '/api/admin/pipeline/refresh', headers: adminAuth, payload: { confirm: 'REFRESH' } });

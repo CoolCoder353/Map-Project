@@ -19,7 +19,7 @@ import {
 } from '@wayfinder/shared';
 import type { PoolClient } from 'pg';
 import { type Db, type DbClient, withTransaction } from '../db/pool.js';
-import { notFound } from '../lib/errors.js';
+import { badRequest, isUuid, notFound } from '../lib/errors.js';
 import type { JobQueue } from './context.js';
 
 const TRIP_GAP_MS = 10 * 60_000;
@@ -369,7 +369,9 @@ export async function listTrips(
   limit: number,
   cursor?: string,
 ): Promise<{ items: TripSummary[]; nextCursor: string | null }> {
+  // The cursor is the last trip's start time from the page before.
   const before = cursor ? new Date(cursor) : null;
+  if (before && Number.isNaN(before.getTime())) throw badRequest('Invalid cursor');
   const rows = (
     await db.query<TripListRow>(
       `SELECT id, mode, source, started_at, ended_at, distance_m, new_roads FROM trips
@@ -383,7 +385,8 @@ export async function listTrips(
 }
 
 export async function getTrip(db: DbClient, userId: string, tripId: string, includeDeleted = false): Promise<TripDetail> {
-  if (!/^[0-9a-f-]{36}$/i.test(tripId)) throw notFound('Trip not found');
+  // The owner's id comes from a URL too, on the admin routes.
+  if (!isUuid(tripId) || !isUuid(userId)) throw notFound('Trip not found');
   const trip = (
     await db.query<TripListRow & { geometry: LngLat[] }>(
       `SELECT id, mode, source, started_at, ended_at, distance_m, new_roads, geometry FROM trips
@@ -402,6 +405,7 @@ export async function getTrip(db: DbClient, userId: string, tripId: string, incl
 }
 
 export async function updateTripMode(db: Db, queue: JobQueue, userId: string, tripId: string, mode: Mode) {
+  if (!isUuid(tripId)) throw notFound('Trip not found');
   const r = await db.query('UPDATE trips SET mode = $3 WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [
     tripId,
     userId,
@@ -412,7 +416,7 @@ export async function updateTripMode(db: Db, queue: JobQueue, userId: string, tr
 }
 
 export async function softDeleteTrip(db: DbClient, queue: JobQueue, userId: string, tripId: string): Promise<void> {
-  if (!/^[0-9a-f-]{36}$/i.test(tripId)) throw notFound('Trip not found');
+  if (!isUuid(tripId) || !isUuid(userId)) throw notFound('Trip not found');
   const r = await db.query('UPDATE trips SET deleted_at = now() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [
     tripId,
     userId,
@@ -423,7 +427,7 @@ export async function softDeleteTrip(db: DbClient, queue: JobQueue, userId: stri
 
 /** Restore a soft-deleted trip still within the retention window. Returns the owner id. */
 export async function restoreTrip(db: DbClient, queue: JobQueue, tripId: string): Promise<string> {
-  if (!/^[0-9a-f-]{36}$/i.test(tripId)) throw notFound('Trip not found');
+  if (!isUuid(tripId)) throw notFound('Trip not found');
   const r = await db.query<{ user_id: string }>(
     `UPDATE trips SET deleted_at = NULL
      WHERE id = $1 AND deleted_at IS NOT NULL AND deleted_at > now() - make_interval(days => $2)
