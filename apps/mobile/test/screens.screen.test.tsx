@@ -2,7 +2,7 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 import Coverage from '../app/(tabs)/coverage';
-import Discover from '../app/(tabs)/discover';
+import Discover, { REFILTER_PAUSE_MS } from '../app/(tabs)/discover';
 import TabsLayout from '../app/(tabs)/_layout';
 import Trips from '../app/(tabs)/trips';
 import Index from '../app/index';
@@ -25,12 +25,16 @@ jest.mock('../src/lib/session', () => require('./fakes').sessionModule);
 jest.mock('../src/lib/appConfig', () => require('./fakes').appConfigModule);
 jest.mock('../src/map/MapCanvas', () => require('./fakes').mapCanvasModule);
 jest.mock('../src/lib/contacts', () => ({ findContacts: async () => [] }));
-jest.mock('../src/lib/useApproxLocation', () => ({ useApproxLocation: () => undefined }));
+let mockHere: [number, number] | undefined;
+jest.mock('../src/lib/useApproxLocation', () => ({ useApproxLocation: () => mockHere }));
 jest.mock('expo-location', () => ({ requestForegroundPermissionsAsync: jest.fn(), getCurrentPositionAsync: jest.fn(), Accuracy: { Balanced: 3 } }));
 const mockSetServerUrl = jest.fn(async (u: string) => u);
 jest.mock('../src/lib/server', () => ({ getServerUrl: async () => 'https://maps.example.com', setServerUrl: (u: string) => mockSetServerUrl(u) }));
 
-beforeEach(() => resetFakes());
+beforeEach(() => {
+  resetFakes();
+  mockHere = undefined;
+});
 afterEach(() => expect(fake.api.unhandled).toEqual([]));
 
 describe('Coverage', () => {
@@ -151,6 +155,46 @@ describe('Discover', () => {
     expect(screen.getByText(/^Place · 7\.4 km away/)).toBeOnTheScreen();
   });
 
+  it('starts from where you are, in your usual way of travelling', async () => {
+    mockHere = [153.02, -27.47];
+    fake.user = { ...user(true), settings: { ...user(true).settings, defaultMode: 'foot' } };
+    fake.api.on({ 'GET api/discover': () => ({ items: [discoverItem()] }) });
+    await renderScreen(<Discover />);
+    expect(screen.getByLabelText('Search from')).toHaveDisplayValue('Your location');
+    expect(screen.getByRole('radio', { name: 'Walk' })).toBeChecked();
+    await fireEvent.press(screen.getByRole('button', { name: 'Find places' }));
+    expect(await screen.findByText('Mount Coot-tha Lookout')).toBeOnTheScreen();
+    expect(fake.api.callsTo('GET api/discover')[0]!.query).toMatchObject({ lon: 153.02, lat: -27.47, mode: 'foot' });
+  });
+
+  it('finds places again when a filter changes, never showing ones found for the old filters', async () => {
+    mockHere = [153.02, -27.47];
+    fake.api.on({ 'GET api/discover': ({ query }) => ({ items: [discoverItem({ name: query?.mode === 'foot' ? 'Walkable Lookout' : 'Mount Coot-tha Lookout' })] }) });
+    await renderScreen(<Discover />);
+    // Before any search, filters are just set.
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Lookouts' }));
+    expect(fake.api.callsTo('GET api/discover')).toHaveLength(0);
+    await fireEvent.press(screen.getByRole('button', { name: 'Find places' }));
+    expect(await screen.findByText('Mount Coot-tha Lookout')).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('radio', { name: 'Walk' }));
+    // Gone at once: they were found for driving.
+    expect(screen.queryByText('Mount Coot-tha Lookout')).toBeNull();
+    expect(await screen.findByText('Walkable Lookout')).toBeOnTheScreen();
+    expect(fake.api.callsTo('GET api/discover')).toHaveLength(2);
+    expect(fake.api.callsTo('GET api/discover')[1]!.query).toMatchObject({ mode: 'foot', categories: 'viewpoint' });
+    // A few quick taps on + make one request, for where the taps ended.
+    await fireEvent.press(screen.getByRole('button', { name: '+' }));
+    await fireEvent.press(screen.getByRole('button', { name: '+' }));
+    await waitFor(() => expect(fake.api.callsTo('GET api/discover')).toHaveLength(3));
+    expect(fake.api.callsTo('GET api/discover')[2]!.query).toMatchObject({ maxMinutes: 40 });
+    expect(await screen.findByText('Walkable Lookout')).toBeOnTheScreen();
+    // A start cleared while a search waits for the taps to stop: no search from the old one.
+    await fireEvent.press(screen.getByRole('radio', { name: 'Drive' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Clear search from' }));
+    await act(() => new Promise((r) => setTimeout(r, REFILTER_PAUSE_MS + 200)));
+    expect(fake.api.callsTo('GET api/discover')).toHaveLength(3);
+  });
+
   it('clears places found from a start that’s been cleared', async () => {
     fake.api.on({ 'GET api/search': () => ({ results: [place()] }), 'GET api/discover': () => ({ items: [discoverItem()] }) });
     await renderScreen(<Discover />);
@@ -171,9 +215,19 @@ describe('Trips', () => {
     await renderScreen(<Trips />);
     expect(await screen.findByText('3 new roads')).toBeOnTheScreen();
     expect(screen.getByText('1 new road')).toBeOnTheScreen();
-    expect(screen.getByText('Walk, navigated')).toBeOnTheScreen();
+    expect(screen.getByText('Walk, navigated · 30 min')).toBeOnTheScreen();
     await fireEvent.press(screen.getAllByRole('button')[0]!);
     expect(fake.router.push).toHaveBeenCalledWith('/trip/t-1');
+  });
+
+  it('shows trips recorded since, on coming back to the list', async () => {
+    let items = [trip()];
+    fake.api.on({ 'GET api/trips': () => ({ items, nextCursor: null }) });
+    await renderScreen(<Trips />);
+    expect(await screen.findByText('3 new roads')).toBeOnTheScreen();
+    items = [trip({ id: 't-new', newRoads: 9 }), trip()];
+    await act(async () => fake.focus());
+    expect(await screen.findByText('9 new roads')).toBeOnTheScreen();
   });
 
   it('says when there are none yet', async () => {
@@ -206,6 +260,44 @@ describe('Trip', () => {
     await act(async () => buttons.find((b) => b.text === 'Delete')!.onPress!());
     await waitFor(() => expect(fake.router.back).toHaveBeenCalled());
     expect(fake.api.callsTo('DELETE api/trips/t-1')).toHaveLength(1);
+  });
+
+  it('says how long the trip took, and how fast it went on average', async () => {
+    fake.params = { id: 't-1' };
+    fake.api.on({ 'GET api/trips/t-1': () => tripDetail() });
+    await renderScreen(<Trip />);
+    expect(await screen.findByText('30 min · 36 km/h average')).toBeOnTheScreen();
+  });
+
+  it('corrects a trip recorded as the wrong way of travelling, and says coverage will catch up', async () => {
+    let mode: 'car' | 'foot' = 'car';
+    fake.params = { id: 't-1' };
+    fake.api.on({
+      'GET api/trips/t-1': () => tripDetail({ mode }),
+      'PATCH api/trips/t-1': ({ body }) => {
+        mode = (body as { mode: 'car' | 'foot' }).mode;
+        return { ok: true };
+      },
+    });
+    await renderScreen(<Trip />);
+    expect(await screen.findByRole('radio', { name: 'Drive' })).toBeChecked();
+    await fireEvent.press(screen.getByRole('radio', { name: 'Walk' }));
+    expect(await screen.findByText('Changed to a walk. Your coverage will update shortly.')).toBeOnTheScreen();
+    expect(fake.api.callsTo('PATCH api/trips/t-1')[0]!.body).toEqual({ mode: 'foot' });
+    expect(await screen.findByText('Walk · 18 km')).toBeOnTheScreen();
+    expect(screen.getByRole('radio', { name: 'Walk' })).toBeChecked();
+    // Choosing what it already is asks nothing.
+    await fireEvent.press(screen.getByRole('radio', { name: 'Walk' }));
+    expect(fake.api.callsTo('PATCH api/trips/t-1')).toHaveLength(1);
+  });
+
+  it('says why a change of mode didn’t save', async () => {
+    fake.params = { id: 't-1' };
+    fake.api.on({ 'GET api/trips/t-1': () => tripDetail(), 'PATCH api/trips/t-1': () => apiError(503, 'Try again shortly.') });
+    await renderScreen(<Trip />);
+    await fireEvent.press(await screen.findByRole('radio', { name: 'Walk' }));
+    expect(await screen.findByText('Couldn’t change the trip. Try again shortly.')).toBeOnTheScreen();
+    expect(screen.getByRole('radio', { name: 'Drive' })).toBeChecked();
   });
 
   it('shows a trip that can’t be loaded', async () => {

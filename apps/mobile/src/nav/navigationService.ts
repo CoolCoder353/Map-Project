@@ -3,6 +3,7 @@ import { type LngLat, bearingDeg, haversineM } from '@wayfinder/shared/geo';
 import { type Route, RouteSchema } from '@wayfinder/shared/schemas';
 import * as Crypto from 'expo-crypto';
 import * as Location from 'expo-location';
+import * as SecureStore from 'expo-secure-store';
 import { speak as say, stopSpeaking } from './voice';
 import { api } from '../lib/api';
 import { askForNotifications } from '../lib/notifications';
@@ -88,6 +89,8 @@ export interface NavigationService {
 }
 
 const REROUTE_FAILED = 'Couldn’t get a new route. Keep heading to the destination; trying again shortly.';
+/** Where the voice being muted is kept, so it stays as it was left trip to trip and across restarts. */
+const MUTED_KEY = 'wf.voiceMuted';
 
 const IDLE: NavSnapshot = {
   active: false,
@@ -171,6 +174,22 @@ export function createNavigationService(): NavigationService {
   const set = (patch: Partial<NavSnapshot>) => {
     snap = { ...snap, ...patch };
     listeners.forEach((l) => l());
+  };
+  /** No trip, with the voice as it was left. */
+  const idle = (): NavSnapshot => ({ ...IDLE, muted: snap.muted });
+  let mutedChosen = false;
+  void (async () => {
+    try {
+      // Muted before this was read (in the car, say): that choice stands.
+      if ((await SecureStore.getItemAsync(MUTED_KEY)) === 'on' && !mutedChosen) set({ muted: true });
+    } catch {
+      // Unreadable storage: the voice starts on.
+    }
+  })();
+  const setMuted = (muted: boolean) => {
+    mutedChosen = true;
+    set({ muted });
+    quietly(() => SecureStore.setItemAsync(MUTED_KEY, muted ? 'on' : 'off'));
   };
 
   const speak = (text: string) => {
@@ -365,7 +384,8 @@ export function createNavigationService(): NavigationService {
     setNavigationRecording(false);
     quietly(() => stopSpeaking());
     if (wasActive && !wasSimulated) void syncQueue().catch(() => undefined);
-    if (snap !== IDLE) set(IDLE);
+    const rest = idle();
+    if ((Object.keys(rest) as Array<keyof NavSnapshot>).some((k) => snap[k] !== rest[k])) set(rest);
   }
 
   function start(route: Route, opts: StartOptions = {}) {
@@ -375,7 +395,7 @@ export function createNavigationService(): NavigationService {
       next = new NavigationSession(route);
     } catch {
       // A route too short to follow (from and to the same place, say) must not take the app down.
-      set({ ...IDLE, route, error: 'This route can’t be followed. Plan it again, then start the new one.' });
+      set({ ...idle(), route, error: 'This route can’t be followed. Plan it again, then start the new one.' });
       return;
     }
     session = next;
@@ -388,7 +408,7 @@ export function createNavigationService(): NavigationService {
     movedFrom = null;
     travelledStepM = TRAVELLED_STEP_M;
     const gen = generation;
-    set({ ...IDLE, active: true, route, destinationName: opts.destinationName ?? null });
+    set({ ...idle(), active: true, route, destinationName: opts.destinationName ?? null });
     // A test drive is fed its fixes by the caller and saves nothing.
     if (simulated) return;
     // No fix yet after a while: say so, rather than leave the car on "Starting…" with no reason.
@@ -432,7 +452,7 @@ export function createNavigationService(): NavigationService {
     start,
     stop,
     handleFix,
-    setMuted: (muted) => set({ muted }),
+    setMuted,
     getSnapshot: () => snap,
     subscribe(listener) {
       listeners.add(listener);

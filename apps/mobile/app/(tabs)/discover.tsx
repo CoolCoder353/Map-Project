@@ -2,7 +2,7 @@ import type { DiscoverItem, Mode } from '@wayfinder/shared/schemas';
 import { POI_CATEGORIES, type PoiCategory } from '@wayfinder/shared/schemas';
 import { router } from 'expo-router';
 import { Car, ChevronRight, Compass, Footprints } from 'lucide-react-native';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../../src/lib/api';
@@ -11,34 +11,74 @@ import { CATEGORY_LABEL, kindOf } from '../../src/lib/categories';
 import { formatDistanceShort } from '../../src/lib/format';
 import { setTripToPlan } from '../../src/lib/plannedStore';
 import { splitStyles, useLayout } from '../../src/lib/layout';
+import { useSession } from '../../src/lib/session';
 import { radius, space, useTheme } from '../../src/lib/theme';
 import { MapCanvas, type MapCanvasHandle } from '../../src/map/MapCanvas';
 import { type ChosenPlace, PlaceSearch } from '../../src/ui/PlaceSearch';
 import { Body, Button, Card, Empty, NewBadge, Notice, Press, Segmented, Small } from '../../src/ui/kit';
 import { useApproxLocation } from '../../src/lib/useApproxLocation';
 
+/** How long after the last change of a filter to search again: a few taps on + make one request. */
+export const REFILTER_PAUSE_MS = 500;
+
 export default function Discover() {
   const here = useApproxLocation();
   const t = useTheme();
+  const { user } = useSession();
   const { copy } = useAppConfig();
   const map = useRef<MapCanvasHandle>(null);
   const split = splitStyles(useLayout().sideBySide, '34%');
   const [origin, setOrigin] = useState<ChosenPlace | null>(null);
-  const [mode, setMode] = useState<Mode>('car');
+  // Start where you are, once a position is known, as Plan does; only the first time, so
+  // clearing the field doesn't fill it in again.
+  const filledStart = useRef(false);
+  useEffect(() => {
+    if (!here || filledStart.current || origin) return;
+    filledStart.current = true;
+    setOrigin({ name: 'Your location', description: '', location: here, current: true });
+  }, [here, origin]);
+  const [mode, setMode] = useState<Mode>(user?.settings.defaultMode ?? 'car');
   const [minutes, setMinutes] = useState(30);
   const [cats, setCats] = useState<PoiCategory[]>([]);
   const [items, setItems] = useState<DiscoverItem[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const latest = useRef(0);
+  /** A search has run from this start, so a change of filter searches again. */
+  const searched = useRef(false);
+  /** The search waiting for the filter taps to stop. */
+  const refilter = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const chooseOrigin = (p: ChosenPlace | null) => {
+    filledStart.current = true;
     setOrigin(p);
-    // Places found from somewhere else no longer fit; a search still on its way is dropped.
+    // Places found from somewhere else no longer fit; a search still on its way, or waiting to
+    // start, is dropped.
     latest.current++;
+    if (refilter.current) clearTimeout(refilter.current);
+    searched.current = false;
     setItems(null);
     setBusy(false);
   };
+
+  // Places found for other filters don't fit either: they go at once, and the search runs again
+  // for the new ones after a pause.
+  const filters = `${mode} ${minutes} ${cats.join(',')}`;
+  const shown = useRef(filters);
+  useEffect(() => {
+    if (shown.current === filters || !searched.current) {
+      shown.current = filters;
+      return;
+    }
+    shown.current = filters;
+    latest.current++;
+    setItems(null);
+    setBusy(true);
+    const timer = setTimeout(() => void search(true), REFILTER_PAUSE_MS);
+    refilter.current = timer;
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on a change of filter; `search` reads them as they are now.
+  }, [filters]);
 
   /** A place found is somewhere to go: Plan works out the trip there, from the same start. */
   const planTrip = (i: DiscoverItem) => {
@@ -46,9 +86,11 @@ export default function Discover() {
     router.navigate('/plan');
   };
 
-  const search = async () => {
-    if (!origin || busy) return;
+  /** `again`: the filters changed; runs even though the button already shows it's busy. */
+  const search = async (again = false) => {
+    if (!origin || (busy && !again)) return;
     const ticket = ++latest.current;
+    searched.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -95,7 +137,7 @@ export default function Discover() {
             );
           })}
         </View>
-        <Button label="Find places" icon={Compass} onPress={search} busy={busy} disabled={!origin} />
+        <Button label="Find places" icon={Compass} onPress={() => void search()} busy={busy} disabled={!origin} />
         {error ? <Notice tone="error">{error}</Notice> : null}
         {items && items.length === 0 ? <Empty icon={Compass} text={copy.discoverEmpty} /> : null}
         {items?.map((i) => (

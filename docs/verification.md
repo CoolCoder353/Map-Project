@@ -86,6 +86,7 @@ What has been checked, how to repeat it, and what is still open. Update this whe
   - Opening the app offline signed people out; the next account on a phone saw the last one's trips and planned routes until they refetched.
   - A place category the app didn't know crashed Discover; Trips said "no trips yet" when it couldn't load them; Settings' Sync, Remove, and switches failed silently.
   - Against a server from before coverage-by-roads, Coverage crashed on the missing numbers (found on the emulator). APKs and the server update separately, so the answers screens depend on are now checked against the shared schemas, and a mismatch says the app or server needs updating.
+- Read through again on 2026-10-28 (each now has a test). Server: a trip, saved place, planned route or admin user id that wasn't an id (or was 36 dashes, which the old check let through) answered 500 and logged an error event, as did a trips `cursor` or audit `before` that wasn't one; they're 404 and 400 now. Android: tracking switched on while waiting for "Allow all the time" didn't start after it was granted in the phone's settings, and Settings kept warning, until the app restarted; Trips and planned routes from the website stayed as they were until the app restarted or the list was pulled down; Discover kept showing places found for filters since changed, and ignored the default travel mode; mute reset at every trip.
 - Android navigation never zoomed in when a trip started (a user report, 2026-09-27). Following your position only re-centres the map at the zoom it already has, and the map opened on the whole of Australia, so the trip was followed from the country overview; the screen's fit-to-the-whole-route never ran at start (the map wasn't loaded yet) but zoomed back out on every reroute. The map now sets a street-level zoom while following, opens at the route's start before the first fix, and navigation no longer fits the whole route.
 
 ## Live stack (Docker, real data)
@@ -193,6 +194,17 @@ emulators are enough.
 - [ ] Feedback on a tablet or Chromebook: Enter sends once there is a message; on a phone Enter starts a new line
 - [ ] Mouse: buttons, list rows, chips and cards shade under the pointer; scroll wheel scrolls lists; the map zooms with Ctrl plus the scroll wheel and with pinch on a touchscreen
 - [ ] A password manager offers to save and generate on the register form, and fills sign in
+
+## Phone app: 2026-10-28 additions
+
+Checked by Jest with the map and the phone's services faked; these need a phone or emulator.
+
+- [ ] Navigate, driving: "Arrive 3:42 pm" matches the phone's clock and moves as the time left does; a turn within 150 m after the next shows "Then …" under the turn banner; your speed shows under the limit sign, red once 3 km/h or more over, and not at all on foot
+- [ ] Mute on a trip, end it and start another, then force-stop the app and start one more: still muted each time, and the car's speaker button agrees
+- [ ] Settings, tracking on with location "while using" only: Open app settings, allow all the time, come back: the warning is gone and the recording notification appears without restarting the app
+- [ ] Plan: the swap button between the two fields swaps them and plans the other way; saved places show as one-tap buttons (Home and Work first) until a destination is chosen; a search with no matches says so
+- [ ] Discover opens from your location in your usual way of travelling; changing a filter after a search searches again once the taps stop
+- [ ] A trip shows how long it took and its average speed; switching Drive/Walk saves, and coverage catches up once the worker has run; Trips shows a trip just recorded on coming back to the tab
 
 ## Google Play permission checks (phone)
 

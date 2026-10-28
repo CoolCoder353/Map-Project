@@ -1,10 +1,10 @@
 import { type PlannedRoute, PlannedRouteListSchema, PublicUserSchema, SavedPlaceListSchema, type UserSettings } from '@wayfinder/shared/schemas';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { Car, ExternalLink, Footprints, LogOut, MessageSquarePlus, Navigation, RefreshCw, Trash2 } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
-import { ScrollView, Switch, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, ScrollView, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../../src/lib/api';
 import { useAppConfig } from '../../src/lib/appConfig';
@@ -54,7 +54,30 @@ export default function SettingsScreen() {
   useEffect(() => {
     void refreshStatus();
     void getServerUrl().then(setServer, () => undefined);
+    // Back from the phone's settings (to allow location all the time, say): what it says now, and
+    // no more advice to go there. Tracking still off is turned on with the switch, which asks again.
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      setMessageState((m) => (m?.openSettings ? null : m));
+      void refreshStatus();
+    });
+    return () => sub.remove();
   }, []);
+  // Routes sent from the website, places saved in Plan and points recorded since: on coming back
+  // to this tab, not only when it first opened.
+  const { refetch: refetchPlanned } = planned;
+  const { refetch: refetchSaved } = saved;
+  const focusedBefore = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (focusedBefore.current) {
+        void refetchPlanned();
+        void refetchSaved();
+        void refreshStatus();
+      }
+      focusedBefore.current = true;
+    }, [refetchPlanned, refetchSaved]),
+  );
 
   const save = useMutation({
     mutationFn: (patch: Partial<UserSettings>) => api.request('api/me/settings', { method: 'PATCH', body: patch, schema: PublicUserSchema }),

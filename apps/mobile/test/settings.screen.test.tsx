@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Alert, AppState, type AppStateStatus } from 'react-native';
 import SettingsScreen from '../app/(tabs)/settings';
 import { user } from './mocks';
 
@@ -13,14 +13,27 @@ const mockSetUser = jest.fn((u) => (mockCurrent = u));
 const mockReplace = jest.fn();
 const mockOpenURL = jest.fn();
 const mockSignOut = jest.fn();
-jest.mock('expo-router', () => ({ router: { push: jest.fn(), replace: (...a: unknown[]) => mockReplace(...a) } }));
+const mockFocusEffects = new Set<() => void>();
+jest.mock('expo-router', () => {
+  const { useEffect } = require('react');
+  return {
+    router: { push: jest.fn(), replace: (...a: unknown[]) => mockReplace(...a) },
+    useFocusEffect: (effect: () => void) =>
+      useEffect(() => {
+        mockFocusEffects.add(effect);
+        effect();
+        return () => void mockFocusEffects.delete(effect);
+      }, [effect]),
+  };
+});
 jest.mock('expo-linking', () => ({ openSettings: jest.fn(), openURL: (...a: unknown[]) => mockOpenURL(...a) }));
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('../src/lib/api', () => ({ api: { request: (...a: unknown[]) => mockRequest(...a) }, errorMessage: (e: Error) => e.message }));
 jest.mock('../src/lib/session', () => ({ useSession: () => ({ user: mockCurrent, setUser: mockSetUser, signOut: () => mockSignOut() }) }));
 jest.mock('../src/lib/server', () => ({ getServerUrl: async () => 'https://maps.example.com' }));
+let mockPermission = 'undetermined';
 jest.mock('../src/tracking/background', () => ({
-  trackingPermission: async () => 'undetermined',
+  trackingPermission: async () => mockPermission,
   requestTrackingPermission: (...a: unknown[]) => mockRequestTrackingPermission(...a),
 }));
 jest.mock('../src/tracking/sqliteStore', () => ({ sqliteQueueStore: { count: async () => 0 } }));
@@ -49,6 +62,7 @@ function renderSettings() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockFeedbackEnabled = false;
+  mockPermission = 'undetermined';
   mockCurrent = user(false);
   mockOpenURL.mockResolvedValue(true);
   mockSignOut.mockResolvedValue(undefined);
@@ -112,6 +126,49 @@ it('turns tracking off without asking for permission', async () => {
 it('lists planned routes sent from the website, or says there are none', async () => {
   await renderSettings();
   expect(await screen.findByText('Nothing planned yet.')).toBeOnTheScreen();
+});
+
+it('shows routes sent from the website since, on coming back to Settings', async () => {
+  let sent: object[] = [];
+  const base = mockRequest.getMockImplementation()!;
+  mockRequest.mockImplementation(async (path: string, init?: object) => (path === 'api/planned-routes' ? { items: sent } : base(path, init)));
+  await renderSettings();
+  expect(await screen.findByText('Nothing planned yet.')).toBeOnTheScreen();
+  sent = [{ id: 'p1', name: 'Coast loop', route: { id: 'r1', kind: 'fastest', mode: 'car', distanceM: 12_000, durationS: 900, extraDurationS: 0, geometry: [[153, -27], [153.1, -27.1]], instructions: [], viaPoints: [], novelty: { totalKm: 12, newKm: 0, noveltyPct: 0 } }, createdAt: '2026-10-28T00:00:00Z' }];
+  await act(async () => mockFocusEffects.forEach((e) => e()));
+  expect(await screen.findByText('Coast loop')).toBeOnTheScreen();
+});
+
+it('notices “Allow all the time” granted in the phone’s settings when the app comes back', async () => {
+  const changes: Array<(s: AppStateStatus) => void> = [];
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, fn) => {
+    changes.push(fn as (s: AppStateStatus) => void);
+    return { remove: jest.fn() } as never;
+  });
+  mockCurrent = user(true);
+  mockPermission = 'foreground-only';
+  await renderSettings();
+  expect(await screen.findByText(/nothing is being recorded/)).toBeOnTheScreen();
+  mockPermission = 'granted';
+  await act(async () => changes.forEach((c) => c('active')));
+  await waitFor(() => expect(screen.queryByText(/nothing is being recorded/)).toBeNull());
+  jest.restoreAllMocks();
+});
+
+it('drops the advice to open app settings once back from them', async () => {
+  const changes: Array<(s: AppStateStatus) => void> = [];
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, fn) => {
+    changes.push(fn as (s: AppStateStatus) => void);
+    return { remove: jest.fn() } as never;
+  });
+  mockRequestTrackingPermission.mockResolvedValue('foreground-only');
+  await renderSettings();
+  await fireEvent(await screen.findByLabelText('Background tracking'), 'valueChange', true);
+  expect(await screen.findByRole('button', { name: 'Open app settings' })).toBeOnTheScreen();
+  await act(async () => changes.forEach((c) => c('active')));
+  expect(screen.queryByRole('button', { name: 'Open app settings' })).toBeNull();
+  expect(screen.queryByText(/needs location access/)).toBeNull();
+  jest.restoreAllMocks();
 });
 
 it('hides Send feedback while feedback is switched off', async () => {

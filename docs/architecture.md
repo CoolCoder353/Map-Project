@@ -46,6 +46,9 @@ service. The only outside download is the OpenStreetMap extract, fetched by the 
    uploads them in batches to `POST /api/tracks/batches`. A batch id makes retries idempotent. A
    batch the server rejects as invalid is dropped, so it cannot block later ones. While a
    navigated trip runs, background recording leaves that time to it (it records its own fixes).
+   The session (`src/lib/session.tsx`) keeps the device in line with the account's tracking
+   setting, and checks again each time the app comes to the foreground, so tracking that was
+   waiting on "Allow all the time" starts as soon as it is granted in the phone's settings.
 2. `trackService.ingestBatch` stores `track_points` and queues `process-tracks`.
 3. `processUserTracks` (`packages/core/src/services/tracks.ts`) splits points into trips (a
    10-minute gap or a 5-minute stop ends a trip; under 100 m is discarded) and records visited
@@ -175,7 +178,10 @@ route that starts by turning around (the car is in a dead end) is said once, "Ro
 around when you can", and not asked for again for a minute while the driver finds somewhere to
 turn; asking sooner only gave the same answer every few seconds. Arriving is said once, and the trip
 ends by itself 15 s later (on a timer, or the next fix with the phone locked); the phone's Navigate
-screen then closes. The session also keeps the road driven and the speed, for the maps. Back on
+screen then closes. The session also keeps the road driven and the speed, for the maps. A muted
+voice stays muted from trip to trip and across restarts (kept in secure storage, as the contacts
+switch is). The phone's Navigate screen shows the turn after the next and the speed against the
+limit by the same rules as the car (`thenAfter` and `overLimit` in `src/car/navModel.ts`). Back on
 the car's driving screen leaves the trip running, and Home offers "Back to directions". Spoken
 directions use the module's own `NavVoice`, which plays as navigation guidance and asks other audio
 to duck, so music dips and comes back; where the module isn't there, `expo-speech` speaks instead

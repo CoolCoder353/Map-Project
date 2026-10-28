@@ -1,12 +1,13 @@
 import { TripListResponseSchema } from '@wayfinder/shared/schemas';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Car, Footprints, History } from 'lucide-react-native';
+import { useCallback, useRef } from 'react';
 import { FlatList, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../../src/lib/api';
 import { useAppConfig } from '../../src/lib/appConfig';
-import { formatDateTime, formatDistanceShort } from '../../src/lib/format';
+import { formatDateTime, formatDistanceShort, formatDuration, tripSeconds } from '../../src/lib/format';
 import { CONTENT_MAX_WIDTH } from '../../src/lib/layout';
 import { radius, space, useTheme } from '../../src/lib/theme';
 import { Empty, NewBadge, Notice, Press, Small, Title } from '../../src/ui/kit';
@@ -20,6 +21,15 @@ export default function Trips() {
     initialPageParam: null as string | null,
     getNextPageParam: (p) => p.nextCursor,
   });
+  // A trip just driven shows on coming back to the list, without pulling it down.
+  const { refetch } = q;
+  const focusedBefore = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (focusedBefore.current) void refetch();
+      focusedBefore.current = true;
+    }, [refetch]),
+  );
   const trips = q.data?.pages.flatMap((p) => p.items) ?? [];
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: t.surface }}>
@@ -47,7 +57,7 @@ export default function Trips() {
             <View style={{ flex: 1, gap: 3 }}>
               <Text style={{ color: t.text, fontWeight: '600' }}>{formatDateTime(item.startedAt)} · {formatDistanceShort(item.distanceM)}</Text>
               <View style={{ flexDirection: 'row', gap: space[2], alignItems: 'center' }}>
-                <Small>{item.mode === 'car' ? 'Drive' : 'Walk'}{item.source === 'navigation' ? ', navigated' : ''}</Small>
+                <Small>{`${item.mode === 'car' ? 'Drive' : 'Walk'}${item.source === 'navigation' ? ', navigated' : ''} · ${formatDuration(tripSeconds(item))}`}</Small>
                 {item.newRoads > 0 ? <NewBadge text={`${item.newRoads} new road${item.newRoads === 1 ? '' : 's'}`} /> : null}
               </View>
             </View>

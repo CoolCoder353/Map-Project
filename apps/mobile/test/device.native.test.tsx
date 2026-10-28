@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react-native';
 import * as Contacts from 'expo-contacts/legacy';
 import * as Location from 'expo-location';
-import { Text } from 'react-native';
+import { AppState, type AppStateStatus, Text } from 'react-native';
 
 const mockStore = new Map<string, string>();
 jest.mock('expo-secure-store', () => ({
@@ -261,6 +261,28 @@ describe('session', () => {
     await act(async () => signOut());
     expect(qc.getQueryData(['trips'])).toBeUndefined();
     expect(qc.getQueryData(['config'])).toEqual({ appName: 'Roamer' });
+  });
+
+  it('starts tracking once the app comes back with “Allow all the time” granted in the phone’s settings', async () => {
+    const changes: Array<(s: AppStateStatus) => void> = [];
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, fn) => {
+      changes.push(fn as (s: AppStateStatus) => void);
+      return { remove: () => changes.splice(changes.indexOf(fn as never), 1) } as never;
+    });
+    mockSaved = auth;
+    await show();
+    await waitFor(() => expect(mockReconcile).toHaveBeenCalledWith(true, 'Roamer'));
+    mockReconcile.mockClear();
+    await act(async () => changes.forEach((c) => c('background')));
+    expect(mockReconcile).not.toHaveBeenCalled();
+    await act(async () => changes.forEach((c) => c('active')));
+    expect(mockReconcile).toHaveBeenCalledWith(true, 'Roamer');
+    // Signed out, coming back starts nothing.
+    await act(async () => signOut());
+    mockReconcile.mockClear();
+    await act(async () => changes.forEach((c) => c('active')));
+    expect(mockReconcile).not.toHaveBeenCalled();
+    jest.restoreAllMocks();
   });
 
   it('is signed out when there is no saved session', async () => {

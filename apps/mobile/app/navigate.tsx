@@ -4,6 +4,8 @@ import { ArrowLeft, ArrowRight, ArrowUp, Flag, RotateCcw, Volume2, VolumeX, X } 
 import { useEffect, useMemo, useRef } from 'react';
 import { Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { overLimit, thenAfter } from '../src/car/navModel';
+import { formatClock } from '../src/lib/format';
 import { goBack } from '../src/lib/goBack';
 import { PANEL_WIDTH, useLayout } from '../src/lib/layout';
 import { takeRouteToNavigate } from '../src/lib/plannedStore';
@@ -21,9 +23,6 @@ function SpeedSign({ kmh }: { kmh: number }) {
       accessible
       accessibilityLabel={`Speed limit ${kmh} km/h`}
       style={{
-        position: 'absolute',
-        top: space[3],
-        left: space[3],
         width: 60,
         height: 60,
         borderRadius: 30,
@@ -36,6 +35,21 @@ function SpeedSign({ kmh }: { kmh: number }) {
       }}
     >
       <Text style={{ color: '#000000', fontSize: kmh >= 100 ? 19 : 22, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{kmh}</Text>
+    </View>
+  );
+}
+
+/** How fast you're going, under the limit sign; red when over it, as in the car. */
+function Speed({ kmh, over }: { kmh: number; over: boolean }) {
+  const t = useTheme();
+  return (
+    <View
+      accessible
+      accessibilityLabel={`Your speed ${kmh} km/h${over ? ', over the limit' : ''}`}
+      style={{ minWidth: 60, paddingVertical: 4, paddingHorizontal: space[2], borderRadius: 12, alignItems: 'center', backgroundColor: over ? '#d0021b' : t.surface, elevation: 3 }}
+    >
+      <Text style={{ color: over ? '#ffffff' : t.text, fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{kmh}</Text>
+      <Text style={{ color: over ? '#ffffff' : t.text2, fontSize: 11, fontWeight: '600' }}>km/h</Text>
     </View>
   );
 }
@@ -70,6 +84,13 @@ export default function Navigate() {
   const next = s?.nextInstruction ?? s?.currentInstruction;
   const Icon = iconFor(next?.sign ?? 0);
   const arrived = s?.status === 'arrived';
+  const then = nav.route && !arrived ? thenAfter(nav.route, s) : null;
+  const ThenIcon = iconFor(then?.sign ?? 0);
+  // Only while on the route: off it, the road you are on isn't the one the limit is for.
+  const limitKmh = s?.status === 'navigating' ? s.speedLimitKmh : null;
+  // A speedometer is for driving; walking, it's only something else to look at.
+  const speedKmh = nav.route?.mode === 'car' && nav.speedMps != null ? Math.round(nav.speedMps * 3.6) : null;
+  const banner = nav.route?.kind === 'fastest' ? t.accent : t.explore;
 
   // The same views in every window size: the map is never remounted, so a trip keeps running
   // and following you through a rotation or a fold. Narrow: banner, map, bar stacked. Wide: the
@@ -78,7 +99,7 @@ export default function Navigate() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
       <View style={panel}>
-      <View style={{ backgroundColor: nav.route?.kind === 'fastest' ? t.accent : t.explore, padding: space[4], flexDirection: 'row', alignItems: 'center', gap: space[4] }} accessibilityLiveRegion="polite">
+      <View style={{ backgroundColor: banner, padding: space[4], flexDirection: 'row', alignItems: 'center', gap: space[4] }} accessibilityLiveRegion="polite">
         <Icon size={40} color="#ffffff" />
         <View style={{ flex: 1 }}>
           {s?.distanceToNextManeuverM != null && !arrived ? (
@@ -89,6 +110,16 @@ export default function Navigate() {
           </Text>
         </View>
       </View>
+      {then ? (
+        // The banner's colour, darkened: part of it, but read second.
+        <View accessible accessibilityLabel={`Then ${then.text.charAt(0).toLowerCase()}${then.text.slice(1)}`} style={{ backgroundColor: banner, paddingHorizontal: space[4], paddingBottom: space[3], marginTop: -space[2] }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: space[3], borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.22)' }}>
+            <Text style={{ color: '#ffffff', fontWeight: '700' }}>Then</Text>
+            <ThenIcon size={20} color="#ffffff" />
+            <Text style={{ color: '#ffffff', fontWeight: '600', flexShrink: 1 }} numberOfLines={1}>{then.text}</Text>
+          </View>
+        </View>
+      ) : null}
       {nav.rerouting ? <Notice tone="warning">Finding a new route…</Notice> : null}
       {s?.status === 'offRoute' && !nav.rerouting ? <Notice tone="warning">Off route</Notice> : null}
       {nav.error ? <Notice tone="error">{nav.error}</Notice> : null}
@@ -96,12 +127,19 @@ export default function Navigate() {
       <View style={sideBySide ? { position: 'absolute', top: 0, bottom: 0, left: PANEL_WIDTH, right: 0 } : { flex: 1 }}>
         {/* Follows you close up. No fitting to the whole route: that zooms out of the drive. */}
         <MapCanvas style={{ flex: 1 }} routes={nav.route ? [nav.route] : []} selectedRouteId={nav.route?.id ?? null} track={nav.travelled.length >= 2 ? nav.travelled : null} followUser />
-        {/* Only while on the route: off it, the road you are on isn't the one the limit is for. */}
-        {s?.status === 'navigating' && s.speedLimitKmh != null ? <SpeedSign kmh={s.speedLimitKmh} /> : null}
+        {limitKmh != null || speedKmh != null ? (
+          <View style={{ position: 'absolute', top: space[3], left: space[3], alignItems: 'center', gap: space[2] }}>
+            {limitKmh != null ? <SpeedSign kmh={limitKmh} /> : null}
+            {speedKmh != null ? <Speed kmh={speedKmh} over={overLimit(limitKmh, speedKmh)} /> : null}
+          </View>
+        ) : null}
       </View>
       <View style={[{ flexDirection: 'row', alignItems: 'center', padding: space[4], gap: space[3], backgroundColor: t.surface }, panel, sideBySide && { marginTop: 'auto' }]}>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: t.text, fontSize: 22, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{s ? formatDuration(s.remainingDurationS) : '–'}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[2], flexWrap: 'wrap' }}>
+            <Text style={{ color: t.text, fontSize: 22, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{s ? formatDuration(s.remainingDurationS) : '–'}</Text>
+            {s && !arrived ? <Text style={{ color: t.text2, fontSize: 15, fontVariant: ['tabular-nums'] }}>{`Arrive ${formatClock(Date.now() + s.remainingDurationS * 1000)}`}</Text> : null}
+          </View>
           <Text style={{ color: t.text2 }}>{s ? `${formatDistanceShort(s.remainingDistanceM)} to go` : ''}</Text>
         </View>
         <Press accessibilityRole="button" accessibilityLabel={nav.muted ? 'Unmute voice' : 'Mute voice'} onPress={() => nav.setMuted(!nav.muted)} style={({ hovered }) => ({ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: hovered ? t.surface3 : 'transparent' })}>

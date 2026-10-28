@@ -87,9 +87,11 @@ export function Small({ children, color, style }: { children: ReactNode; color?:
 
 type ButtonKind = 'primary' | 'secondary' | 'ghost' | 'danger';
 
-export function Button({ label, onPress, kind = 'primary', icon: Icon, busy, disabled, style, compact }: {
+export function Button({ label, onPress, kind = 'primary', icon: Icon, busy, disabled, style, compact, accessibilityLabel }: {
   label: string;
   onPress: PressableProps['onPress'];
+  /** What a screen reader says, where the label alone wouldn't say what the button does. */
+  accessibilityLabel?: string;
   kind?: ButtonKind;
   icon?: LucideIcon;
   busy?: boolean;
@@ -103,6 +105,7 @@ export function Button({ label, onPress, kind = 'primary', icon: Icon, busy, dis
   return (
     <Press
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled: !!disabled || !!busy, busy: !!busy }}
       onPress={onPress}
       disabled={disabled || busy}
