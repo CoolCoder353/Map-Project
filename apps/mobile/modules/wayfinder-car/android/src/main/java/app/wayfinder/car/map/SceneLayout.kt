@@ -2,12 +2,17 @@ package app.wayfinder.car.map
 
 import app.wayfinder.car.bridge.LngLat
 
+/** A numbered marker on the map; the row with the same number in the list beside it is the same thing. */
+data class Pin(val at: LngLat, val label: String)
+
 data class SceneDrawing(
   val selected: List<LngLat>,
   val others: List<List<LngLat>>,
-  val points: List<LngLat>,
+  val pins: List<Pin>,
   val position: LngLat?,
   val travelled: List<LngLat> = emptyList(),
+  /** Where the chosen route ends, marked with the destination pin. */
+  val destination: LngLat? = null,
 )
 
 sealed interface CameraSpec {
@@ -47,17 +52,31 @@ object SceneLayout {
    */
   fun moveMs(spec: CameraSpec): Int = if (spec is CameraSpec.Follow) FOLLOW_MS else 0
 
+  /**
+   * What each scene puts on the map. Home marks where you are. Places and a list of routes are
+   * numbered 1, 2, 3 as their rows are (a route at its middle, where routes that start together
+   * have parted). A chosen route, before Go and while driving, ends at the destination pin.
+   */
   fun drawing(scene: MapScene): SceneDrawing = when (scene) {
-    is MapScene.Overview -> SceneDrawing(emptyList(), emptyList(), emptyList(), null)
-    is MapScene.Places -> SceneDrawing(emptyList(), emptyList(), scene.places.map { it.location }, null)
-    is MapScene.Routes -> SceneDrawing(
-      scene.options.getOrNull(scene.selected)?.geometry.orEmpty(),
-      scene.options.filterIndexed { i, _ -> i != scene.selected }.map { it.geometry },
-      emptyList(),
-      null,
-    )
-    is MapScene.Following -> SceneDrawing(scene.line, emptyList(), emptyList(), scene.position, scene.travelled)
+    is MapScene.Overview -> SceneDrawing(emptyList(), emptyList(), emptyList(), scene.here)
+    is MapScene.Places -> SceneDrawing(emptyList(), emptyList(), numbered(scene.places.map { it.location }), null)
+    is MapScene.Routes -> {
+      val chosen = scene.options.getOrNull(scene.selected)?.geometry.orEmpty()
+      SceneDrawing(
+        chosen,
+        scene.options.filterIndexed { i, _ -> i != scene.selected }.map { it.geometry },
+        if (scene.selected == MapScene.Routes.NONE) numbered(scene.options.map { middle(it.geometry) }) else emptyList(),
+        null,
+        destination = chosen.lastOrNull(),
+      )
+    }
+    is MapScene.Following -> SceneDrawing(scene.line, emptyList(), emptyList(), scene.position, scene.travelled, destination = scene.line.lastOrNull())
   }
+
+  /** Numbered by place in the list, so a row with nothing to mark doesn't renumber the ones after it. */
+  private fun numbered(at: List<LngLat?>) = at.mapIndexedNotNull { i, p -> p?.let { Pin(it, (i + 1).toString()) } }
+
+  private fun middle(line: List<LngLat>) = line.getOrNull(line.size / 2)
 
   fun camera(scene: MapScene): CameraSpec = when (scene) {
     is MapScene.Overview -> scene.here?.let { CameraSpec.Center(it, 13.0) } ?: AUSTRALIA

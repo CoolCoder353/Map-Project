@@ -17,6 +17,7 @@ import app.wayfinder.car.map.MapScenes
 
 /**
  * Type (parked) to find a place, then plan to it. Android Auto hides the keyboard while driving.
+ * Results are numbered as their markers on the map.
  *
  * Typing searches once the typist pauses ([TYPING_PAUSE_MS]), not on every letter, and the last
  * results stay up while the next ones load: a search per letter blanked the list to a spinner with
@@ -107,7 +108,7 @@ class SearchScreen(
     if (loading && results.isEmpty()) return b.setLoading(true).build()
     val list = ItemList.Builder()
     error?.let { list.setNoItemsMessage(it) }
-    results.forEach { p -> list.addItem(row(p.name, p.detail) { screenManager.push(RoutePreviewScreen.forPlace(carContext, api, map, p)) }) }
+    results.forEachIndexed { i, p -> list.addItem(row(p.name, p.detail, icon = numberIcon(i + 1)) { screenManager.push(RoutePreviewScreen.forPlace(carContext, api, map, p)) }) }
     return b.setItemList(list.build()).build()
   }
 

@@ -134,6 +134,11 @@ None changes what Google's criteria ask; all are tested (testing.md) and on the 
 - **Search** asked the server for every letter from the third, blanking the list each time; it now
   waits for a pause in typing and keeps the last results up meanwhile.
 - **At a glance:** Home's rows have icons (host-tinted, VD-1), and arriving shows the destination flag.
+- **Lists and the map (UI pass, same day):** search results, Discover and Planned routes all showed
+  as identical dots or plain lines, so a row couldn't be found on the map. Rows and markers now carry
+  the same number. A chosen route ends at a destination pin and has a white edge; Home marks where
+  you are; the driving screen's mute button is a speaker showing the state; the turn card is the
+  route line's blue. VD-1 (contrast day and night) covers these on the head unit.
 
 ## Still open
 

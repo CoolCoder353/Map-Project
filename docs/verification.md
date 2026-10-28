@@ -136,7 +136,7 @@ and adaptive quality gaps, in
 - [ ] The cluster behind the wheel shows the step after the current one with its distance (even when it is far off), and the Test drive row on Home starts a pretend trip that shows the same
 - [ ] Phone locked and the phone app closed, open Wayfinder from the car: Planned routes and Go work (the car's own location is used), and directions follow the car, not "Still finding where you are"
 - [ ] Roundabout icons turn clockwise (both kinds of roundabout)
-- [ ] Music dips for each spoken direction and comes back after; Mute silences them
+- [ ] Music dips for each spoken direction and comes back after; the speaker button silences them and shows struck through until tapped again
 - [ ] Phone locked for the whole drive: directions keep coming
 - [ ] Trip started on the phone appears in the car; trip started in the car shows the phone banner, with its padding clear of the status bar and gesture bar
 - [ ] End in the car, End on the phone, and the car's own "End navigation" each end the trip everywhere
@@ -170,6 +170,9 @@ and adaptive quality gaps, in
 - [ ] Search (parked): typing searches once you pause, not on every letter; the last results stay up while the next load; emptying the box clears the list and its pins
 - [ ] Arriving shows the destination flag beside "You’ve arrived"
 - [ ] Plan with the phone locked in a pocket and no recent fix on it: the preview comes from the car's position within a few seconds, not "isn’t answering"
+- [ ] Search results, Discover and Planned routes: each row's numbered badge matches a numbered marker on the map, the same blue, readable day and night
+- [ ] Route preview and driving: the route ends at a red destination pin, and the chosen route has a white edge; Home shows a dot where you are
+- [ ] The turn card on the driving screen is Wayfinder blue (darker at night), with its white text clear; if the head unit shows its own colour instead, note it
 
 ## Phone app: window sizes, keyboard and mouse
 

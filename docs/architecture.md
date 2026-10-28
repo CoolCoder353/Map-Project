@@ -236,6 +236,16 @@ Search runs once typing pauses for half a second (or at once on submit), keeps t
 while the next load, and clears them when the box is emptied; an answer to older words is dropped.
 Arriving shows the destination flag.
 
+**What the car map marks.** Search results, Discover and Planned routes are numbered: each row's
+image is a numbered badge (`numberIcon`), and the same badge marks it on the map (a planned route at
+its middle, where routes that start together have parted), so "2" on the map is the second row.
+`SceneLayout.drawing` decides the numbers, `MapPins` draws the badges and the destination pin, and
+`MapFeatures` turns them into the GeoJSON the renderer's symbol layer shows; only that last step
+needs MapLibre. A chosen route, on the preview and while driving, ends at a red destination pin and
+has a white edge so it stands clear of the roads under it. Home marks where you are. On the driving
+screen the speaker button shows whether directions are spoken (struck through when muted), and the
+turn card is the route line's blue (`NavTemplates.TURN_CARD`, darker at night).
+
 **Report.** The driving screen's Report sends a bug report from the phone with one tap
 (`report` in `src/car/handlers.ts`): what the car showed, the speed limit and speed, the heading and
 where, as a feedback report with the map position. Typing or speaking can't be done while driving;

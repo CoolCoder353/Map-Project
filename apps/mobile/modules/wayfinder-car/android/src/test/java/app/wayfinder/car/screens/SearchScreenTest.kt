@@ -90,6 +90,12 @@ class SearchScreenTest {
     assertEquals(listOf("Coot-tha Road"), titles())
   }
 
+  @Test fun resultsAreNumberedAsTheirMarkersOnTheMap() {
+    screen.callback.onSearchSubmitted("coot")
+    api.answer("search", listOf(Samples.place(), Samples.place("p2", "Coot-tha Road")))
+    assertEquals(listOf(numberIcon(1), numberIcon(2)), template().itemList!!.items.map { (it as Row).image })
+  }
+
   @Test fun picksAPlaceToPlanTo() {
     screen.callback.onSearchSubmitted("coot")
     api.answer("search", listOf(Samples.place()))

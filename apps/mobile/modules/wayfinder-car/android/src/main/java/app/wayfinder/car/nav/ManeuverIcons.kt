@@ -1,13 +1,25 @@
 package app.wayfinder.car.nav
 
 import android.content.Context
+import androidx.car.app.model.CarColor
 import androidx.car.app.model.CarIcon
 import androidx.core.graphics.drawable.IconCompat
 import app.wayfinder.car.R
 import app.wayfinder.car.bridge.CarManeuver
 
+/** The driving screen's icons: each manoeuvre's, and the speaker. */
 class ManeuverIcons(private val context: Context) {
   private val roundabouts = HashMap<Int, CarIcon>()
+  private val speakers = HashMap<Boolean, CarIcon>()
+
+  /**
+   * The speaker on the driving screen, showing whether directions are spoken (struck through when
+   * muted), as car audio controls do. The words "Mute"/"Unmute" named what a tap would do, which
+   * read as the state at a glance. Tinted by the car to suit its screen.
+   */
+  fun sound(muted: Boolean): CarIcon = speakers.getOrPut(muted) {
+    CarIcon.Builder(IconCompat.createWithResource(context, if (muted) R.drawable.wf_volume_off else R.drawable.wf_volume_up)).setTint(CarColor.DEFAULT).build()
+  }
 
   fun iconFor(type: String): CarIcon = CarIcon.Builder(IconCompat.createWithResource(context, resFor(type))).build()
 

@@ -22,6 +22,15 @@ class NavTemplatesTest {
   private val icons = ManeuverIcons(ApplicationProvider.getApplicationContext())
   private fun template(nav: app.wayfinder.car.bridge.CarNav?) = NavTemplates.navigation(nav, icons, onEnd = {}, onMute = {})
 
+  /** What each button on the driving screen shows: its words, or which speaker. */
+  private fun buttons(t: androidx.car.app.navigation.model.NavigationTemplate) = t.actionStrip!!.actions.map { a ->
+    a.title.text() ?: when (a.icon?.icon?.resId) {
+      app.wayfinder.car.R.drawable.wf_volume_up -> "speaker"
+      app.wayfinder.car.R.drawable.wf_volume_off -> "speaker, muted"
+      else -> "?"
+    }
+  }
+
   @Test fun showsTheNextTurnHowFarAndWhenYouArrive() {
     val t = template(Samples.nav().copy(next = NextStep(CarManeuver("right", null), "Turn right")))
     val info = t.navigationInfo as RoutingInfo
@@ -30,7 +39,24 @@ class NavTemplatesTest {
     assertEquals(250.0, info.currentDistance!!.displayDistance, 0.0)
     assertEquals("Turn right", info.nextStep!!.cue.text())
     assertEquals(500L, t.destinationTravelEstimate!!.remainingTimeSeconds)
-    assertEquals(listOf("Mute", "End"), t.actionStrip!!.actions.map { it.title.text() })
+    assertEquals(listOf("speaker", "End"), buttons(t))
+  }
+
+  /** The speaker shows whether directions are spoken; "Mute" named what a tap would do, which read as the state. */
+  @Test fun theSpeakerShowsWhetherDirectionsAreSpoken() {
+    var taps = 0
+    val muted = NavTemplates.navigation(Samples.nav(muted = true), icons, onEnd = {}, onMute = { taps++ })
+    assertEquals(listOf("speaker, muted", "End"), buttons(muted))
+    muted.actionStrip!!.actions[0].onClickDelegate!!.sendClick(object : androidx.car.app.OnDoneCallback {})
+    org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle()
+    assertEquals(1, taps)
+  }
+
+  /** The turn card in the route line's blue, day and night. */
+  @Test fun theTurnCardIsWayfinderBlue() {
+    for (nav in listOf(Samples.nav(), Samples.nav(status = NavStatus.ARRIVED), null)) assertEquals(NavTemplates.TURN_CARD, template(nav).backgroundColor)
+    assertEquals(0xFF1765CC.toInt(), NavTemplates.TURN_CARD.color)
+    assertEquals(0xFF174EA6.toInt(), NavTemplates.TURN_CARD.colorDark)
   }
 
   /** A spinner that never stops reads as the car app hanging; this says what it's waiting for. */
@@ -56,7 +82,7 @@ class NavTemplatesTest {
     assertEquals("You’ve arrived", info.title.text())
     assertEquals("Mt Coot-tha Lookout", info.text.text())
     assertEquals("the destination flag", app.wayfinder.car.R.drawable.wf_destination, info.image!!.icon!!.resId)
-    assertEquals(listOf("Unmute", "Done"), t.actionStrip!!.actions.map { it.title.text() })
+    assertEquals(listOf("speaker, muted", "Done"), buttons(t))
     assertNull(t.destinationTravelEstimate)
   }
 
@@ -114,7 +140,7 @@ class NavTemplatesTest {
     var recentred = 0
     fun withMap(panned: Boolean) = NavTemplates.navigation(Samples.nav(), icons, onEnd = {}, onMute = {}, onReport = {}, map = MapButtons(panned, icon, icon, icon, { zooms += it }, { recentred++ }))
     val t = withMap(panned = false)
-    assertEquals(listOf("Mute", "Report", "End"), t.actionStrip!!.actions.map { it.title.text() })
+    assertEquals(listOf("speaker", "Report", "End"), buttons(t))
     val mapActions = t.mapActionStrip!!.actions
     assertEquals(listOf(androidx.car.app.model.Action.TYPE_PAN, androidx.car.app.model.Action.TYPE_CUSTOM, androidx.car.app.model.Action.TYPE_CUSTOM), mapActions.map { it.type })
     assertNotNull(t.panModeDelegate)
@@ -127,7 +153,7 @@ class NavTemplatesTest {
     click(panned[1])
     assertEquals(1, recentred)
     // No trip yet: nothing to report on.
-    assertEquals(listOf("Mute", "End"), NavTemplates.navigation(null, icons, onEnd = {}, onMute = {}, onReport = {}).actionStrip!!.actions.map { it.title.text() })
+    assertEquals(listOf("speaker", "End"), buttons(NavTemplates.navigation(null, icons, onEnd = {}, onMute = {}, onReport = {})))
   }
 
   @Test fun aRoundaboutWithoutAUsableExitStillBuilds() {

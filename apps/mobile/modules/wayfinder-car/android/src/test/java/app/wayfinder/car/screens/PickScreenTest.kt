@@ -63,4 +63,15 @@ class PickScreenTest {
     assertEquals(listOf("Mt Coot-tha Lookout"), (screen.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.items.map { (it as Row).title.text() })
     assertEquals(MapScene.Places(listOf(Samples.place())), scenes.shown.last())
   }
+
+  /** Row 2 has the badge marked "2" on the map, and the planned routes are numbered there too. */
+  @Test fun rowsAreNumberedAsTheirMarkersOnTheMap() {
+    val screen = PickScreens.planned(carContext, api, scenes).also { ScreenController(it).moveToState(Lifecycle.State.STARTED) }
+    val routes = listOf(PlannedItem("pl1", "Sunday drive", Samples.option("r-sun", "Sunday drive")), PlannedItem("pl2", "Coast", Samples.option("r-coast", "Coast")))
+    api.answer("planned", routes)
+    val rows = (screen.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.items.map { it as Row }
+    assertSame(numberIcon(1), rows[0].image)
+    assertSame(numberIcon(2), rows[1].image)
+    assertEquals("none chosen yet", MapScene.Routes(routes.map { it.option }, MapScene.Routes.NONE), scenes.shown.last())
+  }
 }

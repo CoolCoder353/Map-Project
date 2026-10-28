@@ -12,9 +12,9 @@ import app.wayfinder.car.map.MapScene
 import app.wayfinder.car.map.MapScenes
 
 /**
- * A list to choose from (planned routes, places to discover), with its items on the map. A list
- * that couldn't load says why, with "Try again": going back and in again is two taps more while
- * driving.
+ * A list to choose from (planned routes, places to discover), with its items on the map, each row
+ * numbered as its marker there. A list that couldn't load says why, with "Try again": going back
+ * and in again is two taps more while driving.
  */
 class PickScreen<T>(
   carContext: CarContext,
@@ -63,9 +63,9 @@ class PickScreen<T>(
     }
     val list = ItemList.Builder()
     if (found.isEmpty()) list.setNoItemsMessage(emptyMessage)
-    found.take(MAX_ROWS).forEach { item ->
+    found.take(MAX_ROWS).forEachIndexed { i, item ->
       val (name, detail) = describe(item)
-      list.addItem(row(name, detail, browsable = true) { screenManager.push(pick(item)) })
+      list.addItem(row(name, detail, browsable = true, icon = numberIcon(i + 1)) { screenManager.push(pick(item)) })
     }
     return b.setItemList(list.build()).build()
   }
@@ -84,7 +84,8 @@ object PickScreens {
     carContext, map, "Planned routes", "Nothing planned for driving. Send a route from the website.",
     load = api::planned,
     describe = { it.name to it.option.detail },
-    scene = { items -> MapScene.Routes(items.map { it.option }, 0) },
+    // None chosen yet: each route is numbered on the map as its row is.
+    scene = { items -> MapScene.Routes(items.map { it.option }, MapScene.Routes.NONE) },
     pick = { RoutePreviewScreen.forPlanned(carContext, api, map, it) },
   )
 }

@@ -9,6 +9,7 @@ import androidx.core.graphics.drawable.IconCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
+import app.wayfinder.car.map.MapPins
 import app.wayfinder.car.map.MapScene
 import app.wayfinder.car.map.MapScenes
 
@@ -24,6 +25,15 @@ fun appName(carContext: CarContext): String =
  */
 fun carIcon(carContext: CarContext, res: Int): CarIcon =
   CarIcon.Builder(IconCompat.createWithResource(carContext, res)).setTint(CarColor.DEFAULT).build()
+
+private val badges = HashMap<Int, CarIcon>()
+
+/**
+ * Row [n]'s numbered badge: the same as its marker on the car map ([MapPins]), so the driver can
+ * match "2" in the list to "2" on the map. Not tinted: it keeps the route line's blue.
+ */
+fun numberIcon(n: Int): CarIcon =
+  badges.getOrPut(n) { CarIcon.Builder(IconCompat.createWithBitmap(MapPins.badge(n.toString(), MapPins.ROW_PX))).build() }
 
 /**
  * A tappable row, with an [icon] to tell it apart at a glance. Places lists
