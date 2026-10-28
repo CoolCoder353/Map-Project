@@ -55,6 +55,7 @@ class NavTemplatesTest {
     val info = t.navigationInfo as MessageInfo
     assertEquals("You’ve arrived", info.title.text())
     assertEquals("Mt Coot-tha Lookout", info.text.text())
+    assertEquals("the destination flag", app.wayfinder.car.R.drawable.wf_destination, info.image!!.icon!!.resId)
     assertEquals(listOf("Unmute", "Done"), t.actionStrip!!.actions.map { it.title.text() })
     assertNull(t.destinationTravelEstimate)
   }

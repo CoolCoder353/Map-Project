@@ -1,6 +1,7 @@
 package app.wayfinder.car.screens
 
 import android.text.Spanned
+import androidx.car.app.model.Action
 import androidx.car.app.model.DurationSpan
 import androidx.car.app.model.MessageTemplate
 import androidx.car.app.model.Row
@@ -52,6 +53,27 @@ class RoutePreviewScreenTest {
   @Test fun saysWhenNoRouteCanBeFound() {
     api.fail("plan", "No route found. Try somewhere nearer a road.")
     assertEquals("No route found. Try somewhere nearer a road.", (screen.onGetTemplate() as MessageTemplate).message.text())
+  }
+
+  /** No signal, or the phone not finding where it is: plan again from here, not Back and pick again. */
+  @Test fun aPlanThatFailedCanBeTriedAgain() {
+    api.fail("plan", "No connection to the server.")
+    val t = screen.onGetTemplate() as MessageTemplate
+    assertEquals(Action.TYPE_BACK, t.headerAction!!.type)
+    t.actions.single().also { assertEquals("Try again", it.title.text()) }.click()
+    assertEquals(listOf("plan p1", "plan p1"), api.calls)
+    assertTrue((screen.onGetTemplate() as RoutePreviewNavigationTemplate).isLoading)
+    api.answer("plan", PlanResult(options, null))
+    assertEquals(listOf("Fastest", "Explore 1"), (screen.onGetTemplate() as RoutePreviewNavigationTemplate).itemList!!.items.map { (it as Row).title.text() })
+    assertEquals(MapScene.Routes(options, 0), scenes.shown.last())
+  }
+
+  /** Asking again would only find nothing again. */
+  @Test fun noTryAgainWhenThereIsNoRouteAtAll() {
+    api.answer("plan", PlanResult(emptyList(), null))
+    val t = screen.onGetTemplate() as MessageTemplate
+    assertEquals("No route found to Mt Coot-tha Lookout.", t.message.text())
+    assertTrue(t.actions.isEmpty())
   }
 
   private fun rowsOf() = (screen.onGetTemplate() as RoutePreviewNavigationTemplate).itemList!!.items.map { it as Row }

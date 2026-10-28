@@ -2,6 +2,7 @@ package app.wayfinder.car
 
 import android.os.Looper
 import androidx.car.app.OnDoneCallback
+import androidx.car.app.model.Action
 import androidx.car.app.model.CarText
 import androidx.car.app.model.Row
 import androidx.car.app.testing.TestCarContext
@@ -14,6 +15,12 @@ fun CarText?.text(): String? = this?.toCharSequence()?.toString()
 
 /** Taps a row the way the car does, then lets the main thread run what it posted. */
 fun Row.click() {
+  onClickDelegate!!.sendClick(object : OnDoneCallback {})
+  shadowOf(Looper.getMainLooper()).idle()
+}
+
+/** Taps a button (a message's "Try again", say) the way the car does. */
+fun Action.click() {
   onClickDelegate!!.sendClick(object : OnDoneCallback {})
   shadowOf(Looper.getMainLooper()).idle()
 }

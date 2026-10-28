@@ -34,14 +34,24 @@ class RoutePreviewScreen(
   private var starting = false
 
   init {
-    whenCreated {
-      load { r ->
-        result = r
-        showOnMap()
-        invalidate()
-      }
-    }
+    whenCreated { fetch() }
     whenStarted { showOnMap() }
+  }
+
+  private fun fetch() {
+    load { r ->
+      result = r
+      showOnMap()
+      invalidate()
+    }
+  }
+
+  /** Plans again after a failure: no signal, or the phone not finding where it is. */
+  internal fun retry() {
+    result = null
+    selected = 0
+    invalidate()
+    fetch()
   }
 
   private val options: List<RouteOption> get() = result?.getOrNull()?.options.orEmpty()
@@ -75,7 +85,7 @@ class RoutePreviewScreen(
   override fun onGetTemplate(): Template {
     val b = RoutePreviewNavigationTemplate.Builder().setTitle(destinationName).setHeaderAction(Action.BACK)
     val r = result ?: return b.setLoading(true).build()
-    val plan = r.getOrElse { return problem(it.message ?: "Couldn’t plan a route. Try again.") }
+    val plan = r.getOrElse { return problem(it.message ?: "Couldn’t plan a route. Try again.", canRetry = true) }
     if (plan.options.isEmpty()) return problem("No route found to $destinationName.")
     val list = ItemList.Builder().setOnSelectedListener { select(it) }.setSelectedIndex(selected)
     plan.options.forEachIndexed { i, o ->
@@ -108,8 +118,12 @@ class RoutePreviewScreen(
     return CarText.create(text)
   }
 
-  private fun problem(text: String): Template =
-    MessageTemplate.Builder(text).setTitle(destinationName).setHeaderAction(Action.BACK).build()
+  private fun problem(text: String, canRetry: Boolean = false): Template =
+    MessageTemplate.Builder(text)
+      .setTitle(destinationName)
+      .setHeaderAction(Action.BACK)
+      .apply { if (canRetry) addAction(Action.Builder().setTitle("Try again").setOnClickListener { retry() }.build()) }
+      .build()
 
   companion object {
     fun forPlace(carContext: CarContext, api: CarApi, map: MapScenes, place: CarPlace) =

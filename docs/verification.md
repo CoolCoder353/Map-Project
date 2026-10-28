@@ -146,7 +146,7 @@ and adaptive quality gaps, in
 - [ ] Swipe the app away mid-trip, then open it again: no "Navigating" notification left over, and GPS isn't left running
 - [ ] "Navigate to Mt Coot-tha Lookout" by voice (Assistant) opens its route preview, with the phone app closed and with it open; `adb shell am start -a androidx.car.app.action.NAVIGATE -d "geo:-27.47,153.03"` (or the DHU's equivalent) does the same for a point
 - [ ] A navigate request while signed out on the phone asks to sign in, and Try again continues to the place
-- [ ] During a trip, the car's notification area shows the next instruction, with a heads-up only when it changes; tapping it returns to the directions; it is gone when the trip ends
+- [ ] During a trip, the car's notification area shows the next instruction, with a heads-up only when it changes; tapping it returns to the directions, also from Search or Planned routes (Home under them, nothing piled up); it is gone when the trip ends
 - [ ] DHU "auto drive" (`adb shell dumpsys activity service androidx.car.app.samples.navigation.car.NavigationCarAppService AUTO_DRIVE`, with our service name) starts a test drive with no route chosen and with one running; it arrives, ends cleanly, and the trip does not appear in the web app's trips or coverage
 - [ ] Start a trip with no signal at all: the car map is blank at first, then draws once there is signal (the style is tried again)
 - [ ] Every car message that sends the driver to the phone (signed out, phone not answering, update needed, location off) says "When it’s safe" (VI-1)
@@ -164,6 +164,12 @@ and adaptive quality gaps, in
 - [ ] Before the first fix the driving screen says "Finding where you are…", not a spinner
 - [ ] Arriving: "You have arrived" said once; the trip ends by itself about 15 s later, on the car and the phone
 - [ ] Drive into a dead end mid-trip: "Route updated. Turn around when you can" once, and no new route every few seconds while you find somewhere to turn
+- [ ] Home's rows each show their icon (directions arrow, search, route, compass, car), clear in day and night (VD-1)
+- [ ] A message pushed over another screen ("Wayfinder couldn’t read that destination", "Nothing found for …") has Back in its header, on a touch-only head unit too
+- [ ] Discover nearby, Planned routes and a route preview that couldn't load (phone offline, or location off) say why with Try again, which loads them once that is fixed
+- [ ] Search (parked): typing searches once you pause, not on every letter; the last results stay up while the next load; emptying the box clears the list and its pins
+- [ ] Arriving shows the destination flag beside "You’ve arrived"
+- [ ] Plan with the phone locked in a pocket and no recent fix on it: the preview comes from the car's position within a few seconds, not "isn’t answering"
 
 ## Phone app: window sizes, keyboard and mouse
 

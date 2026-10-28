@@ -64,7 +64,9 @@ object NavTemplates {
     }
     when {
       nav == null -> b.setNavigationInfo(RoutingInfo.Builder().setLoading(true).build())
-      arrived -> b.setNavigationInfo(MessageInfo.Builder("You’ve arrived").apply { nav.destinationName?.let { setText(it) } }.build())
+      arrived -> b.setNavigationInfo(
+        MessageInfo.Builder("You’ve arrived").setImage(icons.iconFor("destination")).apply { nav.destinationName?.let { setText(it) } }.build(),
+      )
       nav.rerouting -> b.setNavigationInfo(MessageInfo.Builder("Finding a new route…").build())
       nav.error != null -> b.setNavigationInfo(MessageInfo.Builder(nav.error).build())
       nav.status == NavStatus.OFF_ROUTE -> b.setNavigationInfo(MessageInfo.Builder("Off route").build())

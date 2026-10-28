@@ -2,7 +2,7 @@
 import { waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
 import { formatDistanceShort } from '@wayfinder/nav';
-import { carHandlers, carReportMessage, REPORT_COOLDOWN_MS, REPORT_JUST_SENT, REPORT_LIMIT, REPORT_OFF, resetCarHandlers } from '../src/car/handlers';
+import { carHandlers, carReportMessage, PHONE_FIX_WAIT_MS, REPORT_COOLDOWN_MS, REPORT_JUST_SENT, REPORT_LIMIT, REPORT_OFF, resetCarHandlers } from '../src/car/handlers';
 import { ApiError } from '../src/lib/apiClient';
 import { getServerUrl } from '../src/lib/server';
 import { fake, place, resetFakes, route } from './fakes';
@@ -68,6 +68,30 @@ describe('the car’s own location', () => {
       expect(fake.api.callsTo('GET api/discover')[0]!.query).toMatchObject({ lon: 153.05, lat: -27.45 });
     } finally {
       jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    }
+  });
+
+  it('plans from the car’s position rather than wait for a phone with no recent fix', async () => {
+    jest.mocked(Location.getLastKnownPositionAsync).mockResolvedValueOnce(null as never);
+    jest.mocked(Location.getCurrentPositionAsync).mockClear();
+    fake.api.on({ 'POST api/routes/explore': () => ({ fastest: route({ id: 'r-car' }), explore: [] }) });
+    await carHandlers.location!(fixFromCar());
+    await carHandlers.plan!({ to: [152.957, -27.4846] });
+    expect(fake.api.callsTo('POST api/routes/explore')[0]!.body).toMatchObject({ from: [153.05, -27.45] });
+    expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled();
+  });
+
+  it('gives up on a phone that can’t find where it is, rather than leave the car waiting', async () => {
+    jest.useFakeTimers();
+    try {
+      jest.mocked(Location.getLastKnownPositionAsync).mockResolvedValueOnce(null as never);
+      jest.mocked(Location.getCurrentPositionAsync).mockReturnValueOnce(new Promise(() => undefined) as never);
+      const planned = expect(carHandlers.plan!({ to: [152.957, -27.4846] })).rejects.toThrow(/Can’t tell where you are/);
+      await jest.advanceTimersByTimeAsync(PHONE_FIX_WAIT_MS);
+      await planned;
+      expect(fake.api.callsTo('POST api/routes/explore')).toHaveLength(0);
+    } finally {
+      jest.useRealTimers();
     }
   });
 

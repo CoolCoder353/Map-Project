@@ -155,8 +155,12 @@ The car screens hold no data of their own. They ask the JavaScript side through 
 `planned`, `routeLine`, `start`, `stop` and `mute`, and JS pushes every navigation change back
 (`src/car/navModel.ts`). The car also sends its own position once a second (`location`, from the car's
 GNSS via `CarLocation.kt`): the phone's navigation follows it only when the phone's own fixes have
-been silent for 5 s (a locked phone with the app started from the car), and planning uses it when the
-phone can't say where it is. The trip handed to the car's cluster carries the current step and the
+been silent for 5 s (a locked phone with the app started from the car). Planning and Discover use the
+phone's position from the last minute, else the car's, and only then wait for a new fix from the
+phone, for at most 8 s (`PHONE_FIX_WAIT_MS`): a locked phone in a pocket may never give one. Each
+request gives up after 45 s (`CarBridge`), longer than the phone's own 30 s wait for the server plus
+that 8 s, so a weak signal shows as "No connection to the server" rather than as the phone not
+answering (`carModule.test.ts` keeps the three in that order). The trip handed to the car's cluster carries the current step and the
 one after it. The messages are defined in `src/car/protocol.ts` and `bridge/Protocol.kt`,
 pinned by fixtures both test suites read. Another test (`carModule.test.ts`) checks that every
 request `BridgeCarApi.kt` sends has a handler in `src/car/handlers.ts`.
@@ -199,7 +203,9 @@ sentences as Home, with "Try again".
 notification (category navigation, extended with `CarAppExtender`) with the next instruction, which
 the car shows in its notification area. It is a heads-up only when the instruction changes, updates
 quietly with the distance, and is removed when the trip ends or the car session does. Tapping it
-brings the car app forward. The phone's own "Navigating to ..." service notification is separate.
+brings the car app forward on the directions: the car app is started with a `wayfinder:directions`
+link, which the session answers by stepping back to Home and putting the driving screen on top, from
+wherever the driver was. The phone's own "Navigating to ..." service notification is separate.
 
 **Test drive.** The host's "auto drive" (`onAutoDriveEnabled`, switched on by Google's reviewers and
 the Desktop Head Unit) sends the `simulate` request. `src/car/simulation.ts` then runs the same
@@ -221,6 +227,14 @@ the car connects (`MapStyles`), not only by Home: a trip already running puts th
 straight over Home, which used to leave the map black. Roundabouts are drawn with the exit taken
 (`RoundaboutIcon`, from the route's `exitAngleDeg`). Before the first fix the screen says "Finding
 where you are…" rather than spinning; after 30 s without one, why.
+
+**Using the screens.** Home's rows each carry a Material Symbols icon, tinted by the host for day
+and night. A message pushed over another screen (an unreadable navigate request, a place not found)
+has Back in its header, as a touch-only head unit has no other way off it. A list (Planned routes,
+Discover) or a route preview that couldn't load says why with Try again, which asks again in place.
+Search runs once typing pauses for half a second (or at once on submit), keeps the last results up
+while the next load, and clears them when the box is emptied; an answer to older words is dropped.
+Arriving shows the destination flag.
 
 **Report.** The driving screen's Report sends a bug report from the phone with one tap
 (`report` in `src/car/handlers.ts`): what the car showed, the speed limit and speed, the heading and

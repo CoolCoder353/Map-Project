@@ -127,4 +127,17 @@ class HomeScreenTest {
     api.answer("status", Samples.status())
     assertFalse("Test drive" in titles(screen.onGetTemplate()))
   }
+
+  /** Each row has its own icon, so a glance finds it. */
+  @Test fun everyRowHasItsOwnIcon() {
+    api.navigation = Samples.nav()
+    open()
+    api.answer("status", Samples.status())
+    val during = (screen.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.items.map { (it as Row).image!!.icon!!.resId }
+    assertEquals(listOf(R.drawable.wf_navigation, R.drawable.wf_search, R.drawable.wf_route, R.drawable.wf_explore), during)
+    api.pushNav(null)
+    val after = (screen.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.items.map { (it as Row).image!!.icon!!.resId }
+    assertEquals(R.drawable.wf_car, after.last())
+    assertEquals("one icon each", after.size, after.toSet().size)
+  }
 }
