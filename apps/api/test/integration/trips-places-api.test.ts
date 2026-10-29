@@ -66,6 +66,22 @@ describe('trips over HTTP', () => {
     expect(page.json().items).toHaveLength(1);
     expect((await ta.app.inject({ method: 'GET', url: '/api/trips?limit=0', headers: auth })).statusCode).toBe(400);
   });
+
+  it('answers a malformed trip id or cursor as the caller’s mistake, not a server error', async () => {
+    // Shaped like an id but not one (36 dashes), and not shaped like one at all.
+    for (const id of ['-'.repeat(36), 'not-a-trip']) {
+      for (const method of ['GET', 'PATCH', 'DELETE'] as const) {
+        const res = await ta.app.inject({ method, url: `/api/trips/${id}`, headers: auth, ...(method === 'PATCH' ? { payload: { mode: 'foot' } } : {}) });
+        expect(res.statusCode, `${method} ${id}`).toBe(404);
+      }
+    }
+    const bad = await ta.app.inject({ method: 'GET', url: '/api/trips?cursor=yesterday', headers: auth });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().error.code).toBe('bad_request');
+    for (const url of ['/api/saved-places/' + '-'.repeat(36), '/api/planned-routes/' + '-'.repeat(36)]) {
+      expect((await ta.app.inject({ method: 'DELETE', url, headers: auth })).statusCode, url).toBe(404);
+    }
+  });
 });
 
 describe('search over HTTP', () => {

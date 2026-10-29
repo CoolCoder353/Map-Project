@@ -78,7 +78,7 @@ is always one instruction with the exit actually taken, even where a stop on a d
 | Method | Path | Schema / notes |
 |---|---|---|
 | POST | `/api/tracks/batches` | `TrackBatchRequestSchema`: up to 5,000 points, `ts` in epoch ms. Re-sending a `batchId` returns `duplicate: true` |
-| GET | `/api/trips` | `limit`, `cursor` → `TripListResponseSchema` (each trip has `newRoads`) |
+| GET | `/api/trips` | `limit`, `cursor` (the last trip's `startedAt`; anything else is a 400) → `TripListResponseSchema` (each trip has `newRoads`) |
 | GET | `/api/trips/:id` | `TripDetailSchema`, with the recorded points |
 | PATCH | `/api/trips/:id` | `{ mode }`, which re-runs coverage |
 | DELETE | `/api/trips/:id` | Soft delete; an admin can restore it for 7 days |

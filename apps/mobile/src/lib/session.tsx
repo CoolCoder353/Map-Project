@@ -1,6 +1,7 @@
 import type { AuthResponse, PublicUser } from '@wayfinder/shared/schemas';
 import { useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { reconcileTracking } from '../tracking/background';
 import { api, hasSavedSession, onSession } from './api';
 import { useAppConfig } from './appConfig';
@@ -55,6 +56,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (user) void reconcileTracking(user.settings.trackingEnabled, config.appName).catch(() => undefined);
   }, [user?.settings.trackingEnabled, user, config.appName]);
+  // Tracking that is on but waiting for "Allow all the time" starts once the app comes back from
+  // the phone's settings with it granted, not at the next restart.
+  const tracking = !!user?.settings.trackingEnabled;
+  useEffect(() => {
+    if (!tracking) return;
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void reconcileTracking(true, config.appName).catch(() => undefined);
+    });
+    return () => sub.remove();
+  }, [tracking, config.appName]);
 
   const value = useMemo<SessionValue>(
     () => ({

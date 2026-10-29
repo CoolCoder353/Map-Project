@@ -21,15 +21,13 @@ import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory.*
+import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
-import org.maplibre.geojson.Feature
-import org.maplibre.geojson.FeatureCollection
-import org.maplibre.geojson.LineString
-import org.maplibre.geojson.Point
 import kotlin.math.ln
 
 /**
@@ -47,6 +45,8 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
   private val styleLoads = StyleLoads()
   private var scene: MapScene = MapScene.Overview(null)
   private var surfaceSize = Rect()
+  /** The car screen's density, for drawing the markers (MapPins) at their size there. */
+  private var dpi = 160
   private var visible = Rect()
   private var puck: PuckView? = null
   private var speed: SpeedView? = null
@@ -93,6 +93,7 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
       refreshStyle()
     }
     surfaceSize = Rect(0, 0, container.width, container.height)
+    dpi = container.dpi
     if (visible.isEmpty) visible = Rect(surfaceSize)
   }
 
@@ -183,25 +184,30 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
     style.addSource(GeoJsonSource(OTHERS))
     style.addSource(GeoJsonSource(TRAVELLED))
     style.addSource(GeoJsonSource(SELECTED))
-    style.addSource(GeoJsonSource(POINTS))
+    style.addSource(GeoJsonSource(MARKERS))
     style.addSource(GeoJsonSource(POSITION))
     style.addLayer(LineLayer(OTHERS, OTHERS).withProperties(lineColor(GREY), lineWidth(6f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
     style.addLayer(LineLayer(TRAVELLED, TRAVELLED).withProperties(lineColor(TRAVELLED_COLOUR), lineWidth(6f), lineOpacity(0.85f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
+    // A white edge keeps the chosen route clear of the roads and labels under it, day and night.
+    style.addLayer(LineLayer(CASING, SELECTED).withProperties(lineColor(WHITE), lineWidth(12f), lineOpacity(0.9f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
     style.addLayer(LineLayer(SELECTED, SELECTED).withProperties(lineColor(ACCENT), lineWidth(8f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
-    style.addLayer(CircleLayer(POINTS, POINTS).withProperties(circleColor(ACCENT), circleRadius(7f), circleStrokeColor(WHITE), circleStrokeWidth(2f)))
     style.addLayer(CircleLayer(POSITION, POSITION).withProperties(circleColor(ACCENT), circleRadius(10f), circleStrokeColor(WHITE), circleStrokeWidth(3f)))
+    // Numbered pins and the destination (MapPins), on top and never hidden for overlapping.
+    style.addLayer(SymbolLayer(MARKERS, MARKERS).withProperties(iconImage(Expression.get(MapFeatures.IMAGE)), iconAllowOverlap(true), iconIgnorePlacement(true)))
   }
 
   private fun applyScene() {
     val style = map?.style?.takeIf { it.isFullyLoaded } ?: return
     val d = SceneLayout.drawing(scene)
-    style.getSourceAs<GeoJsonSource>(SELECTED)?.setGeoJson(lines(listOf(d.selected)))
-    style.getSourceAs<GeoJsonSource>(OTHERS)?.setGeoJson(lines(d.others))
-    style.getSourceAs<GeoJsonSource>(TRAVELLED)?.setGeoJson(lines(listOf(d.travelled)))
-    style.getSourceAs<GeoJsonSource>(POINTS)?.setGeoJson(points(d.points))
+    style.getSourceAs<GeoJsonSource>(SELECTED)?.setGeoJson(MapFeatures.lines(listOf(d.selected)))
+    style.getSourceAs<GeoJsonSource>(OTHERS)?.setGeoJson(MapFeatures.lines(d.others))
+    style.getSourceAs<GeoJsonSource>(TRAVELLED)?.setGeoJson(MapFeatures.lines(listOf(d.travelled)))
+    // Drawn for the car screen's density, the first time a scene needs each one.
+    MapPins.missing(d, style::getImage).forEach { style.addImage(it, MapPins.image(it, dpi)) }
+    style.getSourceAs<GeoJsonSource>(MARKERS)?.setGeoJson(MapFeatures.markers(d))
     // Following the car, its marker is the fixed view over the map (no jumping from fix to fix).
     val onMap = d.position?.takeUnless { followingCar() }
-    style.getSourceAs<GeoJsonSource>(POSITION)?.setGeoJson(points(listOfNotNull(onMap)))
+    style.getSourceAs<GeoJsonSource>(POSITION)?.setGeoJson(MapFeatures.points(listOfNotNull(onMap)))
     applyCamera()
     applyOverlays()
   }
@@ -270,17 +276,13 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
     }
   }
 
-  private fun lines(ls: List<List<LngLat>>) =
-    FeatureCollection.fromFeatures(ls.filter { it.size >= 2 }.map { l -> Feature.fromGeometry(LineString.fromLngLats(l.map { Point.fromLngLat(it.lon, it.lat) })) })
-
-  private fun points(ps: List<LngLat>) = FeatureCollection.fromFeatures(ps.map { Feature.fromGeometry(Point.fromLngLat(it.lon, it.lat)) })
-
   private fun LngLat.latLng() = LatLng(lat, lon)
 
   private companion object {
     const val SELECTED = "wf-route-selected"
     const val OTHERS = "wf-route-others"
-    const val POINTS = "wf-places"
+    const val MARKERS = "wf-markers"
+    const val CASING = "wf-route-casing"
     const val POSITION = "wf-position"
     const val TRAVELLED = "wf-travelled"
     // The phone's accent (src/lib/theme.ts) and a quiet grey for the routes not chosen.

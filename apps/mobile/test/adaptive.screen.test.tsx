@@ -54,7 +54,7 @@ beforeEach(() => {
   mockTakes = 0;
   Object.assign(mockNav, { route: route(), state: null, rerouting: false, error: null, muted: false });
   fake.status = 'anonymous';
-  fake.api.on({ 'GET api/coverage/stats': () => coverageStats(), 'GET api/coverage': () => ({ type: 'FeatureCollection', features: [] }), 'GET api/trips/t-1': () => tripDetail() });
+  fake.api.on({ 'GET api/coverage/stats': () => coverageStats(), 'GET api/coverage': () => ({ type: 'FeatureCollection', features: [] }), 'GET api/trips/t-1': () => tripDetail(), 'GET api/saved-places': () => ({ items: [] }) });
 });
 
 const sizes = [

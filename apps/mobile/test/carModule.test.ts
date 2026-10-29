@@ -32,6 +32,15 @@ describe('Android Auto module', () => {
     for (const method of sent) expect(handlers, method).toMatch(new RegExp(`^  (async )?${method}\\(`, 'm'));
   });
 
+  it('waits for the phone longer than the phone waits for the server and a position', () => {
+    // Otherwise a weak signal reads, in the car, as the phone not answering.
+    const ms = (src: string, re: RegExp) => Number(re.exec(src)![1]!.replaceAll('_', ''));
+    const car = ms(readFileSync(join(moduleDir, 'src/main/java/app/wayfinder/car/bridge/CarBridge.kt'), 'utf8'), /timeoutMs: Long = ([\d_]+)/);
+    const server = ms(readFileSync(join(__dirname, '../src/lib/apiClient.ts'), 'utf8'), /const DEFAULT_TIMEOUT_MS = ([\d_]+)/);
+    const position = ms(readFileSync(join(__dirname, '../src/car/handlers.ts'), 'utf8'), /PHONE_FIX_WAIT_MS = ([\d_]+)/);
+    expect(car).toBeGreaterThan(server + position);
+  });
+
   it('handles navigate requests from Google Assistant and other apps (geo: links)', () => {
     const manifest = readFileSync(join(moduleDir, 'src/main/AndroidManifest.xml'), 'utf8');
     const service = manifest.slice(manifest.indexOf('<service'), manifest.indexOf('</service>'));

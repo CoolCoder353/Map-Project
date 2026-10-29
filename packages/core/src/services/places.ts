@@ -14,7 +14,7 @@ import {
 } from '@wayfinder/shared';
 import { gridDisk } from 'h3-js';
 import type { DbClient } from '../db/pool.js';
-import { notFound } from '../lib/errors.js';
+import { isUuid, notFound } from '../lib/errors.js';
 import { placeHours } from '../lib/hours.js';
 
 interface PlaceRow {
@@ -321,7 +321,7 @@ export async function listPlannedRoutes(db: DbClient, userId: string): Promise<P
 }
 
 export async function deletePlannedRoute(db: DbClient, userId: string, id: string): Promise<void> {
-  if (!/^[0-9a-f-]{36}$/i.test(id)) throw notFound('Planned route not found');
+  if (!isUuid(id)) throw notFound('Planned route not found');
   const r = await db.query('DELETE FROM planned_routes WHERE id = $1 AND user_id = $2', [id, userId]);
   if (r.rowCount === 0) throw notFound('Planned route not found');
 }

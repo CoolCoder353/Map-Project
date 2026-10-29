@@ -86,6 +86,7 @@ What has been checked, how to repeat it, and what is still open. Update this whe
   - Opening the app offline signed people out; the next account on a phone saw the last one's trips and planned routes until they refetched.
   - A place category the app didn't know crashed Discover; Trips said "no trips yet" when it couldn't load them; Settings' Sync, Remove, and switches failed silently.
   - Against a server from before coverage-by-roads, Coverage crashed on the missing numbers (found on the emulator). APKs and the server update separately, so the answers screens depend on are now checked against the shared schemas, and a mismatch says the app or server needs updating.
+- Read through again on 2026-10-28 (each now has a test). Server: a trip, saved place, planned route or admin user id that wasn't an id (or was 36 dashes, which the old check let through) answered 500 and logged an error event, as did a trips `cursor` or audit `before` that wasn't one; they're 404 and 400 now. Android: tracking switched on while waiting for "Allow all the time" didn't start after it was granted in the phone's settings, and Settings kept warning, until the app restarted; Trips and planned routes from the website stayed as they were until the app restarted or the list was pulled down; Discover kept showing places found for filters since changed, and ignored the default travel mode; mute reset at every trip.
 - Android navigation never zoomed in when a trip started (a user report, 2026-09-27). Following your position only re-centres the map at the zoom it already has, and the map opened on the whole of Australia, so the trip was followed from the country overview; the screen's fit-to-the-whole-route never ran at start (the map wasn't loaded yet) but zoomed back out on every reroute. The map now sets a street-level zoom while following, opens at the route's start before the first fix, and navigation no longer fits the whole route.
 
 ## Live stack (Docker, real data)
@@ -136,7 +137,7 @@ and adaptive quality gaps, in
 - [ ] The cluster behind the wheel shows the step after the current one with its distance (even when it is far off), and the Test drive row on Home starts a pretend trip that shows the same
 - [ ] Phone locked and the phone app closed, open Wayfinder from the car: Planned routes and Go work (the car's own location is used), and directions follow the car, not "Still finding where you are"
 - [ ] Roundabout icons turn clockwise (both kinds of roundabout)
-- [ ] Music dips for each spoken direction and comes back after; Mute silences them
+- [ ] Music dips for each spoken direction and comes back after; the speaker button silences them and shows struck through until tapped again
 - [ ] Phone locked for the whole drive: directions keep coming
 - [ ] Trip started on the phone appears in the car; trip started in the car shows the phone banner, with its padding clear of the status bar and gesture bar
 - [ ] End in the car, End on the phone, and the car's own "End navigation" each end the trip everywhere
@@ -146,7 +147,7 @@ and adaptive quality gaps, in
 - [ ] Swipe the app away mid-trip, then open it again: no "Navigating" notification left over, and GPS isn't left running
 - [ ] "Navigate to Mt Coot-tha Lookout" by voice (Assistant) opens its route preview, with the phone app closed and with it open; `adb shell am start -a androidx.car.app.action.NAVIGATE -d "geo:-27.47,153.03"` (or the DHU's equivalent) does the same for a point
 - [ ] A navigate request while signed out on the phone asks to sign in, and Try again continues to the place
-- [ ] During a trip, the car's notification area shows the next instruction, with a heads-up only when it changes; tapping it returns to the directions; it is gone when the trip ends
+- [ ] During a trip, the car's notification area shows the next instruction, with a heads-up only when it changes; tapping it returns to the directions, also from Search or Planned routes (Home under them, nothing piled up); it is gone when the trip ends
 - [ ] DHU "auto drive" (`adb shell dumpsys activity service androidx.car.app.samples.navigation.car.NavigationCarAppService AUTO_DRIVE`, with our service name) starts a test drive with no route chosen and with one running; it arrives, ends cleanly, and the trip does not appear in the web app's trips or coverage
 - [ ] Start a trip with no signal at all: the car map is blank at first, then draws once there is signal (the style is tried again)
 - [ ] Every car message that sends the driver to the phone (signed out, phone not answering, update needed, location off) says "When it’s safe" (VI-1)
@@ -164,6 +165,15 @@ and adaptive quality gaps, in
 - [ ] Before the first fix the driving screen says "Finding where you are…", not a spinner
 - [ ] Arriving: "You have arrived" said once; the trip ends by itself about 15 s later, on the car and the phone
 - [ ] Drive into a dead end mid-trip: "Route updated. Turn around when you can" once, and no new route every few seconds while you find somewhere to turn
+- [ ] Home's rows each show their icon (directions arrow, search, route, compass, car), clear in day and night (VD-1)
+- [ ] A message pushed over another screen ("Wayfinder couldn’t read that destination", "Nothing found for …") has Back in its header, on a touch-only head unit too
+- [ ] Discover nearby, Planned routes and a route preview that couldn't load (phone offline, or location off) say why with Try again, which loads them once that is fixed
+- [ ] Search (parked): typing searches once you pause, not on every letter; the last results stay up while the next load; emptying the box clears the list and its pins
+- [ ] Arriving shows the destination flag beside "You’ve arrived"
+- [ ] Plan with the phone locked in a pocket and no recent fix on it: the preview comes from the car's position within a few seconds, not "isn’t answering"
+- [ ] Search results, Discover and Planned routes: each row's numbered badge matches a numbered marker on the map, the same blue, readable day and night
+- [ ] Route preview and driving: the route ends at a red destination pin, and the chosen route has a white edge; Home shows a dot where you are
+- [ ] The turn card on the driving screen is Wayfinder blue (darker at night), with its white text clear; if the head unit shows its own colour instead, note it
 
 ## Phone app: window sizes, keyboard and mouse
 
@@ -185,6 +195,17 @@ emulators are enough.
 - [ ] Mouse: buttons, list rows, chips and cards shade under the pointer; scroll wheel scrolls lists; the map zooms with Ctrl plus the scroll wheel and with pinch on a touchscreen
 - [ ] A password manager offers to save and generate on the register form, and fills sign in
 
+## Phone app: 2026-10-28 additions
+
+Checked by Jest with the map and the phone's services faked; these need a phone or emulator.
+
+- [ ] Navigate, driving: "Arrive 3:42 pm" matches the phone's clock and moves as the time left does; a turn within 150 m after the next shows "Then …" under the turn banner; your speed shows under the limit sign, red once 3 km/h or more over, and not at all on foot
+- [ ] Mute on a trip, end it and start another, then force-stop the app and start one more: still muted each time, and the car's speaker button agrees
+- [ ] Settings, tracking on with location "while using" only: Open app settings, allow all the time, come back: the warning is gone and the recording notification appears without restarting the app
+- [ ] Plan: the swap button between the two fields swaps them and plans the other way; saved places show as one-tap buttons (Home and Work first) until a destination is chosen; a search with no matches says so
+- [ ] Discover opens from your location in your usual way of travelling; changing a filter after a search searches again once the taps stop
+- [ ] A trip shows how long it took and its average speed; switching Drive/Walk saves, and coverage catches up once the worker has run; Trips shows a trip just recorded on coming back to the tab
+
 ## Google Play permission checks (phone)
 
 - [ ] Settings, Background tracking on, with location never granted: the "Use your location in the background?" disclosure shows first; "Not now" leaves the switch off with no Android prompt; "Continue" leads to Android's location prompt, then "Allow all the time"
@@ -200,6 +221,20 @@ emulators are enough.
 - **The native map itself.** Every Android screen is tested in Jest with the map faked, and the map component with MapLibre Native mocked; MapLibre Native on a device is covered only by device testing.
 - **Restore drill.** `infra/scripts/backup.sh` and `restore.sh` are written but a full restore has not been rehearsed on this machine.
 - **The live server's new address, `maps.coolcodertech.com` (2026-10-26).** Same server and data, now through a Cloudflare Tunnel. Checked: `/api/health` (database and routing up), `/privacy` and `/delete-account` answer there; Caddy logs the real client address. App 0.5.1 (versionCode 7) moves an address saved by an older build to the new one, keeping the sign-in (Jest). In Chrome, signed in as admin at the new address: the dashboard shows every service up, and the map draws with no console errors; at the old address the map is blank (tiles come from the new address, which CORS keeps to its own web app), as expected until the old address is retired. App 0.5.1 was built for the new address, installs over the earlier build on the emulator, opens with no crash, and its sign-in screen shows the server's app name. The bundle is on Play's closed and internal tracks, in review with the new privacy and deletion URLs ([store/play/console-changes-2026-10-26.md](../store/play/console-changes-2026-10-26.md)). Still to do: `verify:stack` and `verify:mobile` against the new address (they need an admin's and a throwaway account's passwords). Reachable from abroad: Cloudflare has no country block; `/privacy` answers 200 from the US, Europe and Asia (check-host.net, 2026-10-26).
+- **Security review of the live site (2026-10-29).** Fixed in code, not yet deployed: the web build
+  no longer makes source maps (they published 51 of our source files), Caddy answers 404 for any
+  `*.map`, and every page sends `Content-Security-Policy: frame-ancestors 'none'` (plus
+  `X-Frame-Options: DENY`) so no other site can frame the sign-in page. Guarded by
+  `scripts/test/web-hardening.test.ts`; the Caddyfile itself was not run here. After the next deploy, run the
+  header checks in [operations.md](operations.md#verifying-a-deployment). Already in place: invite
+  codes are 12 random characters (60 bits, `packages/core/test/tokens.test.ts`), and sign-in,
+  register, refresh and password reset are limited to `AUTH_RATE_LIMIT_PER_MIN` (10) a minute per
+  client address on the server. Still open: a Cloudflare rate-limiting rule on `/api/auth/login`
+  and `/api/auth/register` (a dashboard change; the existing rule covers all of `/api/`), and
+  `/tiles/tiles.json` answering Cloudflare 520 to the reviewer, which needs a look on the server
+  (`curl -i http://127.0.0.1:8080/tiles/tiles.json` and the `api` and `caddy` logs). `/api/health`
+  still shows database and routing up/down to anyone: it carries no detail beyond that, and
+  `verify:stack` and the deploy checks read it without signing in.
 - **The live server has no backups yet.** Nothing is scheduled on `maps.coolcodertech.com`; see [deploy-small-server.md](deploy-small-server.md#open-items).
 - **"The app crashes when I start the map"** (a user report, 2026-09-22) is unconfirmed. The likely causes were closed in code, but it has not been reproduced on a device; a logcat from an affected phone would settle it:
   ```bash

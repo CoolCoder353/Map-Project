@@ -105,6 +105,14 @@ API_URL=https://maps.example.com ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=... 
 
 Checks health, map style, tiles, glyphs, search, reverse geocoding, fastest/explore/round-trip routing and discover against the real graph.
 
+After a change to the web image or the Caddyfile, check the security headers and that no source
+map is served (the `.map` request answers 404):
+
+```bash
+curl -sI https://maps.example.com/ | grep -iE 'content-security-policy|x-frame-options'
+curl -s -o /dev/null -w '%{http_code}\n' https://maps.example.com/assets/index.js.map
+```
+
 The phone app ships separately from the server, so it can fall out of step with it. This calls
 every endpoint the app uses, with the app's own request shapes, and checks each reply against the
 schemas the app parses with — including that the map style hands out absolute URLs, which Android

@@ -114,6 +114,32 @@ Play policy items: target SDK 36 (met); `FOREGROUND_SERVICE_LOCATION` with the s
 (fixed); `POST_NOTIFICATIONS` (fixed). The background location declaration form and video are
 the owner's ([play-store-android-auto.md](play-store-android-auto.md)).
 
+## Fixed (2026-10-28, car app pass)
+
+A pass over the car screens and the car-to-phone connection, for things that got in a driver's way.
+None changes what Google's criteria ask; all are tested (testing.md) and on the head unit checklist.
+
+- **Stuck on a message:** a message pushed over another screen (an unreadable navigate request,
+  "Nothing found for …") had the app icon as its header, so a touch-only head unit had no way off
+  it. It now has Back (`MessageScreen`).
+- **No Try again:** Planned routes and Discover that couldn't load said "Go back and try again", and
+  a route preview that couldn't plan had only Back. Both now say why with Try again.
+- **The notification tap** brought the car app forward on whatever screen it was last on; it now
+  opens the directions (verification.md already expected this).
+- **"Isn't answering" on a weak signal:** the car gave up on the phone after 30 s, exactly when the
+  phone gives up on the server, so a slow connection read as the phone not answering and sent the
+  driver to it. It now waits 45 s. Planning also waited, without limit, for a new fix from a phone
+  with no recent one before using the car's own position; it now uses the car's first and waits at
+  most 8 s for the phone.
+- **Search** asked the server for every letter from the third, blanking the list each time; it now
+  waits for a pause in typing and keeps the last results up meanwhile.
+- **At a glance:** Home's rows have icons (host-tinted, VD-1), and arriving shows the destination flag.
+- **Lists and the map (UI pass, same day):** search results, Discover and Planned routes all showed
+  as identical dots or plain lines, so a row couldn't be found on the map. Rows and markers now carry
+  the same number. A chosen route ends at a destination pin and has a white edge; Home marks where
+  you are; the driving screen's mute button is a speaker showing the state; the turn card is the
+  route line's blue. VD-1 (contrast day and night) covers these on the head unit.
+
 ## Still open
 
 - **NF-9 (map on the cluster, Tier 1):** not started; it needs the owner's go-ahead.

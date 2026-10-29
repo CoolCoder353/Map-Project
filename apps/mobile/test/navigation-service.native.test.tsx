@@ -28,6 +28,11 @@ jest.mock('../src/nav/navigationLocation', () => ({
   stopNavigationLocation: jest.fn(async () => undefined),
   setNavigationFixHandler: jest.fn(),
 }));
+const mockStore: Record<string, string> = {};
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn(async (k: string) => mockStore[k] ?? null),
+  setItemAsync: jest.fn(async (k: string, v: string) => void (mockStore[k] = v)),
+}));
 const mockAskForNotifications = jest.fn(async () => true);
 jest.mock('../src/lib/notifications', () => ({ askForNotifications: () => mockAskForNotifications() }));
 import * as NavLocation from '../src/nav/navigationLocation';
@@ -118,6 +123,32 @@ it('stop() clears everything, uploads what was recorded, and is safe to repeat',
   navigation.stop();
   expect(navigation.getSnapshot()).toMatchObject({ active: false, route: null, state: null });
   expect(mockSync).toHaveBeenCalledTimes(1);
+});
+
+it('keeps the voice muted from one trip to the next, and after the app restarts', async () => {
+  navigation.setMuted(true);
+  expect(mockStore['wf.voiceMuted']).toBe('on');
+  navigation.start(route());
+  expect(navigation.getSnapshot()).toMatchObject({ active: true, muted: true });
+  navigation.stop();
+  expect(navigation.getSnapshot()).toMatchObject({ active: false, muted: true });
+  // A fresh start of the app reads it back.
+  let fresh: typeof navigation | undefined;
+  jest.isolateModules(() => {
+    fresh = require('../src/nav/navigationService').navigation;
+  });
+  await waitFor(() => expect(fresh!.getSnapshot().muted).toBe(true));
+  navigation.setMuted(false);
+  expect(mockStore['wf.voiceMuted']).toBe('off');
+});
+
+it('tells listeners nothing when stopped with no trip running', () => {
+  navigation.stop();
+  const heard = jest.fn();
+  const off = navigation.subscribe(heard);
+  navigation.stop();
+  off();
+  expect(heard).not.toHaveBeenCalled();
 });
 
 it('ignores fixes once navigation has ended', async () => {

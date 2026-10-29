@@ -17,6 +17,7 @@ import app.wayfinder.car.bridge.ReactBoot
 import app.wayfinder.car.map.CarMapRenderer
 import app.wayfinder.car.map.MapStyles
 import app.wayfinder.car.nav.ManeuverIcons
+import app.wayfinder.car.nav.NavNotifications
 import app.wayfinder.car.nav.NavigateRequests
 import app.wayfinder.car.nav.NavigationCoordinator
 import app.wayfinder.car.screens.HomeScreen
@@ -24,6 +25,7 @@ import app.wayfinder.car.screens.HomeScreen
 class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared)) : Session() {
   private var renderer: CarMapRenderer? = null
   private var requests: NavigateRequests? = null
+  private var openDirections: (() -> Unit)? = null
 
   override fun onCreateScreen(intent: Intent): Screen {
     ReactBoot.ensureStarted(carContext)
@@ -37,6 +39,7 @@ class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared))
     val styles = MapStyles(api, map::setStyles)
     styles.ensure()
     val coordinator = NavigationCoordinator(carContext, api, map, ManeuverIcons(carContext), map, styles::ensure)
+    openDirections = coordinator::openDirections
     // The car's own position, for when the phone's goes quiet (see CarLocation).
     val stopLocation = CarLocation(HardwareFixSource(carContext), api).start()
     lifecycle.addObserver(object : DefaultLifecycleObserver {
@@ -57,9 +60,9 @@ class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared))
     return HomeScreen(carContext, api, map, onDrive = coordinator::showDrive, onTestDrive = coordinator::startTestDrive, onStatus = styles::use)
   }
 
-  /** "Navigate to ..." while the car app is already open. */
+  /** A tap on the navigation notification, or "Navigate to ..." while the car app is already open. */
   override fun onNewIntent(intent: Intent) {
-    requests?.handle(intent)
+    if (NavNotifications.opensDirections(intent)) openDirections?.invoke() else requests?.handle(intent)
   }
 
   /** The car switching between day and night changes which of the server's styles to draw. */

@@ -84,7 +84,10 @@ describe('MetricsAggregator', () => {
 
   it('flushes on a timer and everything on stop', async () => {
     vi.useFakeTimers();
-    const write = vi.fn(async () => undefined);
+    // Pinned mid-minute: fake timers otherwise start at the real clock, and a run in the last
+    // second of a minute would see the timer write a finished minute.
+    vi.setSystemTime(at('2026-09-27T10:00:10Z'));
+    const write = vi.fn(async (_rows: MetricRow[]) => undefined);
     const m = new MetricsAggregator(write);
     m.start(1000);
     m.start(1000); // idempotent
@@ -92,9 +95,14 @@ describe('MetricsAggregator', () => {
     await vi.advanceTimersByTimeAsync(1000);
     // The minute isn't over yet, so nothing is written by the timer.
     expect(write).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(50_000);
+    // Now it is: the timer writes it, once.
+    expect(write).toHaveBeenCalledTimes(1);
+    m.record('job', 'y', 1);
     await m.stop();
-    expect(write).toHaveBeenCalledTimes(1);
+    expect(write).toHaveBeenCalledTimes(2);
+    expect(write.mock.calls[1]![0].map((r) => r.label)).toEqual(['y']);
     await vi.advanceTimersByTimeAsync(5000);
-    expect(write).toHaveBeenCalledTimes(1);
+    expect(write).toHaveBeenCalledTimes(2);
   });
 });

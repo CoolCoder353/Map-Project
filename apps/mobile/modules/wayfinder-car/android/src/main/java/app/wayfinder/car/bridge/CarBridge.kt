@@ -12,11 +12,16 @@ class CarBridgeTimeout : Exception(CarMessages.PHONE_NOT_ANSWERING)
  * The car screens' line to the JavaScript side, which has the account, the server and navigation.
  * Requests made before JavaScript is listening wait for it; each gives up after [timeoutMs].
  * Answers and navigation updates are delivered through [post] (the main thread).
+ *
+ * [timeoutMs] is longer than the phone itself waits for the server (30 s, DEFAULT_TIMEOUT_MS in
+ * src/lib/apiClient.ts) plus its wait for a position (PHONE_FIX_WAIT_MS in src/car/handlers.ts).
+ * At 30 s the car gave up first on a weak signal and told the driver the phone wasn't answering,
+ * sending them to it, when the phone was about to say it had no connection.
  */
 class CarBridge(
   private val post: (Runnable) -> Unit,
   private val postDelayed: (Runnable, Long) -> Unit,
-  private val timeoutMs: Long = 30_000,
+  private val timeoutMs: Long = 45_000,
 ) {
   private var emit: ((String, String, String) -> Unit)? = null
   private val waiting = ArrayDeque<Triple<String, String, String>>()

@@ -32,26 +32,44 @@ let lastCarFix: { at: number; position: LngLat } | null = null;
 /** A car position older than this isn't where you are any more. */
 const CAR_FIX_MAX_AGE_MS = 60_000;
 
-/** Where the phone is, or null without permission or any fix. Never prompts: the car can't. */
-async function phoneHere(fresh: boolean): Promise<LngLat | null> {
-  try {
-    if (!(await Location.getForegroundPermissionsAsync()).granted) return null;
-    const last = await Location.getLastKnownPositionAsync({ maxAge: fresh ? 60_000 : 10 * 60_000 });
-    const loc = last ?? (fresh ? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }) : null);
-    return loc ? [loc.coords.longitude, loc.coords.latitude] : null;
-  } catch {
-    return null;
-  }
+/**
+ * How long Discover and planning wait for the phone to find where it is, when it has no recent
+ * position and the car hasn't said either. A locked phone in a pocket may never answer, and the
+ * car gives up on the whole request soon after (CarBridge.kt), saying the phone isn't answering.
+ */
+export const PHONE_FIX_WAIT_MS = 8_000;
+
+const located = (loc: Location.LocationObject | null): LngLat | null => (loc ? [loc.coords.longitude, loc.coords.latitude] : null);
+
+/** [p]'s answer, or null if it fails or takes longer than [ms]. */
+function within<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(null);
+      },
+    );
+  });
 }
 
 /**
- * Where you are: the phone's position, else the car's. The phone says nothing when it is locked in
- * a pocket or has not been given location; the car always knows where it is.
+ * Where you are: the phone's recent position, else the car's, else (when [fresh]) a new fix from
+ * the phone. The phone says nothing when it is locked in a pocket or has not been given location;
+ * the car always knows where it is, so it is used before waiting on the phone. Never prompts: the
+ * car can't.
  */
 async function here(fresh = false): Promise<LngLat | null> {
-  const phone = await phoneHere(fresh);
+  const granted = await Location.getForegroundPermissionsAsync().then((p) => p.granted, () => false);
+  const phone = granted ? located(await Location.getLastKnownPositionAsync({ maxAge: fresh ? 60_000 : 10 * 60_000 }).catch(() => null)) : null;
   if (phone) return phone;
-  return lastCarFix && Date.now() - lastCarFix.at <= CAR_FIX_MAX_AGE_MS ? lastCarFix.position : null;
+  if (lastCarFix && Date.now() - lastCarFix.at <= CAR_FIX_MAX_AGE_MS) return lastCarFix.position;
+  return granted && fresh ? located(await within(Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }), PHONE_FIX_WAIT_MS)) : null;
 }
 
 /** Android Auto shows about six rows while driving; never send more. */

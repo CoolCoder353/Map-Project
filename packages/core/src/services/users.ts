@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS, type PublicUser, type Role, type UserSettings } from '@wayfinder/shared';
 import type { DbClient } from '../db/pool.js';
+import { isUuid } from '../lib/errors.js';
 
 export interface UserRow {
   id: string;
@@ -28,7 +29,7 @@ export async function findUserByEmail(db: DbClient, email: string): Promise<User
 }
 
 export async function findUserById(db: DbClient, id: string): Promise<UserRow | null> {
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  if (!isUuid(id)) return null;
   const r = await db.query<UserRow>('SELECT * FROM users WHERE id = $1', [id]);
   return r.rows[0] ?? null;
 }

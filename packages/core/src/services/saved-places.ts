@@ -1,6 +1,6 @@
 import { type LngLat, MAX_SAVED_PLACES, type Place, SAVED_PLACE_KIND, type SavedPlace, type SavedPlaceSave, haversineM } from '@wayfinder/shared';
 import { type Db, type DbClient, withTransaction } from '../db/pool.js';
-import { conflict, notFound } from '../lib/errors.js';
+import { conflict, isUuid, notFound } from '../lib/errors.js';
 
 interface Row {
   id: string;
@@ -41,7 +41,7 @@ export async function saveSavedPlace(db: Db, userId: string, p: SavedPlaceSave):
 }
 
 export async function deleteSavedPlace(db: DbClient, userId: string, id: string): Promise<void> {
-  if (!/^[0-9a-f-]{36}$/i.test(id)) throw notFound('Saved place not found');
+  if (!isUuid(id)) throw notFound('Saved place not found');
   const r = await db.query('DELETE FROM saved_places WHERE id = $1 AND user_id = $2', [id, userId]);
   if (r.rowCount === 0) throw notFound('Saved place not found');
 }

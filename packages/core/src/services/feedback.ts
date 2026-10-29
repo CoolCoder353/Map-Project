@@ -7,7 +7,7 @@ import {
   type FeedbackType,
 } from '@wayfinder/shared';
 import type { DbClient } from '../db/pool.js';
-import { AppError, badRequest, notFound } from '../lib/errors.js';
+import { AppError, badRequest, isUuid, notFound } from '../lib/errors.js';
 import { getAppSettings } from './app-settings.js';
 
 export const REPORTS_PER_HOUR = 5;
@@ -49,7 +49,6 @@ const MAGIC: Record<string, (b: Buffer) => boolean> = {
   'image/webp': (b) => b.subarray(0, 4).toString('latin1') === 'RIFF' && b.subarray(8, 12).toString('latin1') === 'WEBP',
 };
 
-const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
 /** A user's report. Rejected when feedback is switched off, too frequent, or the image isn't one. */
 export async function createFeedback(db: DbClient, userId: string, input: FeedbackCreate): Promise<FeedbackItem> {

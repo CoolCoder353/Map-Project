@@ -2,6 +2,7 @@ package app.wayfinder.car.nav
 
 import androidx.car.app.model.Action
 import androidx.car.app.model.ActionStrip
+import androidx.car.app.model.CarColor
 import androidx.car.app.model.CarIcon
 import androidx.car.app.model.DateTimeWithZone
 import androidx.car.app.navigation.model.Destination
@@ -35,6 +36,13 @@ object NavTemplates {
   /** What the driving screen says before the phone has its first position for the trip. */
   const val FINDING_YOU = "Finding where you are…"
 
+  /**
+   * The turn card's colour: the app's blue, the route line's, so the card and the line ahead read as
+   * one; darker at night. White text on either is well over 4.5:1, and a host that disagrees uses
+   * its own.
+   */
+  val TURN_CARD: CarColor = CarColor.createCustom(0xFF1765CC.toInt(), 0xFF174EA6.toInt())
+
   fun navigation(
     nav: CarNav?,
     icons: ManeuverIcons,
@@ -45,11 +53,11 @@ object NavTemplates {
   ): NavigationTemplate {
     val arrived = nav?.status == NavStatus.ARRIVED
     val strip = ActionStrip.Builder()
-      .addAction(Action.Builder().setTitle(if (nav?.muted == true) "Unmute" else "Mute").setOnClickListener(onMute).build())
+      .addAction(Action.Builder().setIcon(icons.sound(nav?.muted == true)).setOnClickListener(onMute).build())
       .apply { if (onReport != null && nav != null) addAction(Action.Builder().setTitle("Report").setOnClickListener(onReport).build()) }
       .addAction(Action.Builder().setTitle(if (arrived) "Done" else "End").setOnClickListener(onEnd).build())
       .build()
-    val b = NavigationTemplate.Builder().setActionStrip(strip)
+    val b = NavigationTemplate.Builder().setActionStrip(strip).setBackgroundColor(TURN_CARD)
     if (map != null) {
       b.setMapActionStrip(
         ActionStrip.Builder()
@@ -64,7 +72,9 @@ object NavTemplates {
     }
     when {
       nav == null -> b.setNavigationInfo(RoutingInfo.Builder().setLoading(true).build())
-      arrived -> b.setNavigationInfo(MessageInfo.Builder("You’ve arrived").apply { nav.destinationName?.let { setText(it) } }.build())
+      arrived -> b.setNavigationInfo(
+        MessageInfo.Builder("You’ve arrived").setImage(icons.iconFor("destination")).apply { nav.destinationName?.let { setText(it) } }.build(),
+      )
       nav.rerouting -> b.setNavigationInfo(MessageInfo.Builder("Finding a new route…").build())
       nav.error != null -> b.setNavigationInfo(MessageInfo.Builder(nav.error).build())
       nav.status == NavStatus.OFF_ROUTE -> b.setNavigationInfo(MessageInfo.Builder("Off route").build())

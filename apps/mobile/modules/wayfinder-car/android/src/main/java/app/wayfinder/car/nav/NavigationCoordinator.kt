@@ -96,7 +96,19 @@ class NavigationCoordinator(
 
   /** Puts the driving screen on top during a trip, unless it already is. */
   fun showDrive() {
-    if (api.navigation == null || (screens.stackSize > 0 && screens.top is NavigationScreen)) return
+    if (api.navigation == null || driving()) return
     screens.push(NavigationScreen(carContext, api, map, icons, trail, controls, ensureStyles))
   }
+
+  /**
+   * The navigation notification was tapped: the directions, from wherever the driver was (Search,
+   * say), with Home under them as after any trip starts, rather than piled on the screens between.
+   */
+  fun openDirections() {
+    if (api.navigation == null || driving()) return
+    screens.popToRoot()
+    showDrive()
+  }
+
+  private fun driving() = screens.stackSize > 0 && screens.top is NavigationScreen
 }

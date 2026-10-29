@@ -1,7 +1,7 @@
 import type { Instruction, Route } from '@wayfinder/shared/schemas';
 import { describe, expect, it } from 'vitest';
 import { CarNavSchema } from '../src/car/protocol';
-import { maneuverOf, THEN_WITHIN_M, toCarNav } from '../src/car/navModel';
+import { maneuverOf, overLimit, THEN_WITHIN_M, thenAfter, toCarNav } from '../src/car/navModel';
 import type { NavSnapshot } from '../src/nav/navigationService';
 
 const ins = (sign: number, text: string, distanceM: number, extra: Partial<Instruction> = {}): Instruction => ({ sign, text, streetName: '', distanceM, durationS: 10, interval: [0, 1], ...extra });
@@ -78,5 +78,30 @@ describe('toCarNav', () => {
     expect(toCarNav(snap({ route: r, state, speedMps: 22.3 }), 0)).toMatchObject({ speedLimitKmh: 80, speedKmh: 80 });
     expect(toCarNav(snap({ route: r, state: { ...state, status: 'offRoute' }, speedMps: 10 }), 0)).toMatchObject({ speedLimitKmh: null, speedKmh: 36 });
     expect(toCarNav(snap({ route: r }), 0)).toMatchObject({ speedLimitKmh: null, speedKmh: null });
+  });
+});
+
+describe('thenAfter (the phone’s Navigate screen and the car share it)', () => {
+  const instructions = [ins(0, 'Continue', 300), ins(-2, 'Turn left onto Main St', THEN_WITHIN_M), ins(2, 'Turn right', THEN_WITHIN_M + 1), ins(4, 'Arrive', 0)];
+  const r = route(instructions);
+  const at = (nextInstructionIndex: number | null) => ({ status: 'navigating' as const, snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: null, nextInstruction: null, nextInstructionIndex, distanceToNextManeuverM: 50, speedLimitKmh: null });
+
+  it('is the manoeuvre after the next when it comes within reach of it', () => expect(thenAfter(r, at(1))?.text).toBe('Turn right'));
+  it('is nothing when it comes later', () => expect(thenAfter(r, at(2))).toBeNull());
+  it('is nothing after the last manoeuvre, or before the first fix', () => {
+    expect(thenAfter(r, at(3))).toBeNull();
+    expect(thenAfter(r, at(null))).toBeNull();
+    expect(thenAfter(r, null)).toBeNull();
+  });
+});
+
+describe('overLimit (the phone matches the car’s SpeedReadout)', () => {
+  it('is over by 3 km/h or more, so GPS wobble at the limit isn’t', () => {
+    expect(overLimit(60, 62)).toBe(false);
+    expect(overLimit(60, 63)).toBe(true);
+  });
+  it('is never over without both a limit and a speed', () => {
+    expect(overLimit(null, 120)).toBe(false);
+    expect(overLimit(60, null)).toBe(false);
   });
 });

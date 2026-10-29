@@ -3,6 +3,8 @@ package app.wayfinder.car.map
 import app.wayfinder.car.Samples
 import app.wayfinder.car.bridge.LngLat
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SceneLayoutTest {
@@ -13,10 +15,38 @@ class SceneLayoutTest {
     assertEquals(SceneLayout.AUSTRALIA, SceneLayout.camera(MapScene.Overview(null)))
   }
 
-  @Test fun placesAreMarkedAndFitted() {
+  /** Numbered as their rows are, so "2" on the map is the second row. */
+  @Test fun placesAreNumberedAndFitted() {
     val scene = MapScene.Places(listOf(Samples.place(), Samples.place("p2").copy(location = here)))
-    assertEquals(listOf(LngLat(152.957, -27.4846), here), SceneLayout.drawing(scene).points)
+    assertEquals(listOf(Pin(LngLat(152.957, -27.4846), "1"), Pin(here, "2")), SceneLayout.drawing(scene).pins)
     assertEquals(CameraSpec.Fit(listOf(LngLat(152.957, -27.4846), here)), SceneLayout.camera(scene))
+  }
+
+  @Test fun homeMarksWhereYouAre() {
+    assertEquals(here, SceneLayout.drawing(MapScene.Overview(here)).position)
+    assertNull(SceneLayout.drawing(MapScene.Overview(null)).position)
+  }
+
+  /** A list of routes, none chosen yet: each numbered at its middle, where routes that start together have parted. */
+  @Test fun routesToPickFromAreNumberedAtTheirMiddles() {
+    val a = Samples.option("a").copy(geometry = listOf(here, LngLat(153.1, -27.4), LngLat(153.2, -27.4)))
+    val empty = Samples.option("b").copy(geometry = emptyList())
+    val c = Samples.option("c").copy(geometry = listOf(here, LngLat(153.0, -27.6)))
+    val d = SceneLayout.drawing(MapScene.Routes(listOf(a, empty, c), MapScene.Routes.NONE))
+    assertEquals("a route with no line doesn't renumber the next", listOf(Pin(LngLat(153.1, -27.4), "1"), Pin(LngLat(153.0, -27.6), "3")), d.pins)
+    assertEquals(emptyList<LngLat>(), d.selected)
+    assertEquals(listOf(a.geometry, empty.geometry, c.geometry), d.others)
+    assertNull("nothing chosen, so no destination", d.destination)
+  }
+
+  @Test fun theChosenRouteEndsAtTheDestinationPin() {
+    val a = Samples.option("a")
+    val chosen = SceneLayout.drawing(MapScene.Routes(listOf(a), 0))
+    assertEquals(a.geometry.last(), chosen.destination)
+    assertTrue("no numbers once one is chosen", chosen.pins.isEmpty())
+    val line = listOf(here, LngLat(153.1, -27.5))
+    assertEquals(line.last(), SceneLayout.drawing(MapScene.Following(line, here, 90.0)).destination)
+    assertNull("not before the route's line has come", SceneLayout.drawing(MapScene.Following(emptyList(), here, 90.0)).destination)
   }
 
   @Test fun theChosenRouteStandsOut() {

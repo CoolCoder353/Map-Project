@@ -15,6 +15,8 @@ export interface TurnByTurn {
   muted: boolean;
   setMuted(m: boolean): void;
   position: LngLat | null;
+  /** Speed from the last fix, metres a second, or null where the phone didn't say. */
+  speedMps: number | null;
   /** Where the trip has been so far, off the route too. */
   travelled: LngLat[];
   /** A trip was running while this screen showed, and has ended (arrived and closed by itself, say). */
@@ -65,6 +67,7 @@ export function useTurnByTurn(initial: Route | null): TurnByTurn {
     muted: snap.muted,
     setMuted: navigation.setMuted,
     position: snap.position,
+    speedMps: snap.speedMps,
     travelled: snap.travelled,
     ended: seenActive && !snap.active,
     stop: navigation.stop,

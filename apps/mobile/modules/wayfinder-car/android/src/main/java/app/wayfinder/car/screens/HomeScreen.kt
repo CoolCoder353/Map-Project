@@ -10,6 +10,7 @@ import androidx.car.app.navigation.model.PlaceListNavigationTemplate
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import app.wayfinder.car.CarMessages
+import app.wayfinder.car.R
 import app.wayfinder.car.bridge.Account
 import app.wayfinder.car.bridge.CarApi
 import app.wayfinder.car.bridge.CarStatus
@@ -19,7 +20,7 @@ import app.wayfinder.car.map.MapScenes
 /**
  * Where the car starts: search, planned routes and Discover, over the map. During a trip it also
  * offers the way back to directions ([onDrive]), for a driver who pressed Back on them. Otherwise it
- * offers a test drive ([onTestDrive]).
+ * offers a test drive ([onTestDrive]). Each row has its own icon, so a glance finds it.
  */
 class HomeScreen(
   carContext: CarContext,
@@ -83,17 +84,19 @@ class HomeScreen(
         .setHeaderAction(Action.APP_ICON)
         .setItemList(
           ItemList.Builder()
-            .apply { if (backToDirections) addItem(row("Back to directions", browsable = true) { onDrive() }) }
-            .addItem(row("Search", browsable = true) { screenManager.push(SearchScreen(carContext, api, map, s.searchHint)) })
-            .addItem(row("Planned routes", browsable = true) { screenManager.push(PickScreens.planned(carContext, api, map)) })
-            .addItem(row("Discover nearby", browsable = true) { screenManager.push(PickScreens.discover(carContext, api, map)) })
+            .apply { if (backToDirections) addItem(row("Back to directions", browsable = true, icon = icon(R.drawable.wf_navigation)) { onDrive() }) }
+            .addItem(row("Search", browsable = true, icon = icon(R.drawable.wf_search)) { screenManager.push(SearchScreen(carContext, api, map, s.searchHint)) })
+            .addItem(row("Planned routes", browsable = true, icon = icon(R.drawable.wf_route)) { screenManager.push(PickScreens.planned(carContext, api, map)) })
+            .addItem(row("Discover nearby", browsable = true, icon = icon(R.drawable.wf_explore)) { screenManager.push(PickScreens.discover(carContext, api, map)) })
             // A pretend trip for trying the car app without driving; not offered over a real one.
-            .apply { if (!backToDirections) addItem(row("Test drive", "Follow a pretend trip, nothing is recorded", browsable = true) { onTestDrive() }) }
+            .apply { if (!backToDirections) addItem(row("Test drive", "Follow a pretend trip, nothing is recorded", browsable = true, icon = icon(R.drawable.wf_car)) { onTestDrive() }) }
             .build(),
         )
         .build()
     }
   }
+
+  private fun icon(res: Int) = carIcon(carContext, res)
 
   private fun message(text: String): Template =
     MessageTemplate.Builder(text)

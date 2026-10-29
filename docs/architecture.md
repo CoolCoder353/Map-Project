@@ -46,6 +46,9 @@ service. The only outside download is the OpenStreetMap extract, fetched by the 
    uploads them in batches to `POST /api/tracks/batches`. A batch id makes retries idempotent. A
    batch the server rejects as invalid is dropped, so it cannot block later ones. While a
    navigated trip runs, background recording leaves that time to it (it records its own fixes).
+   The session (`src/lib/session.tsx`) keeps the device in line with the account's tracking
+   setting, and checks again each time the app comes to the foreground, so tracking that was
+   waiting on "Allow all the time" starts as soon as it is granted in the phone's settings.
 2. `trackService.ingestBatch` stores `track_points` and queues `process-tracks`.
 3. `processUserTracks` (`packages/core/src/services/tracks.ts`) splits points into trips (a
    10-minute gap or a 5-minute stop ends a trip; under 100 m is discarded) and records visited
@@ -155,8 +158,12 @@ The car screens hold no data of their own. They ask the JavaScript side through 
 `planned`, `routeLine`, `start`, `stop` and `mute`, and JS pushes every navigation change back
 (`src/car/navModel.ts`). The car also sends its own position once a second (`location`, from the car's
 GNSS via `CarLocation.kt`): the phone's navigation follows it only when the phone's own fixes have
-been silent for 5 s (a locked phone with the app started from the car), and planning uses it when the
-phone can't say where it is. The trip handed to the car's cluster carries the current step and the
+been silent for 5 s (a locked phone with the app started from the car). Planning and Discover use the
+phone's position from the last minute, else the car's, and only then wait for a new fix from the
+phone, for at most 8 s (`PHONE_FIX_WAIT_MS`): a locked phone in a pocket may never give one. Each
+request gives up after 45 s (`CarBridge`), longer than the phone's own 30 s wait for the server plus
+that 8 s, so a weak signal shows as "No connection to the server" rather than as the phone not
+answering (`carModule.test.ts` keeps the three in that order). The trip handed to the car's cluster carries the current step and the
 one after it. The messages are defined in `src/car/protocol.ts` and `bridge/Protocol.kt`,
 pinned by fixtures both test suites read. Another test (`carModule.test.ts`) checks that every
 request `BridgeCarApi.kt` sends has a handler in `src/car/handlers.ts`.
@@ -171,7 +178,10 @@ route that starts by turning around (the car is in a dead end) is said once, "Ro
 around when you can", and not asked for again for a minute while the driver finds somewhere to
 turn; asking sooner only gave the same answer every few seconds. Arriving is said once, and the trip
 ends by itself 15 s later (on a timer, or the next fix with the phone locked); the phone's Navigate
-screen then closes. The session also keeps the road driven and the speed, for the maps. Back on
+screen then closes. The session also keeps the road driven and the speed, for the maps. A muted
+voice stays muted from trip to trip and across restarts (kept in secure storage, as the contacts
+switch is). The phone's Navigate screen shows the turn after the next and the speed against the
+limit by the same rules as the car (`thenAfter` and `overLimit` in `src/car/navModel.ts`). Back on
 the car's driving screen leaves the trip running, and Home offers "Back to directions". Spoken
 directions use the module's own `NavVoice`, which plays as navigation guidance and asks other audio
 to duck, so music dips and comes back; where the module isn't there, `expo-speech` speaks instead
@@ -199,7 +209,9 @@ sentences as Home, with "Try again".
 notification (category navigation, extended with `CarAppExtender`) with the next instruction, which
 the car shows in its notification area. It is a heads-up only when the instruction changes, updates
 quietly with the distance, and is removed when the trip ends or the car session does. Tapping it
-brings the car app forward. The phone's own "Navigating to ..." service notification is separate.
+brings the car app forward on the directions: the car app is started with a `wayfinder:directions`
+link, which the session answers by stepping back to Home and putting the driving screen on top, from
+wherever the driver was. The phone's own "Navigating to ..." service notification is separate.
 
 **Test drive.** The host's "auto drive" (`onAutoDriveEnabled`, switched on by Google's reviewers and
 the Desktop Head Unit) sends the `simulate` request. `src/car/simulation.ts` then runs the same
@@ -221,6 +233,24 @@ the car connects (`MapStyles`), not only by Home: a trip already running puts th
 straight over Home, which used to leave the map black. Roundabouts are drawn with the exit taken
 (`RoundaboutIcon`, from the route's `exitAngleDeg`). Before the first fix the screen says "Finding
 where you are…" rather than spinning; after 30 s without one, why.
+
+**Using the screens.** Home's rows each carry a Material Symbols icon, tinted by the host for day
+and night. A message pushed over another screen (an unreadable navigate request, a place not found)
+has Back in its header, as a touch-only head unit has no other way off it. A list (Planned routes,
+Discover) or a route preview that couldn't load says why with Try again, which asks again in place.
+Search runs once typing pauses for half a second (or at once on submit), keeps the last results up
+while the next load, and clears them when the box is emptied; an answer to older words is dropped.
+Arriving shows the destination flag.
+
+**What the car map marks.** Search results, Discover and Planned routes are numbered: each row's
+image is a numbered badge (`numberIcon`), and the same badge marks it on the map (a planned route at
+its middle, where routes that start together have parted), so "2" on the map is the second row.
+`SceneLayout.drawing` decides the numbers, `MapPins` draws the badges and the destination pin, and
+`MapFeatures` turns them into the GeoJSON the renderer's symbol layer shows; only that last step
+needs MapLibre. A chosen route, on the preview and while driving, ends at a red destination pin and
+has a white edge so it stands clear of the roads under it. Home marks where you are. On the driving
+screen the speaker button shows whether directions are spoken (struck through when muted), and the
+turn card is the route line's blue (`NavTemplates.TURN_CARD`, darker at night).
 
 **Report.** The driving screen's Report sends a bug report from the phone with one tap
 (`report` in `src/car/handlers.ts`): what the car showed, the speed limit and speed, the heading and

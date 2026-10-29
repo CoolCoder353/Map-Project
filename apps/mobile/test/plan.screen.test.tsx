@@ -25,6 +25,7 @@ beforeEach(() => {
   fake.api.on({
     'GET api/search': () => ({ results: [place()] }),
     'POST api/routes/explore': () => ({ fastest: route(), explore: [explore] }),
+    'GET api/saved-places': () => ({ items: [] }),
   });
 });
 
@@ -140,6 +141,53 @@ it('forgets routes when the destination is cleared, so Start can’t go to the o
   expect(screen.queryByText('Fastest')).toBeNull();
   expect(screen.queryByRole('button', { name: 'Start' })).toBeNull();
   expect(fake.map.props.routes).toEqual([]);
+});
+
+it('swaps the start and the destination, and plans the other way', async () => {
+  await renderScreen(<Plan />);
+  // Nothing to swap until both are chosen.
+  expect(screen.queryByRole('button', { name: 'Swap starting point and destination' })).toBeNull();
+  await chooseDestination();
+  await screen.findByText('Explore 1');
+  await fireEvent.press(screen.getByRole('button', { name: 'Swap starting point and destination' }));
+  expect(screen.getByLabelText('Starting point')).toHaveDisplayValue('Gumdale State School');
+  expect(screen.getByLabelText('Destination')).toHaveDisplayValue('Your location');
+  await waitFor(() => expect(fake.api.callsTo('POST api/routes/explore')).toHaveLength(2));
+  expect(fake.api.callsTo('POST api/routes/explore')[1]!.body).toMatchObject({ from: [153.15, -27.49], to: [153.02, -27.47] });
+});
+
+it('offers saved places as destinations with one tap', async () => {
+  fake.api.on({
+    'GET api/saved-places': () => ({
+      items: [
+        { id: 's2', name: 'Gym', description: '', location: [153.2, -27.5], createdAt: '2026-10-02T00:00:00Z' },
+        { id: 's1', name: 'Home', description: '27 Whitby Place, Thornlands', location: [153.26, -27.56], createdAt: '2026-10-01T00:00:00Z' },
+      ],
+    }),
+  });
+  await renderScreen(<Plan />);
+  expect(await screen.findByRole('button', { name: 'Directions to Gym' })).toBeOnTheScreen();
+  // Home first, though the server sends them by name.
+  expect(screen.getAllByRole('button', { name: /^Directions to/ }).map((b) => b.props.accessibilityLabel)).toEqual(['Directions to Home', 'Directions to Gym']);
+  await fireEvent.press(screen.getByRole('button', { name: 'Directions to Home' }));
+  expect(screen.getByLabelText('Destination')).toHaveDisplayValue('Home');
+  await waitFor(() => expect(fake.api.callsTo('POST api/routes/explore')).toHaveLength(1));
+  expect(fake.api.callsTo('POST api/routes/explore')[0]!.body).toMatchObject({ from: [153.02, -27.47], to: [153.26, -27.56] });
+  // Chosen: the shortcuts go, and a saved place isn't offered for saving again.
+  expect(screen.queryByRole('button', { name: 'Directions to Gym' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Other…' })).toBeNull();
+});
+
+it('says when nothing matches what was typed', async () => {
+  fake.api.on({ 'GET api/search': ({ query }) => ({ results: query?.q === 'zzqx' ? [] : [place()] }) });
+  await renderScreen(<Plan />);
+  const box = screen.getByLabelText('Destination');
+  await fireEvent(box, 'focus');
+  await fireEvent.changeText(box, 'zzqx');
+  expect(await screen.findByText('No places match “zzqx”.')).toBeOnTheScreen();
+  await fireEvent.changeText(box, 'gumdale');
+  expect(await screen.findByText('Gumdale State School')).toBeOnTheScreen();
+  expect(screen.queryByText(/No places match/)).toBeNull();
 });
 
 it('keeps what you type over a chosen place', async () => {

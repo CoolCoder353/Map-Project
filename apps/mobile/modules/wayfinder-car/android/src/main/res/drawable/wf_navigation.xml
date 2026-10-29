@@ -1,0 +1,12 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+  <!-- Material Symbols "navigation" (outlined, weight 400), drawn in its own 0,-960 box. -->
+  <group android:translateY="960">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="m190-120-30-30 320-730 320 730-30 30-290-132-290 132Zm68-98 222-98 222 98-222-514-222 514Zm222-98Z"/>
+  </group>
+</vector>

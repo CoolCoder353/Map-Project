@@ -23,6 +23,8 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
-    sourcemap: true,
+    // No source maps in the built app: they would publish our own source, admin API shapes
+    // included, to anyone. Caddy also refuses *.map in case one is ever built.
+    sourcemap: false,
   },
 });

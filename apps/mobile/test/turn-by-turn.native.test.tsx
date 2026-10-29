@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
 import * as Speech from 'expo-speech';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { navigation } from '../src/nav/navigationService';
 import { REROUTE_RETRY_MS, useTurnByTurn } from '../src/nav/useTurnByTurn';
 import { fake, resetFakes, route } from './fakes';
 
@@ -57,6 +58,8 @@ beforeEach(() => {
   mockReplaced.length = 0;
   mockOnFix = null;
   jest.mocked(Location.requestForegroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+  // Muting lasts from trip to trip; each test starts with the voice on.
+  navigation.setMuted(false);
 });
 
 it('does nothing without a route', async () => {

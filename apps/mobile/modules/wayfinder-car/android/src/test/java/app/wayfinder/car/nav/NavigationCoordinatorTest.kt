@@ -246,12 +246,37 @@ class NavigationCoordinatorTest {
     assertNull(posted())
   }
 
-  @Test fun tappingItBringsTheCarAppForward() {
+  @Test fun tappingItBringsTheCarAppForwardOnItsDirections() {
     coordinator.attach()
     api.pushNav(Samples.nav())
     carContext.sendBroadcast(Intent(NavNotifications.ACTION_OPEN_APP).setPackage(carContext.packageName))
     shadowOf(Looper.getMainLooper()).idle()
-    assertEquals(1, carContext.startCarAppIntents.size)
+    val opened = carContext.startCarAppIntents.single()
+    assertTrue("the session shows the directions for it", NavNotifications.opensDirections(opened))
+    assertFalse("a navigate request is not", NavNotifications.opensDirections(Intent(androidx.car.app.CarContext.ACTION_NAVIGATE, android.net.Uri.parse("geo:-27.47,153.03"))))
+  }
+
+  /** From Search (say), the tap goes to the directions with Home under them, not piled on Search. */
+  @Test fun theTappedNotificationOpensTheDirectionsFromAnywhere() {
+    ScreenController(HomeScreen(carContext, api, RecordingScenes()) { }).moveToState(Lifecycle.State.CREATED)
+    coordinator.attach()
+    api.pushNav(Samples.nav())
+    driveScreen()
+    screens.pop() // the driver pressed Back
+    ScreenController(app.wayfinder.car.screens.MessageScreen(carContext, "Search stands in here")).moveToState(Lifecycle.State.CREATED)
+    coordinator.openDirections()
+    assertTrue(screens.top is NavigationScreen)
+    assertEquals("Home, then the directions", 2, screens.stackSize)
+    coordinator.openDirections()
+    assertEquals("not stacked twice", 2, screens.stackSize)
+  }
+
+  @Test fun theTappedNotificationDoesNothingOnceTheTripHasEnded() {
+    coordinator.attach()
+    api.pushNav(Samples.nav())
+    api.pushNav(null)
+    coordinator.openDirections()
+    assertEquals(1, screens.screensPushed.count { it is NavigationScreen })
   }
 
   // Test drive (NF-7)

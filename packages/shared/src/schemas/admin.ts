@@ -87,7 +87,8 @@ export const AuditQuerySchema = z.object({
   targetId: z.string().optional(),
   action: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(500).default(100),
-  before: z.string().optional(),
+  /** The id of the last entry on the page before. */
+  before: z.string().regex(/^\d+$/, 'Expected an entry id').optional(),
 });
 export const AuditListSchema = z.object({ items: z.array(AuditEntrySchema) });
 

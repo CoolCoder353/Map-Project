@@ -1,5 +1,7 @@
 package app.wayfinder.car.screens
 
+import androidx.car.app.model.Action
+import androidx.car.app.model.MessageTemplate
 import androidx.car.app.model.Row
 import androidx.car.app.navigation.model.PlaceListNavigationTemplate
 import androidx.car.app.testing.ScreenController
@@ -44,5 +46,32 @@ class PickScreenTest {
     ((screen.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.items[0] as Row).click()
     assertTrue(carContext.getCarService(TestScreenManager::class.java).screensPushed.last() is RoutePreviewScreen)
     assertFalse("a planned route needs no planning", api.calls.any { it.startsWith("plan ") })
+  }
+
+  /** Back and in again is two more taps while driving; a list that couldn't load offers to try again. */
+  @Test fun aListThatCouldntLoadSaysWhyAndTriesAgain() {
+    val screen = PickScreens.discover(carContext, api, scenes).also { ScreenController(it).moveToState(Lifecycle.State.STARTED) }
+    api.fail("discover", "Can’t tell where you are.")
+    val t = screen.onGetTemplate() as MessageTemplate
+    assertEquals("Can’t tell where you are.", t.message.text())
+    assertEquals("Discover nearby", t.title.text())
+    assertEquals(Action.TYPE_BACK, t.headerAction!!.type)
+    t.actions.single().also { assertEquals("Try again", it.title.text()) }.click()
+    assertEquals(listOf("discover", "discover"), api.calls)
+    assertTrue("loads again", (screen.onGetTemplate() as PlaceListNavigationTemplate).isLoading)
+    api.answer("discover", listOf(Samples.place()))
+    assertEquals(listOf("Mt Coot-tha Lookout"), (screen.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.items.map { (it as Row).title.text() })
+    assertEquals(MapScene.Places(listOf(Samples.place())), scenes.shown.last())
+  }
+
+  /** Row 2 has the badge marked "2" on the map, and the planned routes are numbered there too. */
+  @Test fun rowsAreNumberedAsTheirMarkersOnTheMap() {
+    val screen = PickScreens.planned(carContext, api, scenes).also { ScreenController(it).moveToState(Lifecycle.State.STARTED) }
+    val routes = listOf(PlannedItem("pl1", "Sunday drive", Samples.option("r-sun", "Sunday drive")), PlannedItem("pl2", "Coast", Samples.option("r-coast", "Coast")))
+    api.answer("planned", routes)
+    val rows = (screen.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.items.map { it as Row }
+    assertSame(numberIcon(1), rows[0].image)
+    assertSame(numberIcon(2), rows[1].image)
+    assertEquals("none chosen yet", MapScene.Routes(routes.map { it.option }, MapScene.Routes.NONE), scenes.shown.last())
   }
 }

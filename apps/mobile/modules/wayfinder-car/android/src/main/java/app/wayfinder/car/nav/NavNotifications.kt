@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
 import androidx.car.app.CarContext
 import androidx.car.app.notification.CarAppExtender
 import androidx.core.app.NotificationChannelCompat
@@ -22,8 +23,10 @@ import app.wayfinder.car.bridge.NavStatus
  * the instruction changes. Shaped as in developer.android.com/training/cars/apps/navigation:
  * ongoing, alert-once, category navigation, extended with [CarAppExtender].
  *
- * Tapping it in the car brings Wayfinder's car app forward: the car can only send a broadcast, so
- * a receiver registered while the car session lives turns that into `startCarApp`.
+ * Tapping it in the car brings Wayfinder's car app forward, on its directions: the car can only send
+ * a broadcast, so a receiver registered while the car session lives turns that into `startCarApp`
+ * with the [DIRECTIONS] link, which the session answers by showing the driving screen. Without it
+ * the app came forward on whatever screen it was last on (Search, say), not the directions tapped.
  */
 class NavNotifications(private val carContext: CarContext, private val icons: ManeuverIcons) {
   private val manager get() = NotificationManagerCompat.from(carContext)
@@ -105,7 +108,7 @@ class NavNotifications(private val carContext: CarContext, private val icons: Ma
     if (receiver != null) return
     val r = object : BroadcastReceiver() {
       override fun onReceive(context: Context, intent: Intent) {
-        carContext.startCarApp(Intent(Intent.ACTION_VIEW).setComponent(ComponentName(carContext, WayfinderCarAppService::class.java)))
+        carContext.startCarApp(Intent(Intent.ACTION_VIEW, DIRECTIONS).setComponent(ComponentName(carContext, WayfinderCarAppService::class.java)))
       }
     }
     ContextCompat.registerReceiver(carContext, r, IntentFilter(ACTION_OPEN_APP), ContextCompat.RECEIVER_NOT_EXPORTED)
@@ -116,5 +119,10 @@ class NavNotifications(private val carContext: CarContext, private val icons: Ma
     const val ID = 4201
     const val CHANNEL_ID = "wayfinder_navigation"
     const val ACTION_OPEN_APP = "app.wayfinder.car.action.OPEN_APP"
+
+    /** The link a tap on the notification opens the car app with: "show the directions". */
+    val DIRECTIONS: Uri = Uri.fromParts("wayfinder", "directions", null)
+
+    fun opensDirections(intent: Intent): Boolean = intent.data == DIRECTIONS
   }
 }

@@ -1,9 +1,24 @@
-import type { Instruction } from '@wayfinder/shared/schemas';
+import type { NavState } from '@wayfinder/nav';
+import type { Instruction, Route } from '@wayfinder/shared/schemas';
 import type { NavSnapshot } from '../nav/navigationService';
 import type { CarManeuver, CarNav, ManeuverType } from './protocol';
 
 /** A manoeuvre this close after the next one is shown with it ("then turn right"). */
 export const THEN_WITHIN_M = 150;
+/** Over the limit by this much, so GPS wobble at the limit isn't; the car's SpeedReadout agrees. */
+export const OVER_LIMIT_BY_KMH = 3;
+
+/** The manoeuvre after the next, when it comes close behind it. The phone shows it as the car does. */
+export function thenAfter(route: Route, st: NavState | null): Instruction | null {
+  const idx = st?.nextInstructionIndex;
+  if (idx == null) return null;
+  // An instruction's distance runs to the manoeuvre after it.
+  const gap = route.instructions[idx]?.distanceM;
+  const after = route.instructions[idx + 1];
+  return after && gap != null && gap <= THEN_WITHIN_M ? after : null;
+}
+
+export const overLimit = (limitKmh: number | null, speedKmh: number | null) => limitKmh != null && speedKmh != null && speedKmh >= limitKmh + OVER_LIMIT_BY_KMH;
 
 /** GraphHopper's instruction signs (see InstructionSchema). */
 const BY_SIGN: Record<number, ManeuverType> = {
@@ -37,7 +52,7 @@ export function toCarNav(s: NavSnapshot, now: number): CarNav | null {
   const st = s.state;
   const ins = st?.nextInstruction ?? st?.currentInstruction ?? null;
   const idx = st?.nextInstructionIndex ?? null;
-  // An instruction's distance runs to the manoeuvre after it.
+  const then = thenAfter(s.route, st);
   const gap = idx != null ? s.route.instructions[idx]?.distanceM : undefined;
   const after = idx != null ? s.route.instructions[idx + 1] : undefined;
   const remainingS = st?.remainingDurationS ?? s.route.durationS;
@@ -52,7 +67,7 @@ export function toCarNav(s: NavSnapshot, now: number): CarNav | null {
     cue: ins?.text ?? '',
     road: ins?.streetName ?? '',
     distanceToManeuverM: st?.distanceToNextManeuverM ?? null,
-    next: after && gap != null && gap <= THEN_WITHIN_M ? { maneuver: maneuverOf(after), cue: after.text } : null,
+    next: then ? { maneuver: maneuverOf(then), cue: then.text } : null,
     following:
       after && gap != null && st?.distanceToNextManeuverM != null
         ? { maneuver: maneuverOf(after), cue: after.text, road: after.streetName, distanceM: st.distanceToNextManeuverM + gap }

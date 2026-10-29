@@ -9,7 +9,7 @@ import {
 } from '@wayfinder/shared';
 import { type Db, type DbClient, withTransaction } from '../db/pool.js';
 import { audit } from '../lib/audit.js';
-import { AppError, badRequest, forbidden, notFound } from '../lib/errors.js';
+import { AppError, badRequest, forbidden, isUuid, notFound } from '../lib/errors.js';
 import { mergeHistograms, percentileFromHistogram } from '../lib/metrics.js';
 import { revokeAllSessions } from './auth.js';
 import { type UserRow, countActiveAdmins, findUserById } from './users.js';
@@ -67,7 +67,7 @@ export async function listUsers(
 }
 
 export async function getAdminUser(db: DbClient, id: string) {
-  if (!/^[0-9a-f-]{36}$/i.test(id)) throw notFound('User not found');
+  if (!isUuid(id)) throw notFound('User not found');
   const row = (await db.query<AdminUserRow>(`${USER_SELECT} WHERE u.id = $1`, [id])).rows[0];
   if (!row) throw notFound('User not found');
   const sessions = (
@@ -175,6 +175,7 @@ export async function softDeleteUser(db: Db, actor: ActorInfo | null, userId: st
 }
 
 export async function restoreUser(db: Db, actor: ActorInfo, userId: string): Promise<void> {
+  if (!isUuid(userId)) throw notFound('No restorable user with that id');
   await withTransaction(db, async (tx) => {
     const r = await tx.query(
       `UPDATE users SET deleted_at = NULL

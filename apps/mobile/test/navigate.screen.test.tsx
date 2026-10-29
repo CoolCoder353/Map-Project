@@ -15,6 +15,7 @@ const mockNav = {
   muted: false,
   setMuted: jest.fn(),
   position: null,
+  speedMps: null as number | null,
   travelled: [] as unknown[],
   ended: false,
   stop: jest.fn(),
@@ -27,7 +28,7 @@ jest.mock('../src/lib/plannedStore', () => {
 
 beforeEach(() => {
   resetFakes();
-  Object.assign(mockNav, { route: route(), state: null, rerouting: false, error: null, muted: false, travelled: [], ended: false });
+  Object.assign(mockNav, { route: route(), state: null, rerouting: false, error: null, muted: false, speedMps: null, travelled: [], ended: false });
   setRouteToNavigate(route());
 });
 
@@ -76,6 +77,51 @@ it('waits for a position, then shows the next turn, distance and time left', asy
   expect(screen.getByText('180 m')).toBeOnTheScreen();
   expect(screen.getByText('10 min')).toBeOnTheScreen();
   expect(screen.getByText('5.4 km to go')).toBeOnTheScreen();
+});
+
+it('says when you’ll arrive, by the clock', async () => {
+  jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-28T09:00:00Z'));
+  mockNav.state = { status: 'navigating', nextInstruction: { sign: 0, text: 'Continue' }, distanceToNextManeuverM: 900, remainingDurationS: 600, remainingDistanceM: 5400 };
+  await renderScreen(<Navigate />);
+  // Ten minutes on, in the phone's own time zone.
+  expect(screen.getByText(/^Arrive \d{1,2}:10 (am|pm)$/)).toBeOnTheScreen();
+  jest.restoreAllMocks();
+});
+
+it('shows the turn after the next when it comes straight after, as the car does', async () => {
+  const instructions = [
+    { sign: 0, text: 'Head north', streetName: '', distanceM: 300, durationS: 30, interval: [0, 1] as [number, number] },
+    { sign: -2, text: 'Turn left onto Logan Road', streetName: 'Logan Road', distanceM: 80, durationS: 10, interval: [1, 1] as [number, number] },
+    { sign: 2, text: 'Turn right onto Old Cleveland Road', streetName: 'Old Cleveland Road', distanceM: 900, durationS: 60, interval: [1, 1] as [number, number] },
+    { sign: 4, text: 'Arrive at destination', streetName: '', distanceM: 0, durationS: 0, interval: [1, 1] as [number, number] },
+  ];
+  mockNav.route = route({ instructions });
+  mockNav.state = { status: 'navigating', nextInstruction: instructions[1], nextInstructionIndex: 1, distanceToNextManeuverM: 180, remainingDurationS: 600, remainingDistanceM: 5400 };
+  const { rerender } = await renderScreen(<Navigate />);
+  expect(screen.getByLabelText('Then turn right onto Old Cleveland Road')).toBeOnTheScreen();
+  // The one after that is 900 m on: nothing to warn about yet.
+  mockNav.state = { ...(mockNav.state as object), nextInstruction: instructions[2], nextInstructionIndex: 2 };
+  await rerender(<Navigate />);
+  expect(screen.queryByLabelText(/^Then /)).toBeNull();
+});
+
+it('shows how fast you’re going while driving, marked when over the limit', async () => {
+  mockNav.state = { status: 'navigating', nextInstruction: { sign: 0, text: 'Continue' }, distanceToNextManeuverM: 900, remainingDurationS: 600, remainingDistanceM: 5400, speedLimitKmh: 60 };
+  mockNav.speedMps = 16.7; // 60 km/h
+  const { rerender } = await renderScreen(<Navigate />);
+  expect(screen.getByLabelText('Your speed 60 km/h')).toBeOnTheScreen();
+  mockNav.speedMps = 18.1; // 65 km/h
+  await rerender(<Navigate />);
+  expect(screen.getByLabelText('Your speed 65 km/h, over the limit')).toBeOnTheScreen();
+  // Not known: nothing, rather than 0.
+  mockNav.speedMps = null;
+  await rerender(<Navigate />);
+  expect(screen.queryByLabelText(/^Your speed/)).toBeNull();
+  // On foot it's only distraction.
+  mockNav.speedMps = 1.4;
+  mockNav.route = route({ mode: 'foot' });
+  await rerender(<Navigate />);
+  expect(screen.queryByLabelText(/^Your speed/)).toBeNull();
 });
 
 it('keeps following you, zoomed in, when a new route arrives', async () => {

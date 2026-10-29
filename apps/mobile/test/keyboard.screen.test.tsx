@@ -37,7 +37,7 @@ jest.mock('../src/nav/navigationService', () => {
 beforeEach(() => {
   resetFakes();
   fake.status = 'anonymous';
-  fake.api.on({ 'GET api/search': () => ({ results: [place()] }), 'POST api/feedback': () => ({ id: 'f1' }) });
+  fake.api.on({ 'GET api/search': () => ({ results: [place()] }), 'POST api/feedback': () => ({ id: 'f1' }), 'GET api/saved-places': () => ({ items: [] }) });
 });
 afterEach(() => expect(fake.api.unhandled).toEqual([]));
 

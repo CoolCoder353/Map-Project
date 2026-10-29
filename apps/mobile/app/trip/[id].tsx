@@ -1,18 +1,18 @@
 import type { LngLat } from '@wayfinder/shared/geo';
-import { TripDetailSchema } from '@wayfinder/shared/schemas';
+import { type Mode, TripDetailSchema } from '@wayfinder/shared/schemas';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Trash2 } from 'lucide-react-native';
+import { ArrowLeft, Car, Footprints, Trash2 } from 'lucide-react-native';
 import { useEffect, useRef } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../../src/lib/api';
-import { formatDateTime, formatDistanceShort } from '../../src/lib/format';
+import { formatClock, formatDateTime, formatDistanceShort, formatTripPace } from '../../src/lib/format';
 import { goBack } from '../../src/lib/goBack';
 import { splitStyles, useLayout } from '../../src/lib/layout';
 import { space, useTheme } from '../../src/lib/theme';
 import { MapCanvas, type MapCanvasHandle } from '../../src/map/MapCanvas';
-import { Body, Button, Loading, NewBadge, Notice, Title } from '../../src/ui/kit';
+import { Body, Button, Loading, NewBadge, Notice, Segmented, Small, Title } from '../../src/ui/kit';
 
 export default function Trip() {
   const t = useTheme();
@@ -32,6 +32,15 @@ export default function Trip() {
       void qc.invalidateQueries({ queryKey: ['trips'] });
       void qc.invalidateQueries({ queryKey: ['coverage-stats'] });
       goBack('/trips');
+    },
+  });
+  // Trips are told apart by speed, which a slow drive or a run can fool; the owner knows better.
+  const changeMode = useMutation({
+    mutationFn: (mode: Mode) => api.request(`api/trips/${id}`, { method: 'PATCH', body: { mode } }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['trip', id] });
+      void qc.invalidateQueries({ queryKey: ['trips'] });
+      void qc.invalidateQueries({ queryKey: ['coverage-stats'] });
     },
   });
   const confirm = () =>
@@ -54,8 +63,20 @@ export default function Trip() {
         {trip.data ? (
           <>
             <Title>{trip.data.mode === 'car' ? 'Drive' : 'Walk'} · {formatDistanceShort(trip.data.distanceM)}</Title>
-            <Body muted>{formatDateTime(trip.data.startedAt)}</Body>
+            <Body muted>{`${formatDateTime(trip.data.startedAt)} – ${formatClock(Date.parse(trip.data.endedAt))}`}</Body>
+            <Body>{formatTripPace(trip.data)}</Body>
             {trip.data.newRoads > 0 ? <NewBadge text={`${trip.data.newRoads} road${trip.data.newRoads === 1 ? '' : 's'} you’d never travelled before`} /> : null}
+            <View style={{ gap: space[2], marginTop: space[2] }}>
+              <Segmented<Mode>
+                label="Recorded as"
+                value={changeMode.isPending ? changeMode.variables : trip.data.mode}
+                onChange={(m) => m !== trip.data?.mode && !changeMode.isPending && changeMode.mutate(m)}
+                options={[{ value: 'car', label: 'Drive', icon: Car }, { value: 'foot', label: 'Walk', icon: Footprints }]}
+              />
+              <Small>Change this if the trip was recorded as the wrong one.</Small>
+              {changeMode.isSuccess ? <Notice>{`Changed to a ${changeMode.variables === 'car' ? 'drive' : 'walk'}. Your coverage will update shortly.`}</Notice> : null}
+              {changeMode.error ? <Notice tone="error">{`Couldn’t change the trip. ${errorMessage(changeMode.error)}`}</Notice> : null}
+            </View>
             <Button label="Delete trip" kind="danger" icon={Trash2} onPress={confirm} busy={del.isPending} style={{ alignSelf: 'flex-start' }} />
           </>
         ) : null}

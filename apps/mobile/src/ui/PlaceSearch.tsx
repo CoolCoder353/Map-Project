@@ -38,6 +38,8 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
   const [contacts, setContacts] = useState<ContactMatch[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
+  /** What the results shown were found for, so "no places match" is said only of a search that ran. */
+  const [answered, setAnswered] = useState('');
 
   // Show a place chosen here or by the screen. Not when it's cleared: typing over a chosen place
   // clears it, and resetting the text then would swallow what was just typed.
@@ -60,6 +62,7 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
         .request<{ results: Place[] }>('api/search', { query: { q, lon: near?.[0], lat: near?.[1], limit: 6 }, signal: ctrl.signal })
         .then((r) => {
           setResults(r.results);
+          setAnswered(q);
           setError(null);
         })
         .catch((e) => {
@@ -73,6 +76,8 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
   }, [text, focused, near, value?.name]);
 
   const rowStyle = { flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3], minHeight: MIN_TARGET } as const;
+  const typed = text.trim();
+  const noMatch = focused && typed.length >= 2 && typed !== value?.name && answered === typed && results.length === 0 && contacts.length === 0;
   const Icon = tone === 'search' ? Search : MapPin;
   const iconColor = tone === 'end' ? t.danger : t.text2;
   const choose = (p: ChosenPlace) => {
@@ -145,7 +150,7 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
           </Press>
         ) : null}
       </View>
-      {focused && (contacts.length > 0 || results.length > 0 || allowCurrentLocation) ? (
+      {focused && (contacts.length > 0 || results.length > 0 || allowCurrentLocation || noMatch) ? (
         <View style={{ marginTop: 4, borderRadius: radius.control, backgroundColor: t.surface, borderWidth: 1, borderColor: t.border }}>
           {allowCurrentLocation ? (
             <Press
@@ -184,6 +189,12 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
               </View>
             </Press>
           ))}
+          {noMatch ? (
+            <View style={rowStyle} accessibilityLiveRegion="polite">
+              <Search size={18} color={t.text3} />
+              <Text style={{ color: t.text2, flex: 1 }}>{`No places match “${typed}”.`}</Text>
+            </View>
+          ) : null}
           {results.map((p) => (
             <Press key={p.id} accessibilityRole="button" style={({ hovered }) => [rowStyle, hovered && { backgroundColor: t.surface2 }]} onPress={() => choose(chosen(p))}>
               <MapPin size={18} color={t.text3} />
