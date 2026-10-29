@@ -221,6 +221,20 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
 - **The native map itself.** Every Android screen is tested in Jest with the map faked, and the map component with MapLibre Native mocked; MapLibre Native on a device is covered only by device testing.
 - **Restore drill.** `infra/scripts/backup.sh` and `restore.sh` are written but a full restore has not been rehearsed on this machine.
 - **The live server's new address, `maps.coolcodertech.com` (2026-10-26).** Same server and data, now through a Cloudflare Tunnel. Checked: `/api/health` (database and routing up), `/privacy` and `/delete-account` answer there; Caddy logs the real client address. App 0.5.1 (versionCode 7) moves an address saved by an older build to the new one, keeping the sign-in (Jest). In Chrome, signed in as admin at the new address: the dashboard shows every service up, and the map draws with no console errors; at the old address the map is blank (tiles come from the new address, which CORS keeps to its own web app), as expected until the old address is retired. App 0.5.1 was built for the new address, installs over the earlier build on the emulator, opens with no crash, and its sign-in screen shows the server's app name. The bundle is on Play's closed and internal tracks, in review with the new privacy and deletion URLs ([store/play/console-changes-2026-10-26.md](../store/play/console-changes-2026-10-26.md)). Still to do: `verify:stack` and `verify:mobile` against the new address (they need an admin's and a throwaway account's passwords). Reachable from abroad: Cloudflare has no country block; `/privacy` answers 200 from the US, Europe and Asia (check-host.net, 2026-10-26).
+- **Security review of the live site (2026-10-29).** Fixed in code, not yet deployed: the web build
+  no longer makes source maps (they published 51 of our source files), Caddy answers 404 for any
+  `*.map`, and every page sends `Content-Security-Policy: frame-ancestors 'none'` (plus
+  `X-Frame-Options: DENY`) so no other site can frame the sign-in page. Guarded by
+  `scripts/test/web-hardening.test.ts`; the Caddyfile itself was not run here. After the next deploy, run the
+  header checks in [operations.md](operations.md#verifying-a-deployment). Already in place: invite
+  codes are 12 random characters (60 bits, `packages/core/test/tokens.test.ts`), and sign-in,
+  register, refresh and password reset are limited to `AUTH_RATE_LIMIT_PER_MIN` (10) a minute per
+  client address on the server. Still open: a Cloudflare rate-limiting rule on `/api/auth/login`
+  and `/api/auth/register` (a dashboard change; the existing rule covers all of `/api/`), and
+  `/tiles/tiles.json` answering Cloudflare 520 to the reviewer, which needs a look on the server
+  (`curl -i http://127.0.0.1:8080/tiles/tiles.json` and the `api` and `caddy` logs). `/api/health`
+  still shows database and routing up/down to anyone: it carries no detail beyond that, and
+  `verify:stack` and the deploy checks read it without signing in.
 - **The live server has no backups yet.** Nothing is scheduled on `maps.coolcodertech.com`; see [deploy-small-server.md](deploy-small-server.md#open-items).
 - **"The app crashes when I start the map"** (a user report, 2026-09-22) is unconfirmed. The likely causes were closed in code, but it has not been reproduced on a device; a logcat from an affected phone would settle it:
   ```bash

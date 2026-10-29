@@ -29,7 +29,16 @@
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
 		Permissions-Policy "geolocation=(self), camera=(), microphone=()"
+		# No other site may frame these pages (clickjacking on sign-in); X-Frame-Options for old browsers.
+		Content-Security-Policy "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+		X-Frame-Options DENY
 		-Server
+	}
+
+	# Source maps would publish the app's own source. None are built; refuse them anyway.
+	@sourcemaps path *.map
+	handle @sourcemaps {
+		respond 404
 	}
 
 	@backend path /api/* /tiles/* /map/*

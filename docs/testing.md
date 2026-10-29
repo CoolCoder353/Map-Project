@@ -185,6 +185,8 @@ Checked by hand or against a live server, and recorded in [verification.md](veri
 - **Infrastructure scripts** (`infra/scripts/*.sh`, Docker images, Caddy). Checked by using them;
   the APK build verifies its own output. `apps/mobile/test/buildScript.test.ts` only guards the
   script's syntax, its refusal of example addresses and that the bundle step is still there.
+  `scripts/test/web-hardening.test.ts` only guards that the web build makes no source maps and
+  that the Caddyfile refuses `*.map` and stops other sites framing the pages.
 
 ## What tests what
 
