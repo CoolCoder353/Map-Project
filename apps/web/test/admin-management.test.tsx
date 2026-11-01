@@ -393,6 +393,27 @@ describe('Feedback reports', () => {
     expect(screen.getByRole('link', { name: 'alex@example.test' })).toHaveAttribute('href', '/admin/users/u-2');
   });
 
+  it('shows where a wrong speed limit was reported, with links to fix it in OpenStreetMap', async () => {
+    await openDetail({
+      'GET /api/admin/feedback/f-1': () =>
+        feedbackItem({ type: 'speed_limit', message: 'Wrong speed limit on Ann Street', speedLimit: { location: [153.0251, -27.4698], headingDeg: 91.6, shownKmh: 60, estimated: true, signedKmh: 40 } }),
+    });
+    expect(await screen.findByRole('heading', { name: 'Speed limit' })).toBeInTheDocument();
+    expect(screen.getByText('Shown').nextSibling).toHaveTextContent('60 km/h (estimated: no sign mapped)');
+    expect(screen.getByText('On the sign').nextSibling).toHaveTextContent('40 km/h');
+    expect(screen.getByText('Where').nextSibling).toHaveTextContent('-27.46980, 153.02510 · heading 92°');
+    expect(screen.getByRole('link', { name: 'Edit in OpenStreetMap' })).toHaveAttribute('href', 'https://www.openstreetmap.org/edit#map=19/-27.469800/153.025100');
+    expect(screen.getByRole('link', { name: 'View in OpenStreetMap' })).toHaveAttribute('href', 'https://www.openstreetmap.org/#map=19/-27.469800/153.025100');
+  });
+
+  it('shows a report of a missing limit', async () => {
+    await openDetail({ 'GET /api/admin/feedback/f-1': () => feedbackItem({ type: 'speed_limit', speedLimit: { location: [153.0251, -27.4698], shownKmh: null } }) });
+    expect(await screen.findByRole('heading', { name: 'Speed limit' })).toBeInTheDocument();
+    expect(screen.getByText('Shown').nextSibling).toHaveTextContent('None');
+    expect(screen.queryByText('On the sign')).toBeNull();
+    expect(screen.getByText('Where').nextSibling).toHaveTextContent('-27.46980, 153.02510');
+  });
+
   it('triages: status and notes', async () => {
     const { api } = await openDetail({ 'PATCH /api/admin/feedback/f-1': (req) => feedbackItem({ ...(req.body as object), hasScreenshot: true }) });
     await userEvent.selectOptions(await screen.findByLabelText('Status'), 'Won’t fix');

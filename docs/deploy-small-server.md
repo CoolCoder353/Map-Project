@@ -75,7 +75,7 @@ The build database (`wf-qld-db`) must be running for the `places` step: `docker 
 ```bash
 infra/scripts/deploy-small.sh images   # builds and loads api, worker (slim), web, graphhopper
 infra/scripts/deploy-small.sh data     # graph + tiles; swapped in beside the live data, then GraphHopper restarts
-infra/scripts/deploy-small.sh places   # search data + data date (needs the server stack running)
+infra/scripts/deploy-small.sh places   # search data, traffic lights, speed-limit rules + data date (needs the server stack running)
 ```
 
 Each step checks free disk space on the server first. Configuration (compose files, Caddyfile, GraphHopper config) comes from the server's git checkout, `/opt/wayfinder`, so bring it up to date too. If the commits are on GitHub:

@@ -163,3 +163,57 @@ describe('speed limit', () => {
     expect(s.update({ ts: 0, lon: start[0] + 0.001, lat: start[1], accuracyM: 5 }).state.speedLimitKmh).toBeNull();
   });
 });
+
+describe('estimated speed limits', () => {
+  it('falls back to the estimate where no sign is mapped, and says it is one', () => {
+    const route = { ...lRoute(), speedLimits: [{ from: 1, to: 2, kmh: 80 }], estimatedSpeedLimits: [{ from: 0, to: 1, kmh: 50 }] };
+    const s = new NavigationSession(route);
+    expect(s.snapshot.speedLimitEstimated).toBe(false);
+    const at = (p: LngLat) => s.update({ ts: 0, lon: p[0], lat: p[1], accuracyM: 5 }).state;
+    expect(at(destination(start, 90, 300))).toMatchObject({ speedLimitKmh: 50, speedLimitEstimated: true });
+    expect(at(destination(corner, 0, 300))).toMatchObject({ speedLimitKmh: 80, speedLimitEstimated: false });
+  });
+});
+
+describe('traffic lights', () => {
+  /** Three sets of lights along Alpha Street, the last at the corner where the route turns left. */
+  function withLights(): Route {
+    const corner2 = destination(start, 90, 1000);
+    const geometry: LngLat[] = [start, destination(start, 90, 300), destination(start, 90, 600), corner2, end];
+    const route = lRoute();
+    return {
+      ...route,
+      geometry,
+      trafficSignals: [
+        { index: 1, kind: 'signals' },
+        { index: 2, kind: 'crossing' },
+        { index: 2, kind: 'ramp_meter' },
+        { index: 3, kind: 'signals' },
+      ],
+      instructions: [
+        { ...route.instructions[0]!, interval: [0, 3] },
+        { ...route.instructions[1]!, text: 'At the lights, turn left onto Beta Road', atTrafficLights: true, interval: [3, 4] },
+        { ...route.instructions[2]!, interval: [4, 4] },
+      ],
+    };
+  }
+
+  it('says which set of lights to turn at, counted from where you are', () => {
+    const route = withLights();
+    const { events } = run(new NavigationSession(route), simulateFixes(route.geometry, { speedMps: 14, intervalS: 1 }));
+    const turn = events.filter((e): e is Extract<NavEvent, { type: 'announce' }> => e.type === 'announce' && e.instructionIndex === 1);
+    expect(turn.map((e) => e.text)).toEqual([
+      'In 800 metres, at the third set of lights, turn left onto Beta Road',
+      'In 200 metres, at the lights, turn left onto Beta Road',
+      'At the lights, turn left onto Beta Road',
+    ]);
+  });
+
+  it('says it the plain way for a route from an older server', () => {
+    const route = withLights();
+    delete route.trafficSignals;
+    const { events } = run(new NavigationSession(route), simulateFixes(route.geometry, { speedMps: 14, intervalS: 1 }));
+    const first = events.find((e): e is Extract<NavEvent, { type: 'announce' }> => e.type === 'announce' && e.instructionIndex === 1)!;
+    expect(first.text).toBe('In 800 metres, at the lights, turn left onto Beta Road');
+  });
+});

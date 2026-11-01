@@ -32,6 +32,13 @@ it('shows new ground and extra time on an explore route', async () => {
   expect(screen.getByText('+4 min')).toBeOnTheScreen();
 });
 
+it('says when trips on the route are usually slow at this time', async () => {
+  const { rerender } = await render(<RouteCard route={route('fastest')} title="Fastest" selected={false} onSelect={jest.fn()} onStart={jest.fn()} />);
+  expect(screen.queryByText('Usually slow at this time')).toBeNull();
+  await rerender(<RouteCard route={route('fastest', { usuallySlow: true })} title="Fastest" selected={false} onSelect={jest.fn()} onStart={jest.fn()} />);
+  expect(screen.getByText('Usually slow at this time')).toBeOnTheScreen();
+});
+
 it('offers Start only once the route is selected', async () => {
   const onSelect = jest.fn();
   const onStart = jest.fn();

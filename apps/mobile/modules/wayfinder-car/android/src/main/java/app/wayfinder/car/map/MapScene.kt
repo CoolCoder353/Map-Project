@@ -23,6 +23,8 @@ sealed interface MapScene {
     val travelled: List<LngLat> = emptyList(),
     val speedLimitKmh: Int? = null,
     val speedKmh: Int? = null,
+    /** [speedLimitKmh] is the legal default for the road, not a mapped sign. */
+    val speedLimitEstimated: Boolean = false,
   ) : MapScene
 }
 

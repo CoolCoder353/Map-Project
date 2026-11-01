@@ -227,7 +227,7 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
       }
     }
     speed?.let { v ->
-      v.set(s?.speedLimitKmh, s?.speedKmh)
+      v.set(s?.speedLimitKmh, s?.speedKmh, s?.speedLimitEstimated == true)
       if (!visible.isEmpty) {
         val margin = 12 * v.resources.displayMetrics.density
         v.translationX = visible.left + margin

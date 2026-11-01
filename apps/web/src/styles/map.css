@@ -350,6 +350,11 @@ body.is-picking .map-canvas canvas {
   font-size: var(--text-sm);
   color: var(--text-2);
 }
+.route-option-slow {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--warning);
+}
 .route-option-time {
   display: grid;
   justify-items: end;

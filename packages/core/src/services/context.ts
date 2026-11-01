@@ -10,6 +10,7 @@ export type JobName =
   | 'purge-deleted'
   | 'system-sample'
   | 'metrics-maintenance'
+  | 'road-speeds'
   | 'osm-refresh';
 
 export interface JobQueue {

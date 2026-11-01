@@ -216,6 +216,24 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
 
 ## Open / manual
 
+- **Traffic lights, school zones, estimated limits and learned speeds (2026-11-01, not deployed).**
+  Checked by tests, and by hand against real data: a Brisbane extract (152.98–153.12°E,
+  27.42–27.53°S) built into a GraphHopper 11 graph with the new `config.yml` (estimates on), which
+  answers routes with `max_speed_estimated`, `road_environment` and `time` details and names an
+  unknown detail with "Cannot find the path details". The extract has 4,231 lights and 483 roads with
+  limit rules (286 school zones). A route from the CBD to Carina (9.2 km) finds 15 sets of lights,
+  four turns "at the lights" (onto Ann Street, Cavendish Road, Old Cleveland Road, Leicester Street),
+  40 in a school zone at 8 am on a Tuesday and 60 there at noon, and three short estimated stretches;
+  its time goes from GraphHopper's 11.4 min to 15.0 min. Still to do: the next map data refresh (the
+  graph must be rebuilt for estimates; until then routes come without them, no harm done), then
+  `deploy-small.sh data` and `places` and migration 009 with the deploy; on a device, the grey ring,
+  tapping the sign to report, lights on the map at zoom 15 and in the car, and "at the third set of
+  lights" spoken. Learned speeds need three trips on a road before they count, so expect few at first.
+  School and public holidays aren't known, so a school zone shows on holidays too.
+- **The 1 October reports** of wrong speed limits and traffic lights not recognised: the limits
+  matched OSM then; school zones were the likely cause, and lights weren't used at all. Both are
+  addressed above, not yet confirmed with the reporter.
+
 - **`pnpm play` against the real Play API (2026-10-04):** `status` lists the tracks and `listing` committed the store listing. An upload of a new bundle hasn't run against Play yet. Service account permission changes took more than 10 minutes to reach the API.
 
 - **Android on a device.** Install the APK (`infra/scripts/build-apk.sh`) and check: background tracking survives the app being killed and Doze; a real walk appears as new coverage on the web; turn-by-turn with a deliberate wrong turn triggers a reroute; the offline queue uploads when connectivity returns.

@@ -37,6 +37,7 @@ import { AppError } from '../lib/errors.js';
 import type { CustomModel, GhInstruction, GhPath, GraphHopperClient } from '../lib/graphhopper.js';
 import type { MetricsAggregator } from '../lib/metrics.js';
 import { areaUnexplored, loadVisitedCells } from './coverage.js';
+import { finishRoutes } from './road-facts.js';
 import { visitedWayIds } from './roads.js';
 
 export interface RoutingDeps {
@@ -267,14 +268,33 @@ export async function fastestRoute(
   if (!path) throw new AppError(422, 'no_route', 'No route found');
   const { set, ways } = await visitedSetFor(deps.db, userId, path.points.coordinates, 500);
   await recordRequest(deps.db, userId, 'fastest', req.mode);
-  const route = toRoute(path, {
-    kind: 'fastest',
-    mode: req.mode,
-    novelty: noveltyOf(path, (c) => set.has(c), ways),
-    extraDurationS: 0,
-    viaPoints: req.via,
+  const make = (p: GhPath) => ({
+    route: toRoute(p, { kind: 'fastest', mode: req.mode, novelty: noveltyOf(p, (c) => set.has(c), ways), extraDurationS: 0, viaPoints: req.via }),
+    path: p,
   });
-  return req.heading !== undefined ? turnAroundWhenYouCan(route) : route;
+  let [route] = await finishRoutes(deps.db, [make(path)]);
+  if (route!.usuallySlow && req.mode === 'car' && req.via.length === 0 && req.heading === undefined) {
+    route = await quickestOfAlternatives(deps, req.from, req.to, route!, make);
+  }
+  return req.heading !== undefined ? turnAroundWhenYouCan(route!) : route!;
+}
+
+/**
+ * When trips say the fastest route is usually slow at this time, the engine's other ways there may
+ * really be quicker: ask for them and keep whichever takes least time by the same measure.
+ */
+async function quickestOfAlternatives(
+  deps: RoutingDeps,
+  from: LngLat,
+  to: LngLat,
+  current: Route,
+  make: (p: GhPath) => { route: Route; path: GhPath },
+): Promise<Route> {
+  const paths = await deps.metrics
+    .time('graphhopper.route', 'fastest.alternatives', () => deps.graphhopper.route({ points: [from, to], profile: profileFor(current.mode), alternatives: 3 }))
+    .catch(() => [] as GhPath[]);
+  const finished = await finishRoutes(deps.db, paths.filter((p) => uTurnsIn(p).length === 0).map(make));
+  return finished.reduce((best, r) => (r.durationS < best.durationS ? r : best), current);
 }
 
 /** What a new route says when the only sensible way is back the way the car came. */
@@ -358,18 +378,15 @@ export async function exploreRoutes(
   );
 
   await recordRequest(deps.db, userId, 'explore', req.mode);
-  return {
-    fastest: toRoute(fastestPath, { kind: 'fastest', mode: req.mode, novelty: fastestNovelty, extraDurationS: 0, viaPoints: [] }),
-    explore: ranked.map((r) =>
-      toRoute(r.candidate.path, {
-        kind: 'explore',
-        mode: req.mode,
-        novelty: r.novelty,
-        extraDurationS: r.durationS - t0,
-        viaPoints: r.candidate.vias,
-      }),
-    ),
-  };
+  const [fastest, ...explore] = await finishRoutes(deps.db, [
+    { route: toRoute(fastestPath, { kind: 'fastest', mode: req.mode, novelty: fastestNovelty, extraDurationS: 0, viaPoints: [] }), path: fastestPath },
+    ...ranked.map((r) => ({
+      route: toRoute(r.candidate.path, { kind: 'explore', mode: req.mode, novelty: r.novelty, extraDurationS: r.durationS - t0, viaPoints: r.candidate.vias }),
+      path: r.candidate.path,
+    })),
+  ]);
+  // Times now allow for lights and what trips have learned, so the extra time is by the same measure.
+  return { fastest: fastest!, explore: explore.map((r) => ({ ...r, extraDurationS: Math.max(0, r.durationS - fastest!.durationS) })) };
 }
 
 export async function roundTrips(
@@ -450,14 +467,12 @@ export async function roundTrips(
     }
   }
   await recordRequest(deps.db, userId, 'roundtrip', req.mode);
-  return ranked.map((r) =>
-    toRoute(r.candidate.path, {
-      kind: 'roundtrip',
-      mode: req.mode,
-      novelty: r.novelty,
-      extraDurationS: 0,
-      viaPoints: r.candidate.vias,
-    }),
+  return finishRoutes(
+    deps.db,
+    ranked.map((r) => ({
+      route: toRoute(r.candidate.path, { kind: 'roundtrip', mode: req.mode, novelty: r.novelty, extraDurationS: 0, viaPoints: r.candidate.vias }),
+      path: r.candidate.path,
+    })),
   );
 }
 

@@ -51,11 +51,37 @@ const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { sta
 const path = { distance: 1000, time: 60_000, points: { type: 'LineString', coordinates: [[153, -27], [153.01, -27]] }, instructions: [] };
 
 describe('GraphHopper requests', () => {
-  it('asks for a plain fastest route with way ids and speed limits, using the fast (CH) graph', async () => {
+  it('asks for a plain fastest route with way ids, limits, estimates, bridges and times, using the fast (CH) graph', async () => {
     const gh = recording(() => json({ paths: [path] }));
     expect(await gh.client.route({ points: [[153, -27], [153.1, -27.1]], profile: 'car' })).toEqual([path]);
     expect(gh.calls[0]!.url).toBe('http://gh/route');
-    expect(gh.body()).toEqual({ points: [[153, -27], [153.1, -27.1]], profile: 'car', points_encoded: false, instructions: true, calc_points: true, locale: 'en', details: ['osm_way_id', 'max_speed'] });
+    expect(gh.body()).toEqual({
+      points: [[153, -27], [153.1, -27.1]],
+      profile: 'car',
+      points_encoded: false,
+      instructions: true,
+      calc_points: true,
+      locale: 'en',
+      details: ['osm_way_id', 'max_speed', 'max_speed_estimated', 'road_environment', 'time'],
+    });
+  });
+
+  it('keeps routing on a graph built before limit estimates, asking for what it has for a while', async () => {
+    const gh = recording((_url, init) => {
+      const details = (JSON.parse(String(init.body)) as { details: string[] }).details;
+      return details.includes('max_speed_estimated') ? json({ message: 'Cannot find the path details: [max_speed_estimated]' }, 400) : json({ paths: [path] });
+    });
+    expect(await gh.client.route({ points: [[153, -27], [153.1, -27.1]], profile: 'car' })).toEqual([path]);
+    expect(gh.body(1).details).toEqual(['osm_way_id', 'max_speed']);
+    // The next route goes straight to the details the graph has.
+    await gh.client.route({ points: [[153, -27], [153.1, -27.1]], profile: 'car' });
+    expect(gh.calls).toHaveLength(3);
+    expect(gh.body(2).details).toEqual(['osm_way_id', 'max_speed']);
+  });
+
+  it('still reports other failures after falling back', async () => {
+    const gh = recording(() => json({ message: 'Cannot find the path details: [time]' }, 400));
+    await expect(gh.client.route({ points: [[153, -27], [153.1, -27.1]], profile: 'car' })).rejects.toThrow(/path details/);
   });
 
   it('turns off CH for custom models, alternatives and pass-through vias', async () => {

@@ -24,7 +24,12 @@ graphhopper:
 
   # osm_way_id: which OSM way each metre of a route belongs to — the unit of road coverage.
   # Unlike internal edge ids it survives a graph rebuild.
-  graph.encoded_values: osm_way_id, car_access, car_average_speed, road_access, max_speed, road_class, road_environment, foot_access, foot_priority, foot_average_speed, foot_road_access, hike_rating, mtb_rating, country
+  graph.encoded_values: osm_way_id, car_access, car_average_speed, road_access, max_speed, max_speed_estimated, urban_density, road_class, road_environment, foot_access, foot_priority, foot_average_speed, foot_road_access, hike_rating, mtb_rating, country
+  # Where no limit is mapped, fill in the legal default for the kind of road (50 in a built-up
+  # area, 100 outside one in Queensland), marked in max_speed_estimated so routes can keep these
+  # apart from signposted limits. Built-up areas come from the urban density calculation.
+  max_speed_calculator.enabled: true
+  graph.urban_density.threads: 4
   import.osm.ignored_highways: construction,proposed,abandoned,razed
   prepare.min_network_size: 200
   prepare.lm.landmarks: 16

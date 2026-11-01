@@ -2,6 +2,7 @@
  * MapLibre style for the self-hosted OpenMapTiles-schema tiles (built by Planetiler).
  * No sprite sheet: POIs are drawn as circles so the style only needs glyphs.
  */
+import { SIGNAL_LAYER, SIGNAL_TILE_MAX_ZOOM, SIGNAL_TILE_MIN_ZOOM } from './signal-tiles.js';
 
 interface Palette {
   background: string;
@@ -28,6 +29,9 @@ interface Palette {
   roadLabel: string;
   waterLabel: string;
   poi: string;
+  /** Traffic lights: the housing and its lamp. */
+  signal: string;
+  signalLamp: string;
 }
 
 const LIGHT: Palette = {
@@ -55,6 +59,8 @@ const LIGHT: Palette = {
   roadLabel: '#5d574c',
   waterLabel: '#3f7894',
   poi: '#b5653f',
+  signal: '#2f2c28',
+  signalLamp: '#f2b53a',
 };
 
 const DARK: Palette = {
@@ -82,6 +88,8 @@ const DARK: Palette = {
   roadLabel: '#c3bcae',
   waterLabel: '#86b6cf',
   poi: '#d9895f',
+  signal: '#0d0f11',
+  signalLamp: '#e9a838',
 };
 
 const FONT = ['Noto Sans Regular'];
@@ -122,6 +130,8 @@ export function buildStyle(origin: string, theme: 'light' | 'dark') {
     glyphs: `${origin}/map/assets/fonts/{fontstack}/{range}.pbf`,
     sources: {
       openmaptiles: { type: 'vector', url: `${origin}/tiles/tiles.json` },
+      // Traffic lights, served from the database (they aren't in the OpenMapTiles schema).
+      signals: { type: 'vector', tiles: [`${origin}/tiles/signals/{z}/{x}/{y}.mvt`], minzoom: SIGNAL_TILE_MIN_ZOOM, maxzoom: SIGNAL_TILE_MAX_ZOOM },
     },
     layers: [
       { id: 'background', type: 'background', paint: { 'background-color': p.background } },
@@ -248,6 +258,27 @@ export function buildStyle(origin: string, theme: 'light' | 'dark') {
         minzoom: 14,
         filter: ['<=', ['get', 'rank'], 20],
         paint: { 'circle-color': p.poi, 'circle-radius': 3.5, 'circle-stroke-color': p.labelHalo, 'circle-stroke-width': 1 },
+      },
+      {
+        id: 'traffic-signals',
+        type: 'circle',
+        source: 'signals',
+        'source-layer': SIGNAL_LAYER,
+        minzoom: 15,
+        paint: {
+          'circle-color': p.signal,
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 15, 3, 18, 5.5],
+          'circle-stroke-color': p.labelHalo,
+          'circle-stroke-width': 1,
+        },
+      },
+      {
+        id: 'traffic-signals-lamp',
+        type: 'circle',
+        source: 'signals',
+        'source-layer': SIGNAL_LAYER,
+        minzoom: 15,
+        paint: { 'circle-color': p.signalLamp, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 15, 1.2, 18, 2.4] },
       },
       {
         id: 'poi-label',

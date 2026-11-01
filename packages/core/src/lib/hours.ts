@@ -23,7 +23,7 @@ function parse(spec: string): OpeningHours | null {
  * The library evaluates in the process's local time, so give it a Date whose local fields are
  * the wall-clock time in the place's time zone.
  */
-function wallClock(now: Date, timeZone: string): Date {
+export function wallClock(now: Date, timeZone: string): Date {
   const parts = Object.fromEntries(
     new Intl.DateTimeFormat('en-AU', { timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' })
       .formatToParts(now)

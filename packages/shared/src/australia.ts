@@ -46,3 +46,25 @@ export function placeDetail(
   if (p.distanceM !== undefined) parts.push(formatDistance(p.distanceM));
   return parts.filter(Boolean).join(' · ');
 }
+
+/**
+ * The time zone at a point in Australia, roughly: Western Australia west of 129°E, the Northern
+ * Territory and South Australia either side of 26°S as far as 138°E and 141°E, Queensland north of
+ * its border with New South Wales (which runs near 29°S inland and 28.2°S on the coast), and the
+ * eastern states' zone elsewhere. Good enough to know what hour of the day it is on a road, which is
+ * what it's for; a town right on a border (Broken Hill keeps Adelaide time) can be an hour out.
+ */
+export function timeZoneAt([lon, lat]: readonly [number, number]): string {
+  if (lon < 129) return AU_STATES.WA.timeZone;
+  if (lon < 138) return lat > -26 ? AU_STATES.NT.timeZone : AU_STATES.SA.timeZone;
+  if (lon < 141) return lat > -26 ? AU_STATES.QLD.timeZone : AU_STATES.SA.timeZone;
+  if (lat < -39.2) return AU_STATES.TAS.timeZone;
+  return lat > (lon >= 151 ? -28.2 : -29) ? AU_STATES.QLD.timeZone : AU_STATES.NSW.timeZone;
+}
+
+/** The weekday (0 Sunday) and hour (0–23) on the wall clock in a time zone. */
+export function localDayHour(at: Date, timeZone: string): { day: number; hour: number } {
+  const parts = new Intl.DateTimeFormat('en-AU', { timeZone, weekday: 'short', hour: 'numeric', hourCycle: 'h23' }).formatToParts(at);
+  const weekday = parts.find((p) => p.type === 'weekday')?.value ?? 'Mon';
+  return { day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(weekday), hour: Number(parts.find((p) => p.type === 'hour')?.value ?? 0) };
+}

@@ -5,6 +5,7 @@ import {
   type FeedbackItem,
   type FeedbackStatus,
   type FeedbackType,
+  type SpeedLimitReport,
 } from '@wayfinder/shared';
 import type { DbClient } from '../db/pool.js';
 import { AppError, badRequest, isUuid, notFound } from '../lib/errors.js';
@@ -19,6 +20,7 @@ interface FeedbackRow {
   message: string;
   context: FeedbackContext;
   has_screenshot: boolean;
+  speed_limit: SpeedLimitReport | null;
   admin_notes: string;
   user_id: string | null;
   email: string | null;
@@ -33,6 +35,7 @@ const toItem = (r: FeedbackRow): FeedbackItem => ({
   message: r.message,
   context: r.context,
   hasScreenshot: r.has_screenshot,
+  ...(r.speed_limit ? { speedLimit: r.speed_limit } : {}),
   adminNotes: r.admin_notes,
   user: r.user_id && r.email ? { id: r.user_id, email: r.email } : null,
   createdAt: r.created_at.toISOString(),
@@ -40,7 +43,7 @@ const toItem = (r: FeedbackRow): FeedbackItem => ({
 });
 
 const SELECT = `SELECT f.id, f.type, f.status, f.message, f.context, f.screenshot IS NOT NULL AS has_screenshot,
-                       f.admin_notes, f.user_id, u.email, f.created_at, f.updated_at
+                       f.speed_limit, f.admin_notes, f.user_id, u.email, f.created_at, f.updated_at
                 FROM feedback f LEFT JOIN users u ON u.id = f.user_id`;
 
 const MAGIC: Record<string, (b: Buffer) => boolean> = {
@@ -67,9 +70,17 @@ export async function createFeedback(db: DbClient, userId: string, input: Feedba
     if (!MAGIC[input.screenshot.mediaType]!(image)) throw badRequest('The screenshot isn’t a JPEG, PNG or WebP image');
   }
   const r = await db.query<{ id: string }>(
-    `INSERT INTO feedback (user_id, type, message, context, screenshot, screenshot_type)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [userId, input.type, input.message, JSON.stringify(input.context), image, image ? input.screenshot!.mediaType : null],
+    `INSERT INTO feedback (user_id, type, message, context, screenshot, screenshot_type, speed_limit)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [
+      userId,
+      input.type,
+      input.message,
+      JSON.stringify(input.context),
+      image,
+      image ? input.screenshot!.mediaType : null,
+      input.speedLimit ? JSON.stringify(input.speedLimit) : null,
+    ],
   );
   return (await getFeedback(db, r.rows[0]!.id))!;
 }

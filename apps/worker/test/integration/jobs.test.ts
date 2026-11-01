@@ -97,6 +97,11 @@ describe('worker job handlers', () => {
     expect(daily).toBe(1);
   });
 
+  it('road-speeds rebuilds the typical speeds from drives', async () => {
+    const handlers = jobHandlers(deps());
+    expect(await handlers['road-speeds']({})).toEqual({ roads: 0, pruned: 0 });
+  });
+
   it('instrument records job metrics and error events', async () => {
     const d = deps();
     const failing = instrument(d.ctx, 'rebuild-coverage', async () => {

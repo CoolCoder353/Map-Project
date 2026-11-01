@@ -1,4 +1,4 @@
-import type { Route } from '@wayfinder/shared';
+import { type Route, USUALLY_SLOW_TEXT } from '@wayfinder/shared';
 import { ArrowLeft, ArrowRight, ArrowUp, CornerUpLeft, CornerUpRight, Flag, MapPin, MoveUpLeft, MoveUpRight, RotateCcw, Send, Sparkles, Zap } from 'lucide-react';
 import { useState } from 'react';
 import { formatDistanceShort, formatDuration } from '../lib/format';
@@ -51,6 +51,7 @@ export function RouteOption({ route, title, selected, onSelect, onSend, sending,
               <span className="badge badge-new">{copy.newKm(route.novelty.newKm)}</span>
             )}
           </span>
+          {route.usuallySlow && <span className="route-option-slow">{USUALLY_SLOW_TEXT}</span>}
         </span>
         <span className="route-option-time num">
           <strong>{formatDuration(route.durationS)}</strong>

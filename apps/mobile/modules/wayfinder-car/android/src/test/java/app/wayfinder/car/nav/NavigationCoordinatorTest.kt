@@ -83,10 +83,11 @@ class NavigationCoordinatorTest {
     api.pushNav(Samples.nav().copy(position = LngLat(153.0, -27.4)))
     driveScreen()
     api.pushNav(Samples.nav(routeId = "r-reroute").copy(position = LngLat(153.001, -27.4)))
-    api.pushNav(Samples.nav(routeId = "r-reroute").copy(position = LngLat(153.002, -27.4), speedLimitKmh = 60, speedKmh = 57))
+    api.pushNav(Samples.nav(routeId = "r-reroute").copy(position = LngLat(153.002, -27.4), speedLimitKmh = 60, speedKmh = 57, speedLimitEstimated = true))
     val shown = scenes.shown.last() as MapScene.Following
     assertEquals(listOf(LngLat(153.0, -27.4), LngLat(153.001, -27.4), LngLat(153.002, -27.4)), shown.travelled)
     assertEquals(60, shown.speedLimitKmh)
+    assertTrue("an estimated limit stays marked as one", shown.speedLimitEstimated)
     assertEquals(57, shown.speedKmh)
     // The next trip starts with none.
     api.pushNav(null)

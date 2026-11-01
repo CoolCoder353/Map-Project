@@ -22,21 +22,24 @@ object SpeedReadout {
 /**
  * The speed limit as Australian signs show it (black on white in a red ring, as on the phone's
  * Navigate screen) with the car's speed under it, red when over the limit. Drawn over the car map.
+ * A limit that is only the legal default for the road, with no sign mapped, has a grey ring.
  */
 class SpeedView(context: Context) : View(context) {
   private val density = context.resources.displayMetrics.density
   private var limitKmh: Int? = null
   private var speedKmh: Int? = null
+  private var estimated = false
   private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
   private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; typeface = Typeface.DEFAULT_BOLD }
 
   val sizePx: Int get() = (SIGN_DP * density).toInt()
   val heightPx: Int get() = ((SIGN_DP + GAP_DP + SPEED_DP) * density).toInt()
 
-  fun set(limitKmh: Int?, speedKmh: Int?) {
-    if (limitKmh == this.limitKmh && speedKmh == this.speedKmh) return
+  fun set(limitKmh: Int?, speedKmh: Int?, estimated: Boolean = false) {
+    if (limitKmh == this.limitKmh && speedKmh == this.speedKmh && estimated == this.estimated) return
     this.limitKmh = limitKmh
     this.speedKmh = speedKmh
+    this.estimated = estimated
     visibility = if (SpeedReadout.shown(limitKmh, speedKmh)) VISIBLE else GONE
     invalidate()
   }
@@ -50,7 +53,7 @@ class SpeedView(context: Context) : View(context) {
       canvas.drawCircle(r, r, r, fill)
       fill.style = Paint.Style.STROKE
       fill.strokeWidth = 6 * d
-      fill.color = SIGN_RED
+      fill.color = if (estimated) ESTIMATE_GREY else SIGN_RED
       canvas.drawCircle(r, r, r - 3 * d, fill)
       fill.style = Paint.Style.FILL
       text.color = Color.BLACK
@@ -75,6 +78,7 @@ class SpeedView(context: Context) : View(context) {
     const val GAP_DP = 6f
     const val SPEED_DP = 38f
     val SIGN_RED = Color.parseColor("#d0021b")
+    val ESTIMATE_GREY = Color.parseColor("#8a8f98")
   }
 }
 

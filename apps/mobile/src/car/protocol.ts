@@ -75,6 +75,8 @@ export const CarNavSchema = z.object({
   headingDeg: z.number().nullable(),
   /** The limit where you are, only while on the route (off it, the road isn't the one it's for). */
   speedLimitKmh: z.number().nullable(),
+  /** That limit is the legal default for the road, not a sign in the map data. */
+  speedLimitEstimated: z.boolean(),
   /** How fast the phone says you're going, km/h. */
   speedKmh: z.number().nullable(),
 });

@@ -51,6 +51,13 @@ describe('Directions', () => {
     });
   });
 
+  it('says when a route is usually slow at this time', async () => {
+    const res = exploreResponse();
+    await renderApp(<DirectionsPanel />, { path: `/directions?${FROM}&${TO}`, api: { 'POST /api/routes/explore': () => ({ ...res, fastest: { ...res.fastest, usuallySlow: true } }) } });
+    expect(await screen.findByRole('list', { name: 'Fastest route' })).toHaveTextContent('Usually slow at this time');
+    expect(screen.getByRole('list', { name: 'Ways you haven’t been' })).not.toHaveTextContent('Usually slow');
+  });
+
   it('selects a route from the list or the map, and shows its steps', async () => {
     const { map } = await renderApp(<DirectionsPanel />, { path: `/directions?${FROM}&${TO}`, api: { 'POST /api/routes/explore': () => exploreResponse() } });
     const fastest = await screen.findByRole('button', { name: /Fastest/ });

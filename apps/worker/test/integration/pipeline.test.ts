@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminService, opsService, placeService } from '@wayfinder/core';
 import { importPlacesFromGeoJsonSeq } from '../../src/pipeline/import-places.js';
+import { importRoadFacts } from '../../src/pipeline/osm-roads.js';
 import { type RunCommand, runOsmRefresh } from '../../src/pipeline/refresh.js';
 import { type TestDb, createTestDb } from '../../../../packages/core/test/helpers/db.js';
 
@@ -51,6 +52,11 @@ const BOUNDARIES = seq([
   feature('r1', { boundary: 'administrative', admin_level: '4', name: 'New South Wales' }, square(149.2, -36, 150, -35), 'Polygon'),
   feature('r2', { boundary: 'administrative', admin_level: '10', name: 'Queanbeyan' }, square(149.21, -35.37, 149.25, -35.33), 'Polygon'),
 ]);
+const ROADS = seq([
+  feature('n21', { highway: 'traffic_signals' }, [149.232, -35.351]),
+  feature('n22', { highway: 'crossing', crossing: 'traffic_signals' }, [149.233, -35.352]),
+  feature('w23', { highway: 'residential', maxspeed: '60', 'maxspeed:conditional': '40 @ (Mo-Fr 08:00-09:30,14:30-16:00)' }, [[149.23, -35.35], [149.231, -35.35]], 'LineString'),
+]);
 const PLACES = seq([
   feature('n9', { place: 'town', name: 'Queanbeyan' }, [149.23, -35.35]),
   // The same town mapped again as an area: dropped in favour of the node.
@@ -83,7 +89,7 @@ describe('OSM refresh orchestration', () => {
       }
       if (cmd === 'osmium' && args[0] === 'export') {
         const out = args[args.indexOf('-o') + 1]!;
-        await writeFile(out, out.includes('boundaries') ? BOUNDARIES : PLACES);
+        await writeFile(out, out.includes('boundaries') ? BOUNDARIES : out.includes('roads') ? ROADS : PLACES);
       }
       onLine(`ran ${cmd}`);
     };
@@ -94,7 +100,7 @@ describe('OSM refresh orchestration', () => {
       { dataDir, pbfUrl: 'https://example.test/au.osm.pbf', graphhopperJar: 'gh.jar', graphhopperConfig: 'c.yml', graphhopperHeap: '1g', planetilerJar: 'p.jar', planetilerHeap: '1g', skip: ['download'] },
       fake,
     );
-    expect(commands).toEqual(['osmium fileinfo', 'java -Xmx1g', 'java -Xmx1g', 'osmium tags-filter', 'osmium export', 'osmium tags-filter', 'osmium export']);
+    expect(commands).toEqual(['osmium fileinfo', 'java -Xmx1g', 'java -Xmx1g', 'osmium tags-filter', 'osmium export', 'osmium tags-filter', 'osmium export', 'osmium tags-filter', 'osmium export']);
     expect(await readFile(join(dataDir, 'graphhopper', 'graph-current', 'nodes'), 'utf8')).toBe('graph');
     expect(await readFile(join(dataDir, 'tiles', 'australia.pmtiles'), 'utf8')).toBe('pmtiles');
     expect((await readFile(join(dataDir, 'graphhopper', 'graph-version'), 'utf8')).trim()).toMatch(/^\d+$/);
@@ -108,6 +114,14 @@ describe('OSM refresh orchestration', () => {
       { id: 'n12', kind: 'poi', suburb: 'Queanbeyan', state: 'NSW', postcode: '2620', poi_type: 'shop=supermarket', opening_hours: 'Mo-Su 07:00-22:00' },
       { id: 'n9', kind: 'town', suburb: 'Queanbeyan', state: 'NSW', postcode: '2620', poi_type: null, opening_hours: null },
       { id: 'w13', kind: 'street', suburb: 'Queanbeyan', state: 'NSW', postcode: '2620', poi_type: 'highway=residential', opening_hours: null },
+    ]);
+    // Traffic lights and school zones come in with the places, in the state they're in.
+    expect((await t.db.query('SELECT id::text, kind FROM traffic_signals ORDER BY id')).rows).toEqual([
+      { id: '21', kind: 'signals' },
+      { id: '22', kind: 'crossing' },
+    ]);
+    expect((await t.db.query('SELECT way_id::text, conditional, variable, state FROM way_speed_rules')).rows).toEqual([
+      { way_id: '23', conditional: '40 @ (Mo-Fr 08:00-09:30,14:30-16:00)', variable: false, state: 'NSW' },
     ]);
   });
 
@@ -163,5 +177,35 @@ describe('OSM refresh orchestration', () => {
     expect(run.status).toBe('failed');
     expect(run.logTail).toContain('!! java exited with code 137');
     expect((await t.db.query('SELECT id FROM places ORDER BY id')).rows).toEqual(before);
+  });
+});
+
+describe('road facts import', () => {
+  it('swaps in traffic lights and limit rules, and can do it again', async () => {
+    const file = join(dir, 'roads.geojsonseq');
+    await writeFile(
+      file,
+      seq([
+        feature('n1', { highway: 'traffic_signals' }, [153.02, -27.47]),
+        feature('n2', { highway: 'traffic_signals', traffic_signals: 'ramp_meter' }, [153.03, -27.47]),
+        feature('n3', { highway: 'traffic_signals', traffic_signals: 'blinker' }, [153.04, -27.47]),
+        feature('w4', { highway: 'motorway', maxspeed: '100', 'maxspeed:variable': 'yes' }, [[153.0, -27.4], [153.01, -27.4]], 'LineString'),
+        feature('w5', { highway: 'primary', maxspeed: 'signals' }, [[153.0, -27.41], [153.01, -27.41]], 'LineString'),
+        feature('w6', { highway: 'primary', maxspeed: '60' }, [[153.0, -27.42], [153.01, -27.42]], 'LineString'),
+      ]) + 'not json\n\n',
+    );
+    expect(await importRoadFacts(t.db, file)).toEqual({ signals: 2, rules: 2 });
+    expect(await importRoadFacts(t.db, file)).toEqual({ signals: 2, rules: 2 });
+    expect((await t.db.query('SELECT id::text, kind FROM traffic_signals ORDER BY id')).rows).toEqual([
+      { id: '1', kind: 'signals' },
+      { id: '2', kind: 'ramp_meter' },
+    ]);
+    expect((await t.db.query('SELECT way_id::text, variable, state FROM way_speed_rules ORDER BY way_id')).rows).toEqual([
+      { way_id: '4', variable: true, state: null },
+      { way_id: '5', variable: true, state: null },
+    ]);
+    // The point index is still there under its usual name, for the lookups routes make.
+    const idx = (await t.db.query("SELECT indexname FROM pg_indexes WHERE tablename = 'traffic_signals' ORDER BY indexname")).rows.map((r) => r.indexname);
+    expect(idx).toEqual(['traffic_signals_pkey', 'traffic_signals_point_idx']);
   });
 });

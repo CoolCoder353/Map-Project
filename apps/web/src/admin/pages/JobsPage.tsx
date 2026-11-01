@@ -14,6 +14,7 @@ const JOB_LABEL: Record<string, string> = {
   'purge-deleted': 'Purge deleted data',
   'system-sample': 'Sample system stats',
   'metrics-maintenance': 'Roll up metrics',
+  'road-speeds': 'Learn road speeds from trips',
   'osm-refresh': 'OSM data refresh',
 };
 

@@ -2,7 +2,9 @@ package app.wayfinder.car.bridge
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -47,6 +49,7 @@ class ProtocolTest {
     assertEquals(FollowingStep(CarManeuver("right", null), "Turn right onto Moggill Rd", "Moggill Rd", 900.0), n.following)
     assertEquals(1790000000000L, n.arrivalEpochMs)
     assertEquals(60, n.speedLimitKmh)
+    assertTrue("a limit that is only the road's legal default", n.speedLimitEstimated)
     assertEquals(57, n.speedKmh)
   }
 
@@ -63,10 +66,11 @@ class ProtocolTest {
 
   /** A phone app one version behind sends none of the newer fields; the car still reads the rest. */
   @Test fun navigatingFromAnOlderPhoneApp() {
-    val o = fixture("nav-navigating.json").apply { remove("speedLimitKmh"); remove("speedKmh"); getJSONObject("maneuver").remove("exitAngleDeg") }
+    val o = fixture("nav-navigating.json").apply { remove("speedLimitKmh"); remove("speedLimitEstimated"); remove("speedKmh"); getJSONObject("maneuver").remove("exitAngleDeg") }
     val n = Protocol.nav(o)
     assertEquals(CarManeuver("roundabout", 2, null), n.maneuver)
     assertNull(n.speedLimitKmh)
+    assertFalse(n.speedLimitEstimated)
   }
 
   @Test fun statusKnowsSignedOutAndOffline() {

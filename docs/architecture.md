@@ -86,7 +86,27 @@ routes; nothing user-facing shows them.
   lights and wherever signed); on foot, one is allowed.
 - **Speed limits:** every route carries GraphHopper's `max_speed` as `speedLimits`, and Android
   turn-by-turn shows the limit of the road you're on. A short unknown stretch between two known
-  roads (a junction) keeps the limit before it; longer unknown ones show none.
+  roads (a junction) keeps the limit before it; longer unknown ones show none. Where no limit is
+  mapped, GraphHopper's limit estimator (`max_speed_calculator`, with urban density) fills in the
+  legal default; those come as `estimatedSpeedLimits` and show in a grey ring on the phone and in
+  the car. School zones (`maxspeed:conditional`) lower the limit while in force, by the road's own
+  clock; roads with electronic signs (`maxspeed:variable`, `maxspeed=signals`) show none. Tapping the
+  limit on the phone's Navigate screen files a `speed_limit` report with where it was, which the
+  admin dashboard links to OpenStreetMap for fixing.
+- **Finishing each route** (`road-facts.ts`, `packages/shared/src/road-facts.ts`): after the
+  candidates are chosen, every route gets what the database knows about its roads. Driving routes
+  get the sets of traffic lights on them (`traffic_signals` within 12 m of the line, one set per
+  junction, none beside a bridge or tunnel), turns at them say "At the lights, …", and the engine
+  says which set ("at the third set of lights") from further back. The time adds an average wait
+  per set (15 s; 6 s at a pedestrian crossing, 10 s at a ramp meter), and replaces the engine's time
+  with the speed trips actually go wherever enough of them have driven that road at this time.
+- **Speeds learned from drives** (`road-speeds.ts`): matching a car trip also times it along each
+  road (`road_speed_samples`, leaving out the first and last road, short stretches and gaps in the
+  fixes). The nightly `road-speeds` job keeps the median per road, weekday or weekend and hour
+  (and the whole day) wherever three or more trips agree, from the last 180 days. Where those say
+  the fastest route is usually slow at this time, the routing engine's alternatives are asked for
+  and the quickest by the same measure is offered, marked "Usually slow at this time" if it still
+  is. With a small group most roads have no learned speed, and keep the engine's.
 - **Round trip:** loops through unexplored areas around the start. Driving loops that need a
   U-turn aren't offered, so when the first six directions leave fewer than three loops, the other
   six are tried, then the 15° directions between them.
@@ -104,13 +124,17 @@ distance. Details in [ADR 0002](adr/0002-place-search.md).
 
 Planetiler builds one PMTiles file from the extract. The API serves tiles at
 `/tiles/{z}/{x}/{y}.mvt` and the style at `/map/style.json`, with fonts from `infra/map-assets`.
+Traffic lights aren't in the OpenMapTiles schema: the API builds them into small vector tiles from
+the `traffic_signals` table (`/tiles/signals/{z}/{x}/{y}.mvt`, `signal-tiles.ts`), drawn from zoom
+15 on the web, the phone and the car alike.
 URLs in the style are absolute, from `PUBLIC_ORIGIN`: the Android map cannot resolve relative
 URLs.
 
 ### Map data refresh
 
 `apps/worker/src/pipeline/refresh.ts`: download the extract → GraphHopper graph → tiles → places →
-swap all three in. Live data is untouched until every step succeeds. Needs about 16 GB of RAM,
+swap all three in. The places step also extracts traffic lights and speed-limit rules
+(`osm-roads.ts`) into `traffic_signals` and `way_speed_rules`, swapped in the same way. Live data is untouched until every step succeeds. Needs about 16 GB of RAM,
 so a small server gets its data built elsewhere ([deploy-small-server.md](deploy-small-server.md)).
 
 ### Admin and monitoring
@@ -130,6 +154,7 @@ pg-boss queues, handled in `apps/worker/src/jobs.ts`:
 | `purge-deleted` | daily 03:17 | hard-delete users and trips deleted over 7 days ago |
 | `system-sample` | every minute | CPU, memory, disk, queue depth, worker heartbeat |
 | `metrics-maintenance` | hourly | roll up and prune metrics |
+| `road-speeds` | daily 03:37 | rebuild typical road speeds from drives, drop samples over 180 days old |
 | `osm-refresh` | `OSM_REFRESH_CRON`, or the admin button | the map data refresh |
 
 ## Clients and the API contract

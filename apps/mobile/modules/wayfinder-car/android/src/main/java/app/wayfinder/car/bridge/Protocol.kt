@@ -41,6 +41,8 @@ data class CarNav(
   val position: LngLat?, val headingDeg: Double?,
   /** Only while on the route; [speedKmh] is how fast the phone says the car is going. */
   val speedLimitKmh: Int? = null, val speedKmh: Int? = null,
+  /** [speedLimitKmh] is the legal default for the road, not a mapped sign (absent from older phones: false). */
+  val speedLimitEstimated: Boolean = false,
 )
 
 /**
@@ -106,6 +108,7 @@ object Protocol {
     headingDeg = o.doubleOrNull("headingDeg"),
     speedLimitKmh = o.doubleOrNull("speedLimitKmh")?.let(Math::round)?.toInt(),
     speedKmh = o.doubleOrNull("speedKmh")?.let(Math::round)?.toInt(),
+    speedLimitEstimated = o.optBoolean("speedLimitEstimated", false),
   )
 
   private fun maneuver(o: JSONObject) =

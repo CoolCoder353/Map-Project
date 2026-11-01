@@ -2,7 +2,9 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import fastifyStatic from '@fastify/static';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
+import { roadFactsService } from '@wayfinder/core';
 import type { AppDeps } from '../deps.js';
+import { SIGNAL_TILE_MAX_ZOOM, SIGNAL_TILE_MIN_ZOOM, encodeSignalTile, tileBounds } from '../signal-tiles.js';
 
 /** Absolute origin of this request as seen by the client (honours X-Forwarded-* behind Caddy). */
 export const mapRoutes =
@@ -34,6 +36,21 @@ export const mapRoutes =
       reply.header('content-type', 'application/vnd.mapbox-vector-tile');
       // Sent uncompressed; Caddy compresses responses on the way out.
       return reply.send(Buffer.from(tile));
+    });
+
+    // Traffic lights, from the database rather than the tile file.
+    app.get<{ Params: { z: string; x: string; y: string } }>('/tiles/signals/:z/:x/:y.mvt', tileLimit, async (req, reply) => {
+      const [z, x, y] = [Number(req.params.z), Number(req.params.x), Number(req.params.y)];
+      if (![z, x, y].every(Number.isInteger) || z < 0 || z > SIGNAL_TILE_MAX_ZOOM || x < 0 || y < 0 || x >= 2 ** z || y >= 2 ** z) {
+        return reply.status(400).send({ error: { code: 'bad_request', message: 'Invalid tile coordinates' } });
+      }
+      // Lights change with the map data, monthly at most; an hour's caching is plenty fresh.
+      reply.header('cache-control', 'public, max-age=3600');
+      if (z < SIGNAL_TILE_MIN_ZOOM) return reply.status(204).send();
+      const signals = await roadFactsService.signalsIn(deps.ctx.db, tileBounds(z, x, y), 5000);
+      if (signals.length === 0) return reply.status(204).send();
+      reply.header('content-type', 'application/vnd.mapbox-vector-tile');
+      return reply.send(Buffer.from(encodeSignalTile(signals, z, x, y)));
     });
 
     // Style JSON with absolute URLs for this deployment.

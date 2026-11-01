@@ -22,8 +22,18 @@ export interface GhPath {
   points: { type: 'LineString'; coordinates: LngLat[] };
   instructions: GhInstruction[];
   snapped_waypoints?: { coordinates: LngLat[] };
-  /** Path details, as [firstPoint, lastPoint, value] runs. `max_speed` is km/h, null where unmapped. */
-  details?: { osm_way_id?: Array<[number, number, number]>; max_speed?: Array<[number, number, number | null]> };
+  /**
+   * Path details, as [firstPoint, lastPoint, value] runs. `max_speed` is km/h, null where unmapped;
+   * `max_speed_estimated` true where that limit is the legal default rather than a mapped one;
+   * `road_environment` road, bridge, tunnel or ferry; `time` the milliseconds each stretch takes.
+   */
+  details?: {
+    osm_way_id?: Array<[number, number, number]>;
+    max_speed?: Array<[number, number, number | null]>;
+    max_speed_estimated?: Array<[number, number, boolean | null]>;
+    road_environment?: Array<[number, number, string]>;
+    time?: Array<[number, number, number]>;
+  };
 }
 
 export interface CustomModel {
@@ -70,7 +80,22 @@ export function noRouteMessage(raw: string, points: number): string {
   return 'No route could be found between these places.';
 }
 
+/** GraphHopper's answer when a route asks for a detail the graph wasn't built with. */
+class UnknownDetailsError extends Error {}
+
+/** Details every graph has: which OSM way each stretch belongs to (the unit of road coverage), and its speed limit. */
+const BASE_DETAILS = ['osm_way_id', 'max_speed'];
+/**
+ * Details for lights and travel times. `max_speed_estimated` only exists in graphs built with the
+ * limit estimates switched on, so until a graph like that is in, routes go without it.
+ */
+const FULL_DETAILS = [...BASE_DETAILS, 'max_speed_estimated', 'road_environment', 'time'];
+/** How long to keep to the base details after the graph turned the full ones down. */
+const BASE_DETAILS_FOR_MS = 10 * 60_000;
+
 export class GraphHopperClient {
+  private baseDetailsUntil = 0;
+
   constructor(
     private readonly baseUrl: string,
     private readonly fetchImpl: typeof fetch = fetch,
@@ -91,6 +116,7 @@ export class GraphHopperClient {
     const body = (await res.json().catch(() => ({}))) as { message?: string } & T;
     if (!res.ok) {
       const message = body.message ?? `GraphHopper error ${res.status}`;
+      if (res.status === 400 && /Cannot find the path details/i.test(message)) throw new UnknownDetailsError(message);
       if (res.status === 400) {
         // Points outside the map, no connection between them, etc.
         throw new AppError(422, 'no_route', noRouteMessage(message, pointCount(init)));
@@ -126,6 +152,17 @@ export class GraphHopperClient {
   }
 
   async route(p: RouteParams): Promise<GhPath[]> {
+    if (Date.now() < this.baseDetailsUntil) return this.routeWith(p, BASE_DETAILS);
+    try {
+      return await this.routeWith(p, FULL_DETAILS);
+    } catch (err) {
+      if (!(err instanceof UnknownDetailsError)) throw err;
+      this.baseDetailsUntil = Date.now() + BASE_DETAILS_FOR_MS;
+      return this.routeWith(p, BASE_DETAILS);
+    }
+  }
+
+  private async routeWith(p: RouteParams, details: string[]): Promise<GhPath[]> {
     const body: Record<string, unknown> = {
       points: p.points,
       profile: p.profile,
@@ -133,8 +170,7 @@ export class GraphHopperClient {
       instructions: true,
       calc_points: true,
       locale: 'en',
-      // Which OSM way each stretch belongs to (the unit of road coverage), and its speed limit.
-      details: ['osm_way_id', 'max_speed'],
+      details,
     };
     if (p.passThrough && p.points.length > 2) {
       body['ch.disable'] = true;

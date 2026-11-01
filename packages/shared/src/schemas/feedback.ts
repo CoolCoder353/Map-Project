@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { LngLatSchema } from './common.js';
 
-export const FeedbackTypeSchema = z.enum(['bug', 'idea', 'other']);
+export const FeedbackTypeSchema = z.enum(['bug', 'idea', 'other', 'speed_limit']);
 export type FeedbackType = z.infer<typeof FeedbackTypeSchema>;
 
 export const FeedbackStatusSchema = z.enum(['new', 'planned', 'in_progress', 'done', 'wont_fix']);
@@ -14,7 +14,7 @@ export const FEEDBACK_STATUS_LABEL: Record<FeedbackStatus, string> = {
   done: 'Done',
   wont_fix: 'Won’t fix',
 };
-export const FEEDBACK_TYPE_LABEL: Record<FeedbackType, string> = { bug: 'Bug', idea: 'Idea', other: 'Other' };
+export const FEEDBACK_TYPE_LABEL: Record<FeedbackType, string> = { bug: 'Bug', idea: 'Idea', other: 'Other', speed_limit: 'Speed limit' };
 
 /** Collected automatically; the map view only when the user ticks the box. */
 export const FeedbackContextSchema = z.object({
@@ -25,6 +25,20 @@ export const FeedbackContextSchema = z.object({
   mapView: z.object({ center: LngLatSchema, zoom: z.number().min(0).max(24) }).optional(),
 });
 export type FeedbackContext = z.infer<typeof FeedbackContextSchema>;
+
+/** A wrong speed limit, reported from where it was shown. */
+export const SpeedLimitReportSchema = z.object({
+  location: LngLatSchema,
+  /** Which way the driver was going, degrees clockwise from north, when known. */
+  headingDeg: z.number().min(0).max(360).optional(),
+  /** The limit shown, or null when none was. */
+  shownKmh: z.number().int().positive().max(130).nullable(),
+  /** Whether the limit shown was an estimate rather than a signposted one. */
+  estimated: z.boolean().optional(),
+  /** The limit on the sign, when the driver says. */
+  signedKmh: z.number().int().positive().max(130).optional(),
+});
+export type SpeedLimitReport = z.infer<typeof SpeedLimitReportSchema>;
 
 export const FEEDBACK_SCREENSHOT_MAX_BYTES = 2 * 1024 * 1024;
 
@@ -39,7 +53,9 @@ export const FeedbackCreateSchema = z.object({
       data: z.string().max(Math.ceil((FEEDBACK_SCREENSHOT_MAX_BYTES * 4) / 3) + 4),
     })
     .optional(),
-});
+  /** Only with type speed_limit, which needs it. */
+  speedLimit: SpeedLimitReportSchema.optional(),
+}).refine((v) => (v.type === 'speed_limit') === (v.speedLimit !== undefined), { message: 'A speed limit report needs where it was', path: ['speedLimit'] });
 export type FeedbackCreate = z.infer<typeof FeedbackCreateSchema>;
 
 export const FeedbackItemSchema = z.object({
@@ -49,6 +65,7 @@ export const FeedbackItemSchema = z.object({
   message: z.string(),
   context: FeedbackContextSchema,
   hasScreenshot: z.boolean(),
+  speedLimit: SpeedLimitReportSchema.optional(),
   adminNotes: z.string(),
   user: z.object({ id: z.string(), email: z.string() }).nullable(),
   createdAt: z.string(),

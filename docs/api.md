@@ -70,8 +70,20 @@ exactly what each field is.
 
 `mode` is `car` or `foot`. Each `Route` carries its geometry, turn instructions, `novelty`
 (new kilometres of road for this person) and `speedLimits`: `{ from, to, kmh }` runs of geometry
-point indices, missing where no limit is mapped. Older servers leave `speedLimits` out. A roundabout
+point indices, signposted limits only, with a school zone's lower limit while it is in force and no
+limit on roads with electronic signs. Older servers leave `speedLimits` out. A roundabout
 is always one instruction with the exit actually taken, even where a stop on a detour lies on it.
+
+Newer servers add, each left out where empty:
+
+- `estimatedSpeedLimits`: the same runs where no limit is mapped and GraphHopper estimated the legal
+  default for the road. Kept apart so older apps never show a guess as a sign.
+- `trafficSignals` (driving only): `{ index, kind }`, the sets of lights along the route at their
+  nearest geometry point; `kind` is `signals`, `crossing` or `ramp_meter`. A turn at a set of lights
+  has `atTrafficLights: true` and text starting "At the lights, …", which older apps say as it is.
+- `usuallySlow`: trips on these roads at this time of day take noticeably longer than the map
+  suggests. `durationS` and each instruction's `durationS` already allow for lights and for speeds
+  learned from the group's drives.
 
 ## Travel
 
@@ -89,7 +101,7 @@ is always one instruction with the exit actually taken, even where a stop on a d
 
 | Method | Path | Schema / notes |
 |---|---|---|
-| POST | `/api/feedback` | `FeedbackCreateSchema` → `201 { id }`. `404 feedback_disabled` while an admin has it switched off. 5 an hour per person; screenshot up to 2 MB. Android Auto's **Report** sends one too (`screen` "Android Auto: driving"), its message saying what the car showed |
+| POST | `/api/feedback` | `FeedbackCreateSchema` → `201 { id }`. `404 feedback_disabled` while an admin has it switched off. 5 an hour per person; screenshot up to 2 MB. Android Auto's **Report** sends one too (`screen` "Android Auto: driving"), its message saying what the car showed. `type: "speed_limit"` needs `speedLimit` (`SpeedLimitReportSchema`: `location`, `shownKmh` or null, optional `headingDeg`, `estimated`, `signedKmh`), and only that type takes one; the Android Navigate screen sends it when the limit sign is tapped |
 
 ## Map (no auth)
 
@@ -98,6 +110,7 @@ is always one instruction with the exit actually taken, even where a stop on a d
 | GET | `/map/style.json` | MapLibre style; `?theme=dark` for dark. URLs are absolute, from `PUBLIC_ORIGIN` |
 | GET | `/tiles/tiles.json` | TileJSON |
 | GET | `/tiles/:z/:x/:y.mvt` | Vector tiles from the PMTiles file (plain MVT; Caddy compresses) |
+| GET | `/tiles/signals/:z/:x/:y.mvt` | Traffic lights from the database as one MVT layer, `traffic_signals`, each point with its `kind`. Zoom 14 to 16; `204` below 14 or where a tile has none |
 | GET | `/map/assets/…` | Fonts and sprites |
 
 ## Admin — `/api/admin`

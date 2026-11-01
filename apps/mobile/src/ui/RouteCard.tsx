@@ -1,3 +1,4 @@
+import { USUALLY_SLOW_TEXT } from '@wayfinder/shared/road-facts';
 import type { Route } from '@wayfinder/shared/schemas';
 import { Navigation, Sparkles, Zap } from 'lucide-react-native';
 import { Text, View } from 'react-native';
@@ -23,6 +24,7 @@ export function RouteCard({ route, title, selected, onSelect, onStart }: { route
             <Text style={{ color: t.text2, fontSize: 13 }}>{formatDistanceShort(route.distanceM)}</Text>
             {route.novelty.newKm > 0.05 ? <NewBadge text={copy.newKm(route.novelty.newKm)} /> : null}
           </View>
+          {route.usuallySlow ? <Text style={{ color: t.warning, fontSize: 13, fontWeight: '600' }}>{USUALLY_SLOW_TEXT}</Text> : null}
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={{ color: t.text, fontWeight: '700', fontSize: 18, fontVariant: ['tabular-nums'] }}>{formatDuration(route.durationS)}</Text>

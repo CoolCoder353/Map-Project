@@ -283,7 +283,7 @@ export function carReportMessage(s: NavSnapshot, at: Date = new Date()): string 
     const ins = st?.nextInstruction ?? st?.currentInstruction;
     lines.push(`Trip: ${s.route.kind} route${s.destinationName ? ` to ${s.destinationName}` : ''}, ${st ? STATUS_WORDS[st.status] : 'waiting for the first position'}${s.rerouting ? ', finding a new route' : ''}.`);
     if (ins) lines.push(`Showing: "${ins.text}"${st?.distanceToNextManeuverM != null ? ` in ${formatDistanceShort(st.distanceToNextManeuverM)}` : ''}${ins.streetName ? ` (${ins.streetName})` : ''}.`);
-    lines.push(`Speed limit shown: ${st?.speedLimitKmh != null ? `${st.speedLimitKmh} km/h` : 'none'}. Speed: ${s.speedMps != null ? `${Math.round(s.speedMps * 3.6)} km/h` : 'unknown'}.`);
+    lines.push(`Speed limit shown: ${st?.speedLimitKmh != null ? `${st.speedLimitKmh} km/h${st.speedLimitEstimated ? ' (estimated, no sign mapped)' : ''}` : 'none'}. Speed: ${s.speedMps != null ? `${Math.round(s.speedMps * 3.6)} km/h` : 'unknown'}.`);
     if (s.headingDeg != null) lines.push(`Heading: ${Math.round(s.headingDeg)}°.`);
     if (s.error) lines.push(`Message shown: ${s.error}`);
   }

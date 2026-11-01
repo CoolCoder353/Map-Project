@@ -5,6 +5,7 @@ import { type Db, adminService, opsService } from '@wayfinder/core';
 import { loadBoundaries } from './boundaries.js';
 import { importPlacesFromGeoJsonSeq } from './import-places.js';
 import { OSMIUM_FILTERS } from './osm-places.js';
+import { OSMIUM_ROAD_FILTERS, importRoadFacts } from './osm-roads.js';
 
 export interface RefreshConfig {
   dataDir: string;
@@ -58,6 +59,8 @@ export const runCommand: RunCommand = (cmd, args, onLine) =>
  *   container's wrapper watches to restart the server)
  * - tiles/australia.pmtiles.next → australia.pmtiles (the API reopens it on mtime change)
  * - places_staging → places (table swap in a transaction)
+ * - traffic_signals and way_speed_rules, from their staging tables, in the places step: they need
+ *   the same boundaries, and travel to a small server with the places
  */
 export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, run: RunCommand = runCommand): Promise<void> {
   const lines: string[] = [];
@@ -196,6 +199,15 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
       await importPlacesFromGeoJsonSeq(db, geojson, log, boundaries);
       await rm(filtered, { force: true });
       await rm(geojson, { force: true });
+
+      // Traffic lights, school zones and roads with electronic speed signs.
+      const roadsPbf = join(osmDir, 'roads-filtered.osm.pbf');
+      const roadsJson = join(osmDir, 'roads.geojsonseq');
+      await run('osmium', ['tags-filter', '--overwrite', '-o', roadsPbf, pbf, ...OSMIUM_ROAD_FILTERS], log);
+      await run('osmium', ['export', '--overwrite', '-f', 'geojsonseq', '--add-unique-id=type_id', '-o', roadsJson, roadsPbf], log);
+      await importRoadFacts(db, roadsJson, log, boundaries);
+      await rm(roadsPbf, { force: true });
+      await rm(roadsJson, { force: true });
     });
 
     await step('swap', async () => {

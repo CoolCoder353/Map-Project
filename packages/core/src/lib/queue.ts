@@ -7,6 +7,7 @@ export const JOB_NAMES: JobName[] = [
   'purge-deleted',
   'system-sample',
   'metrics-maintenance',
+  'road-speeds',
   'osm-refresh',
 ];
 

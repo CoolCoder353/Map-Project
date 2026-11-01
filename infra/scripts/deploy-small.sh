@@ -69,12 +69,14 @@ data() {
 places() {
   echo "== sending places"
   date=$(docker exec "$BUILD_DB" psql -U wayfinder -d wayfinder -At -c "SELECT value #>> '{}' FROM app_state WHERE key = 'osm.dataDate'")
-  docker exec "$BUILD_DB" pg_dump -U wayfinder -d wayfinder --data-only -t places -Fc \
-    | remote "cd $DIR/infra && $DC exec -T db sh -c 'psql -q -U wayfinder -d wayfinder -c \"TRUNCATE places\" && pg_restore -U wayfinder -d wayfinder --data-only --single-transaction'"
+  # Traffic lights and speed-limit rules are built with the places and travel with them.
+  docker exec "$BUILD_DB" pg_dump -U wayfinder -d wayfinder --data-only -t places -t traffic_signals -t way_speed_rules -Fc \
+    | remote "cd $DIR/infra && $DC exec -T db sh -c 'psql -q -U wayfinder -d wayfinder -c \"TRUNCATE places, traffic_signals, way_speed_rules\" && pg_restore -U wayfinder -d wayfinder --data-only --single-transaction'"
   remote "cd $DIR/infra && $DC exec -T db psql -q -U wayfinder -d wayfinder -c \"
     INSERT INTO app_state (key, value) VALUES ('osm.dataDate', to_jsonb('$date'::text))
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
-    ANALYZE places;\""
+    ANALYZE places; ANALYZE traffic_signals; ANALYZE way_speed_rules;\""
+  echo "   traffic lights: $(remote "cd $DIR/infra && $DC exec -T db psql -U wayfinder -d wayfinder -At -c 'SELECT count(*) FROM traffic_signals'")"
   echo "   places: $(remote "cd $DIR/infra && $DC exec -T db psql -U wayfinder -d wayfinder -At -c 'SELECT count(*) FROM places'"), data date $date"
 }
 

@@ -8,3 +8,4 @@ export * from './copy.js';
 export * from './australia.js';
 export * from './categories.js';
 export * from './address.js';
+export * from './road-facts.js';

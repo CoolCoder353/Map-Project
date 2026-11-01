@@ -1,5 +1,6 @@
 /// <reference types="jest" />
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import Navigate from '../app/navigate';
 import { setRouteToNavigate } from '../src/lib/plannedStore';
 import { fake, renderScreen, resetFakes, route } from './fakes';
@@ -21,6 +22,8 @@ const mockNav = {
   stop: jest.fn(),
 };
 jest.mock('../src/nav/useTurnByTurn', () => ({ useTurnByTurn: () => mockNav }));
+const mockSend = jest.fn(async (_where: unknown) => 'Thanks. We’ll check the limit here.');
+jest.mock('../src/nav/speedLimitReport', () => ({ sendSpeedLimitReport: (where: unknown) => mockSend(where) }));
 jest.mock('../src/lib/plannedStore', () => {
   let r: unknown = null;
   return { setRouteToNavigate: (x: unknown) => (r = x), takeRouteToNavigate: () => r };
@@ -178,6 +181,43 @@ it('shows the speed limit of the road you are on, when it is known', async () =>
   mockNav.state = { ...(mockNav.state as object), status: 'offRoute', speedLimitKmh: 80 };
   await rerender(<Navigate />);
   expect(screen.queryByLabelText(/Speed limit/)).toBeNull();
+});
+
+it('shows a limit that is only the legal default in a grey ring', async () => {
+  const { rerender } = await renderScreen(<Navigate />);
+  mockNav.state = { status: 'navigating', nextInstruction: { sign: 0, text: 'Continue' }, distanceToNextManeuverM: 900, remainingDurationS: 600, remainingDistanceM: 5400, speedLimitKmh: 50, speedLimitEstimated: true };
+  await rerender(<Navigate />);
+  expect(screen.getByLabelText('Speed limit probably 50 km/h, no sign mapped')).toHaveStyle({ borderColor: '#8a8f98' });
+});
+
+it('reports the limit as wrong when you tap it and say so', async () => {
+  jest.useFakeTimers();
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  try {
+    mockNav.state = { status: 'navigating', nextInstruction: { sign: 0, text: 'Continue' }, distanceToNextManeuverM: 900, remainingDurationS: 600, remainingDistanceM: 5400, speedLimitKmh: 60, speedLimitEstimated: false };
+    mockNav.position = [153.02, -27.47] as never;
+    await renderScreen(<Navigate />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Speed limit 60 km/h' }));
+    expect(alert.mock.calls[0]![1]).toBe('Report that 60 km/h is wrong here.');
+    // Cancel sends nothing; Report does, and says how it went for a few seconds.
+    const buttons = alert.mock.calls[0]![2]!;
+    expect(buttons[0]).toMatchObject({ text: 'Cancel', style: 'cancel' });
+    await act(async () => buttons[1]!.onPress!());
+    expect(mockSend).toHaveBeenCalledWith({ state: mockNav.state, position: [153.02, -27.47] });
+    expect(screen.getByText('Thanks. We’ll check the limit here.')).toBeOnTheScreen();
+    await act(async () => jest.advanceTimersByTime(5000));
+    expect(screen.queryByText('Thanks. We’ll check the limit here.')).toBeNull();
+    // With no limit shown, the report is that one is missing.
+    mockNav.state = { ...(mockNav.state as object), speedLimitKmh: null };
+    mockNav.speedMps = 15;
+    await renderScreen(<Navigate />);
+    await fireEvent.press(screen.getAllByRole('button', { name: /Your speed/ }).at(-1)!);
+    expect(alert.mock.calls.at(-1)![1]).toBe('Report that the limit here is missing.');
+  } finally {
+    alert.mockRestore();
+    mockNav.position = null;
+    jest.useRealTimers();
+  }
 });
 
 it('draws the road already driven, off the route too, once there is some', async () => {

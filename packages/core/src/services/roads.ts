@@ -1,6 +1,7 @@
 import { type BBox, type LngLat, bboxOf, lineLengthM, mergeStretches } from '@wayfinder/shared';
 import { type Db, type DbClient, withTransaction } from '../db/pool.js';
 import type { GhPath, GraphHopperClient } from '../lib/graphhopper.js';
+import { recordSpeedSamples, speedSamples } from './road-speeds.js';
 
 /** The stretches of one OSM way that a trip travelled. */
 export interface TravelledWay {
@@ -135,7 +136,8 @@ export async function visitedWayIds(db: DbClient, userId: string, bbox?: BBox): 
 }
 
 /**
- * Snap trips onto the road network and record the ways they covered. Runs outside the trip
+ * Snap trips onto the road network and record the ways they covered, and for drives how fast each
+ * road went. Runs outside the trip
  * transaction: matching is a call to the routing engine, not a database operation.
  */
 export async function matchTrips(
@@ -168,6 +170,8 @@ export async function matchTrips(
       continue;
     }
     const travelled = waysOfPath(path);
+    // Drives also say how fast each road really goes, for travel times.
+    if (trip.mode === 'car') await recordSpeedSamples(db, trip.id, speedSamples(path.points.coordinates, path.details?.osm_way_id ?? [], points));
     const fresh = await recordTravelledWays(db, userId, travelled, trip.mode, trip.started_at);
     // Added, not set: a trip still being recorded is matched again each time it grows, and the
     // roads it was first on earlier are no longer new by then.

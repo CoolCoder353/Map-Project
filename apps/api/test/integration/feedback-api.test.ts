@@ -50,6 +50,21 @@ describe('user feedback', () => {
     expect((await send(alex, { screenshot: { mediaType: 'image/png', data: huge } })).statusCode).toBe(400);
   });
 
+  it('takes a wrong speed limit with where it was shown, and only with it', async () => {
+    const report = { location: [153.0251, -27.4698], headingDeg: 90, shownKmh: 60, estimated: true };
+    const res = await send(dev, { type: 'speed_limit', message: 'Wrong speed limit on Ann Street', speedLimit: report });
+    expect(res.statusCode, res.body).toBe(201);
+    const item = await ta.app.inject({ method: 'GET', url: `/api/admin/feedback/${res.json().id}`, headers: await auth(admin, 'admin') });
+    expect(item.json()).toMatchObject({ type: 'speed_limit', speedLimit: report });
+    const listed = await ta.app.inject({ method: 'GET', url: '/api/admin/feedback?type=speed_limit', headers: await auth(admin, 'admin') });
+    expect(listed.json().items.map((i: { id: string }) => i.id)).toEqual([res.json().id]);
+    // Other reports carry none.
+    expect((await ta.app.inject({ method: 'GET', url: `/api/admin/feedback/${reportId}`, headers: await auth(admin, 'admin') })).json().speedLimit).toBeUndefined();
+    // A speed-limit report needs its place; other reports can't carry one.
+    expect((await send(dev, { type: 'speed_limit', message: 'Wrong limit' })).statusCode).toBe(400);
+    expect((await send(dev, { message: 'Wrong limit', speedLimit: report })).statusCode).toBe(400);
+  });
+
   it('allows five reports an hour per person', async () => {
     for (let i = 0; i < 5; i++) expect((await send(alex, { type: 'idea', message: `Idea number ${i}` })).statusCode).toBe(201);
     const sixth = await send(alex, { message: 'One more thing' });

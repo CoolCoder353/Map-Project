@@ -16,6 +16,8 @@ export const InstructionSchema = z.object({
    * turn on Queensland's clockwise roundabouts, 180 straight on, 270 right). Absent when unknown.
    */
   exitAngleDeg: z.number().min(1).max(360).optional(),
+  /** The turn is at a set of traffic lights (its text then starts "At the lights"). */
+  atTrafficLights: z.boolean().optional(),
 });
 export type Instruction = z.infer<typeof InstructionSchema>;
 
@@ -24,6 +26,8 @@ export const NoveltySchema = z.object({
   newKm: z.number(),
   noveltyPct: z.number(),
 });
+
+const SpeedLimitRunSchema = z.object({ from: z.number().int().nonnegative(), to: z.number().int().nonnegative(), kmh: z.number().positive() });
 
 export const RouteKindSchema = z.enum(['fastest', 'explore', 'roundtrip']);
 
@@ -43,7 +47,17 @@ export const RouteSchema = z.object({
    * Speed limits along the route: km/h from geometry point `from` to `to`. Stretches with no
    * limit mapped are missing. Absent from older servers.
    */
-  speedLimits: z.array(z.object({ from: z.number().int().nonnegative(), to: z.number().int().nonnegative(), kmh: z.number().positive() })).optional(),
+  speedLimits: z.array(SpeedLimitRunSchema).optional(),
+  /**
+   * Limits where none is signposted in the map data, estimated from the legal default for the kind
+   * of road (50 in a built-up area, say). Kept apart so older apps, which show `speedLimits` as
+   * signs, never show a guess as a sign. Absent from older servers.
+   */
+  estimatedSpeedLimits: z.array(SpeedLimitRunSchema).optional(),
+  /** The sets of traffic lights along the route, at their nearest geometry point. Absent from older servers. */
+  trafficSignals: z.array(z.object({ index: z.number().int().nonnegative(), kind: z.enum(['signals', 'crossing', 'ramp_meter']) })).optional(),
+  /** Trips on these roads at this time of day usually take noticeably longer than the map alone suggests. */
+  usuallySlow: z.boolean().optional(),
 });
 export type Route = z.infer<typeof RouteSchema>;
 

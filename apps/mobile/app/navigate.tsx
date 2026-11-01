@@ -1,8 +1,8 @@
 import { formatDistanceShort, formatDuration } from '@wayfinder/nav';
 import { useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, ArrowRight, ArrowUp, Flag, RotateCcw, Volume2, VolumeX, X } from 'lucide-react-native';
-import { useEffect, useMemo, useRef } from 'react';
-import { Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { overLimit, thenAfter } from '../src/car/navModel';
 import { formatClock } from '../src/lib/format';
@@ -11,23 +11,27 @@ import { PANEL_WIDTH, useLayout } from '../src/lib/layout';
 import { takeRouteToNavigate } from '../src/lib/plannedStore';
 import { space, useTheme } from '../src/lib/theme';
 import { MapCanvas } from '../src/map/MapCanvas';
+import { sendSpeedLimitReport } from '../src/nav/speedLimitReport';
 import { useTurnByTurn } from '../src/nav/useTurnByTurn';
 import { Button, Empty, Notice, Press } from '../src/ui/kit';
 
 const iconFor = (sign: number) => (sign === 4 ? Flag : sign <= -2 ? ArrowLeft : sign >= 2 && sign <= 3 ? ArrowRight : sign === 6 || Math.abs(sign) === 8 ? RotateCcw : ArrowUp);
 
-/** The limit as Australian signs show it: black on white in a red ring, in both themes. */
-function SpeedSign({ kmh }: { kmh: number }) {
+/**
+ * The limit as Australian signs show it: black on white in a red ring, in both themes. A limit that
+ * is only the legal default for the road (no sign in the map data) has a grey ring.
+ */
+function SpeedSign({ kmh, estimated }: { kmh: number; estimated: boolean }) {
   return (
     <View
       accessible
-      accessibilityLabel={`Speed limit ${kmh} km/h`}
+      accessibilityLabel={estimated ? `Speed limit probably ${kmh} km/h, no sign mapped` : `Speed limit ${kmh} km/h`}
       style={{
         width: 60,
         height: 60,
         borderRadius: 30,
         borderWidth: 6,
-        borderColor: '#d0021b',
+        borderColor: estimated ? '#8a8f98' : '#d0021b',
         backgroundColor: '#ffffff',
         alignItems: 'center',
         justifyContent: 'center',
@@ -70,6 +74,13 @@ export default function Navigate() {
       goBack();
     }
   }, [nav.ended]);
+  // What sending a wrong-limit report said, shown for a few seconds.
+  const [reported, setReported] = useState<string | null>(null);
+  useEffect(() => {
+    if (!reported) return;
+    const id = setTimeout(() => setReported(null), 5000);
+    return () => clearTimeout(id);
+  }, [reported]);
 
   if (!initial && !(resume === '1' && nav.route)) {
     return (
@@ -91,6 +102,12 @@ export default function Navigate() {
   // A speedometer is for driving; walking, it's only something else to look at.
   const speedKmh = nav.route?.mode === 'car' && nav.speedMps != null ? Math.round(nav.speedMps * 3.6) : null;
   const banner = nav.route?.kind === 'fastest' ? t.accent : t.explore;
+  // Tapping the limit reports it as wrong, after a confirm so a stray tap sends nothing.
+  const reportLimit = () =>
+    Alert.alert('Wrong speed limit?', limitKmh != null ? `Report that ${limitKmh} km/h is wrong here.` : 'Report that the limit here is missing.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Report', onPress: () => void sendSpeedLimitReport({ state: s, position: nav.position }).then(setReported) },
+    ]);
 
   // The same views in every window size: the map is never remounted, so a trip keeps running
   // and following you through a rotation or a fold. Narrow: banner, map, bar stacked. Wide: the
@@ -128,9 +145,19 @@ export default function Navigate() {
         {/* Follows you close up. No fitting to the whole route: that zooms out of the drive. */}
         <MapCanvas style={{ flex: 1 }} routes={nav.route ? [nav.route] : []} selectedRouteId={nav.route?.id ?? null} track={nav.travelled.length >= 2 ? nav.travelled : null} followUser />
         {limitKmh != null || speedKmh != null ? (
-          <View style={{ position: 'absolute', top: space[3], left: space[3], alignItems: 'center', gap: space[2] }}>
-            {limitKmh != null ? <SpeedSign kmh={limitKmh} /> : null}
+          <Press
+            accessibilityRole="button"
+            accessibilityHint="Reports the speed limit here as wrong"
+            onPress={reportLimit}
+            style={{ position: 'absolute', top: space[3], left: space[3], alignItems: 'center', gap: space[2] }}
+          >
+            {limitKmh != null ? <SpeedSign kmh={limitKmh} estimated={s?.speedLimitEstimated === true} /> : null}
             {speedKmh != null ? <Speed kmh={speedKmh} over={overLimit(limitKmh, speedKmh)} /> : null}
+          </Press>
+        ) : null}
+        {reported ? (
+          <View style={{ position: 'absolute', bottom: space[3], left: space[3], right: space[3] }}>
+            <Notice tone="info">{reported}</Notice>
           </View>
         ) : null}
       </View>

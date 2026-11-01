@@ -6,5 +6,5 @@
   "next": { "maneuver": { "type": "left", "exit": null, "exitAngleDeg": null }, "cue": "Turn left" },
   "following": { "maneuver": { "type": "right", "exit": null, "exitAngleDeg": null }, "cue": "Turn right onto Moggill Rd", "road": "Moggill Rd", "distanceM": 900 },
   "remainingDistanceM": 4200, "remainingDurationS": 540, "arrivalEpochMs": 1790000000000,
-  "position": [152.99, -27.48], "headingDeg": 270, "speedLimitKmh": 60, "speedKmh": 57
+  "position": [152.99, -27.48], "headingDeg": 270, "speedLimitKmh": 60, "speedLimitEstimated": true, "speedKmh": 57
 }

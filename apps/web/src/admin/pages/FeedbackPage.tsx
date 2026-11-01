@@ -6,6 +6,7 @@ import {
   FeedbackStatusSchema,
   type FeedbackType,
   FeedbackTypeSchema,
+  type SpeedLimitReport,
 } from '@wayfinder/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Image, Search, Trash2 } from 'lucide-react';
@@ -166,6 +167,7 @@ export function FeedbackDetailPage() {
                   </a>
                 )}
               </section>
+              {f.speedLimit && <SpeedLimitDetail report={f.speedLimit} />}
               <section className="admin-section">
                 <h2>Triage</h2>
                 <label className="field">
@@ -224,5 +226,34 @@ export function FeedbackDetailPage() {
         onCancel={() => setConfirmDelete(false)}
       />
     </>
+  );
+}
+
+/**
+ * Where a wrong limit was reported, with the way to fix it: the map data is OpenStreetMap's, so the
+ * fix goes there, and reaches everyone with the next map data refresh.
+ */
+function SpeedLimitDetail({ report }: { report: SpeedLimitReport }) {
+  const [lon, lat] = report.location;
+  const at = `19/${lat.toFixed(6)}/${lon.toFixed(6)}`;
+  return (
+    <section className="admin-section">
+      <h2>Speed limit</h2>
+      <dl className="kv-grid feedback-context">
+        <div>
+          <dt>Shown</dt>
+          <dd>{report.shownKmh !== null ? `${report.shownKmh} km/h${report.estimated ? ' (estimated: no sign mapped)' : ''}` : 'None'}</dd>
+        </div>
+        {report.signedKmh !== undefined && <div><dt>On the sign</dt><dd>{report.signedKmh} km/h</dd></div>}
+        <div><dt>Where</dt><dd>{`${lat.toFixed(5)}, ${lon.toFixed(5)}`}{report.headingDeg !== undefined ? ` · heading ${Math.round(report.headingDeg)}°` : ''}</dd></div>
+      </dl>
+      <p className="field-hint">
+        Check the sign, then fix the road&rsquo;s <code>maxspeed</code> in OpenStreetMap. The change reaches routes with the next map data refresh.
+      </p>
+      <div className="route-option-actions">
+        <a className="btn btn-secondary btn-sm" href={`https://www.openstreetmap.org/#map=${at}`} target="_blank" rel="noreferrer">View in OpenStreetMap</a>
+        <a className="btn btn-secondary btn-sm" href={`https://www.openstreetmap.org/edit#map=${at}`} target="_blank" rel="noreferrer">Edit in OpenStreetMap</a>
+      </div>
+    </section>
   );
 }

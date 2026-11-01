@@ -365,6 +365,14 @@ describe('report', () => {
     expect(body.message).toContain('Heading: 88°.');
   });
 
+  it('says when the limit shown was an estimate', async () => {
+    fake.api.on({ 'POST api/feedback': () => ({ id: 'f1' }) });
+    const s = navigating();
+    mockNavigation.getSnapshot.mockReturnValueOnce({ ...s, state: { ...s.state, speedLimitEstimated: true } } as never);
+    await carHandlers.report!({});
+    expect((fake.api.callsTo('POST api/feedback')[0]!.body as { message: string }).message).toContain('Speed limit shown: 60 km/h (estimated, no sign mapped).');
+  });
+
   it('works with no trip running, placed where the phone is', async () => {
     fake.api.on({ 'POST api/feedback': () => ({ id: 'f1' }) });
     mockNavigation.getSnapshot.mockReturnValueOnce({ active: false, route: null, error: null, position: null } as never);

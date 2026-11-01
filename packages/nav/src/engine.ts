@@ -1,4 +1,5 @@
 import { type LngLat, bearingDeg, destination, haversineM, projectOntoSegment } from '@wayfinder/shared/geo';
+import { AT_LIGHTS_BEFORE_M, atNthLights } from '@wayfinder/shared/road-facts';
 import type { Instruction, Mode, Route } from '@wayfinder/shared/schemas';
 import { announcementText } from './phrasing.js';
 
@@ -53,6 +54,8 @@ export interface NavState {
   distanceToNextManeuverM: number | null;
   /** Speed limit where you are, in km/h, or null where it isn't known. */
   speedLimitKmh: number | null;
+  /** The limit is the legal default for the kind of road, not one signposted in the map data. */
+  speedLimitEstimated: boolean;
 }
 
 export class NavigationSession {
@@ -64,6 +67,8 @@ export class NavigationSession {
   private instructionEnd: number[] = [];
   private viaProgress: number[] = [];
   private viaPassed = new Set<number>();
+  /** How far along the route each set of lights is (ramp meters aside). */
+  private lightsAt: number[] = [];
   private announced = new Set<string>();
   private lastSegment = 0;
   private lastProgress = 0;
@@ -121,6 +126,7 @@ export class NavigationSession {
       this.viaProgress.push(this.cum[best]!);
       from = best;
     }
+    this.lightsAt = (route.trafficSignals ?? []).filter((s) => s.kind !== 'ramp_meter').map((s) => this.cum[Math.min(s.index, this.cum.length - 1)]!);
     this.announced = new Set();
     this.lastSegment = 0;
     this.lastProgress = 0;
@@ -144,12 +150,22 @@ export class NavigationSession {
       nextInstructionIndex: this.route.instructions.length > 1 ? 1 : null,
       distanceToNextManeuverM: this.instructionStart[1] ?? null,
       speedLimitKmh: null,
+      speedLimitEstimated: false,
     };
   }
 
-  /** The limit on route segment i (between geometry points i and i + 1). */
-  private speedLimitOn(segment: number): number | null {
-    return this.route.speedLimits?.find((r) => r.from <= segment && segment < r.to)?.kmh ?? null;
+  /** The limit on route segment i (between geometry points i and i + 1): signposted first, else estimated. */
+  private speedLimitOn(segment: number): { kmh: number | null; estimated: boolean } {
+    const on = (runs: Route['speedLimits']) => runs?.find((r) => r.from <= segment && segment < r.to)?.kmh ?? null;
+    const signed = on(this.route.speedLimits);
+    if (signed !== null) return { kmh: signed, estimated: false };
+    const guess = on(this.route.estimatedSpeedLimits);
+    return { kmh: guess, estimated: guess !== null };
+  }
+
+  /** Sets of lights between here and a turn at the lights (not counting the turn's own). */
+  private lightsBefore(progressM: number, turnM: number): number {
+    return this.lightsAt.filter((m) => m > progressM + 5 && m < turnM - AT_LIGHTS_BEFORE_M).length;
   }
 
   /** Find the best segment for p, preferring forward progress near the last match. */
@@ -233,9 +249,11 @@ export class NavigationSession {
         // Arriving is said once, by the 'arrived' event: a "now" announcement of the destination
         // just before it would say it twice.
         if (!(isFinal && next.sign === DESTINATION_SIGN)) {
+          // "At the third set of lights, turn left": which lights, counted from here.
+          const said = next.atTrafficLights ? { ...next, text: atNthLights(next.text, this.lightsBefore(progress, this.instructionStart[nextIdx]!)) } : next;
           events.push({
             type: 'announce',
-            text: announcementText(next, isFinal ? null : distanceToNext),
+            text: announcementText(said, isFinal ? null : distanceToNext),
             instructionIndex: nextIdx,
             thresholdM: smallest,
           });
@@ -263,6 +281,7 @@ export class NavigationSession {
       }
     }
 
+    const limit = status === 'arrived' ? { kmh: null, estimated: false } : this.speedLimitOn(snap.segment);
     this.state = {
       status,
       snapped: snap.point,
@@ -274,7 +293,8 @@ export class NavigationSession {
       nextInstruction: nextIdx !== null ? ins[nextIdx]! : null,
       nextInstructionIndex: nextIdx,
       distanceToNextManeuverM: distanceToNext,
-      speedLimitKmh: status === 'arrived' ? null : this.speedLimitOn(snap.segment),
+      speedLimitKmh: limit.kmh,
+      speedLimitEstimated: limit.estimated,
     };
     return { state: this.state, events };
   }

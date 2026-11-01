@@ -78,6 +78,7 @@ export function toCarNav(s: NavSnapshot, now: number): CarNav | null {
     position: s.position,
     headingDeg: s.headingDeg,
     speedLimitKmh: st?.status === 'navigating' ? st.speedLimitKmh : null,
+    speedLimitEstimated: st?.status === 'navigating' && st.speedLimitKmh !== null ? st.speedLimitEstimated : false,
     speedKmh: s.speedMps != null ? Math.round(s.speedMps * 3.6) : null,
   };
 }

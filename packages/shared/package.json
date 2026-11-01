@@ -33,6 +33,11 @@
       "development": "./src/australia.ts",
       "types": "./dist/australia.d.ts",
       "default": "./dist/australia.js"
+    },
+    "./road-facts": {
+      "development": "./src/road-facts.ts",
+      "types": "./dist/road-facts.d.ts",
+      "default": "./dist/road-facts.js"
     }
   },
   "scripts": {
