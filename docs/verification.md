@@ -139,7 +139,7 @@ and adaptive quality gaps, in
 - [ ] Roundabout icons turn clockwise (both kinds of roundabout)
 - [ ] Music dips for each spoken direction and comes back after; the speaker button silences them and shows struck through until tapped again
 - [ ] Phone locked for the whole drive: directions keep coming
-- [ ] Android 16 phone, trip started on the phone or the car, then the phone locked: the car's directions and map keep moving straight away, not only once it is unlocked (feedback 2026-11-01, 0.5.4)
+- [ ] Android 16 phone, trip started on the phone or the car, then the phone locked: the car's directions and map keep moving straight away, not only once it is unlocked (feedback 2026-11-01 on 0.5.4; fixed in 0.5.5)
 - [ ] Trip started on the phone appears in the car; trip started in the car shows the phone banner, with its padding clear of the status bar and gesture bar
 - [ ] End in the car, End on the phone, and the car's own "End navigation" each end the trip everywhere
 - [ ] Night mode switches the map to the dark style; OSM attribution visible
@@ -250,6 +250,7 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   `maps.paulsjones.com` on 2026-09-28: it installs over the old build, opens on the emulator with no
   crash, and its sign-in screen reaches the server. It hasn't been shared with testers yet. This
   is likely what the crash reports were.
+- **App 0.5.5 (versionCode 11, 2026-11-01)**: the car's directions stopping as soon as the phone locks on Android 16 (feedback 2026-11-01): the phone's fixes now reach navigation straight from the car module instead of through background jobs Android 16 holds back. Passed `pnpm check`. Built for `maps.coolcodertech.com`; installs on the emulator (Android 16) with no crash and its sign-in screen reaches the server. Rolled out to internal and closed testing with `pnpm play`. No server change. Not yet tried in a car or on a head unit.
 - **App 0.5.2 (versionCode 8, 2026-10-26)**: fixes from a review of the October changes (car Report says why and sends one a minute; the wait after a turn-around route ends once you're along it, and only applies to routes asked for with a heading; the road driven is bounded; saved places and search; Google Maps start flag). Passed `pnpm check`. Built for `maps.coolcodertech.com`, rolled out to internal testing with `pnpm play upload`; server deployed the same day. Not yet tried on a device or head unit.
 - **2026-10-08 feedback fixes** (reports from 5–7 October; app 0.5.0, versionCode 6, server
   changes for routes and saved places). Checked by tests, and on the live server's data where noted:
