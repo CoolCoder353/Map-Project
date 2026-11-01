@@ -9,6 +9,11 @@ import type { DbClient } from '../db/pool.js';
 
 /** Separate trips a road needs at a time of day before its learned speed is used. */
 export const MIN_TRIPS = 3;
+/**
+ * Separate people those trips must come from: everyone's routes go by these speeds, so one person's
+ * drives (or made-up tracks) can't set a road's speed for the rest.
+ */
+export const MIN_PEOPLE = 2;
 /** Only recent drives count: roads change, and so does traffic. */
 export const SAMPLE_DAYS = 180;
 /** Stretches shorter than this say more about GPS error than about speed. */
@@ -105,21 +110,34 @@ export async function recordSpeedSamples(db: DbClient, tripId: string, samples: 
 }
 
 /**
- * Rebuild the typical speeds: the median of recent samples for each road, weekday or weekend, and
- * hour (and for the whole day, hour 24), kept only where at least MIN_TRIPS separate trips agree.
- * Samples older than SAMPLE_DAYS are dropped.
+ * Rebuild the typical speeds for each road, weekday or weekend, and hour (and for the whole day, hour
+ * 24): each person's median, then the median of those, so everyone counts once however often they
+ * drive it. Kept only where at least MIN_TRIPS trips from MIN_PEOPLE people agree. Only drives that
+ * still stand count: not a trip deleted or since marked as a walk, nor a deleted or disabled
+ * account's. Samples older than SAMPLE_DAYS are dropped.
  */
 export async function rebuildRoadSpeeds(db: DbClient): Promise<{ roads: number; pruned: number }> {
   const pruned = await db.query(`DELETE FROM road_speed_samples WHERE observed_at < now() - make_interval(days => $1)`, [SAMPLE_DAYS]);
   await db.query('DELETE FROM road_speeds');
   await db.query(
-    `INSERT INTO road_speeds (way_id, day_kind, hour, kmh, trips)
-     SELECT way_id, day_kind, hour, percentile_cont(0.5) WITHIN GROUP (ORDER BY kmh), count(DISTINCT trip_id)
-     FROM road_speed_samples GROUP BY way_id, day_kind, hour HAVING count(DISTINCT trip_id) >= $1
-     UNION ALL
-     SELECT way_id, day_kind, 24, percentile_cont(0.5) WITHIN GROUP (ORDER BY kmh), count(DISTINCT trip_id)
-     FROM road_speed_samples GROUP BY way_id, day_kind HAVING count(DISTINCT trip_id) >= $1`,
-    [MIN_TRIPS],
+    `WITH live AS (
+       SELECT s.way_id, s.day_kind, s.hour, s.kmh, s.trip_id, t.user_id
+       FROM road_speed_samples s
+       JOIN trips t ON t.id = s.trip_id AND t.deleted_at IS NULL AND t.mode = 'car'
+       JOIN users u ON u.id = t.user_id AND u.deleted_at IS NULL AND u.disabled_at IS NULL
+     ),
+     per_person AS (
+       SELECT way_id, day_kind, hour, user_id, percentile_cont(0.5) WITHIN GROUP (ORDER BY kmh) AS kmh, count(DISTINCT trip_id) AS trips
+       FROM live GROUP BY way_id, day_kind, hour, user_id
+       UNION ALL
+       SELECT way_id, day_kind, 24, user_id, percentile_cont(0.5) WITHIN GROUP (ORDER BY kmh), count(DISTINCT trip_id)
+       FROM live GROUP BY way_id, day_kind, user_id
+     )
+     INSERT INTO road_speeds (way_id, day_kind, hour, kmh, trips)
+     SELECT way_id, day_kind, hour, percentile_cont(0.5) WITHIN GROUP (ORDER BY kmh), sum(trips)
+     FROM per_person GROUP BY way_id, day_kind, hour
+     HAVING sum(trips) >= $1 AND count(*) >= $2`,
+    [MIN_TRIPS, MIN_PEOPLE],
   );
   const roads = await db.query<{ n: string }>('SELECT count(DISTINCT way_id) AS n FROM road_speeds');
   return { roads: Number(roads.rows[0]!.n), pruned: pruned.rowCount ?? 0 };

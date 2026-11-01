@@ -228,7 +228,7 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   graph must be rebuilt for estimates; until then routes come without them, no harm done), then
   `deploy-small.sh data` and `places` and migration 009 with the deploy; on a device, the grey ring,
   tapping the sign to report, lights on the map at zoom 15 and in the car, and "at the third set of
-  lights" spoken. Learned speeds need three trips on a road before they count, so expect few at first.
+  lights" spoken. Learned speeds need three trips from two people on a road before they count, so expect few at first.
   School and public holidays aren't known, so a school zone shows on holidays too.
 - **The 1 October reports** of wrong speed limits and traffic lights not recognised: the limits
   matched OSM then; school zones were the likely cause, and lights weren't used at all. Both are

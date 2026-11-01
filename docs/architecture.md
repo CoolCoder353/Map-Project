@@ -103,7 +103,10 @@ routes; nothing user-facing shows them.
 - **Speeds learned from drives** (`road-speeds.ts`): matching a car trip also times it along each
   road (`road_speed_samples`, leaving out the first and last road, short stretches and gaps in the
   fixes). The nightly `road-speeds` job keeps the median per road, weekday or weekend and hour
-  (and the whole day) wherever three or more trips agree, from the last 180 days. Where those say
+  (and the whole day): each person's median, then the median of those, wherever three or more
+  trips from two or more people agree, from the last 180 days. So one person can't set a road's
+  speed for everyone, and a road only one person drives keeps the engine's. Only drives that still
+  stand count: not deleted trips, trips since marked as walks, or deleted or disabled accounts. Where those say
   the fastest route is usually slow at this time, the routing engine's alternatives are asked for
   and the quickest by the same measure is offered, marked "Usually slow at this time" if it still
   is. With a small group most roads have no learned speed, and keep the engine's.

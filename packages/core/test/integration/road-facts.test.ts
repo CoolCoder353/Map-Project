@@ -113,21 +113,22 @@ describe('road speeds learned from drives', () => {
     },
   };
 
-  it('keeps the median speed of each road where enough trips agree, by hour and for the day', async () => {
+  it('keeps the median speed of each road where enough trips from enough people agree, by hour and for the day', async () => {
     const u = await makeUser(t.db, 'commuter@example.com');
-    for (const day of [0, 1]) await driveTrip(u.id, day);
+    for (const day of [0, 1, 2, 3]) await driveTrip(u.id, day);
     await roads.matchTrips(t.db, matcher as never, u.id);
     const samples = await t.db.query<{ way_id: string; hour: number; kmh: number }>('SELECT way_id::text, hour, kmh FROM road_speed_samples ORDER BY id');
-    expect(samples.rows.map((r) => [r.way_id, r.hour])).toEqual([['702', 8], ['702', 8]]);
+    expect(samples.rows.map((r) => [r.way_id, r.hour])).toEqual([['702', 8], ['702', 8], ['702', 8], ['702', 8]]);
     expect(samples.rows[0]!.kmh).toBeCloseTo(36, 0);
 
-    // Two trips aren't enough to go by.
+    // However many trips one person makes, they alone don't set a road's speed for everyone.
     expect(await speeds.rebuildRoadSpeeds(t.db)).toMatchObject({ roads: 0 });
-    await driveTrip(u.id, 2);
-    await roads.matchTrips(t.db, matcher as never, u.id);
+    const other = await makeUser(t.db, 'neighbour@example.com');
+    await driveTrip(other.id, 2);
+    await roads.matchTrips(t.db, matcher as never, other.id);
     expect(await speeds.rebuildRoadSpeeds(t.db)).toMatchObject({ roads: 1 });
     const rows = (await t.db.query<{ hour: number; trips: number }>('SELECT hour, trips FROM road_speeds WHERE way_id = 702 ORDER BY hour')).rows;
-    expect(rows).toEqual([{ hour: 8, trips: 3 }, { hour: 24, trips: 3 }]);
+    expect(rows).toEqual([{ hour: 8, trips: 5 }, { hour: 24, trips: 5 }]);
 
     // A weekday at 8 uses that hour; at 3 pm the whole day's.
     const at8 = await speeds.learnedSpeeds(t.db, [701, 702], new Date('2026-11-09T08:30:00+10:00'), from);
@@ -140,8 +141,27 @@ describe('road speeds learned from drives', () => {
     expect((await speeds.learnedSpeeds(t.db, [], new Date(), from)).size).toBe(0);
   });
 
+  it('goes only by drives that still stand', async () => {
+    const neighbour = `(SELECT id FROM users WHERE email = 'neighbour@example.com')`;
+    const rebuilt = async () => (await speeds.rebuildRoadSpeeds(t.db)).roads;
+    expect(await rebuilt()).toBe(1);
+    // The second person's trip deleted, marked as a walk, or their account deleted or disabled: one person is left.
+    await t.db.query(`UPDATE trips SET deleted_at = now() WHERE user_id = ${neighbour}`);
+    expect(await rebuilt()).toBe(0);
+    await t.db.query(`UPDATE trips SET deleted_at = NULL, mode = 'foot' WHERE user_id = ${neighbour}`);
+    expect(await rebuilt()).toBe(0);
+    await t.db.query(`UPDATE trips SET mode = 'car' WHERE user_id = ${neighbour}`);
+    expect(await rebuilt()).toBe(1);
+    await t.db.query(`UPDATE users SET deleted_at = now() WHERE id = ${neighbour}`);
+    expect(await rebuilt()).toBe(0);
+    await t.db.query(`UPDATE users SET deleted_at = NULL, disabled_at = now() WHERE id = ${neighbour}`);
+    expect(await rebuilt()).toBe(0);
+    await t.db.query(`UPDATE users SET disabled_at = NULL WHERE id = ${neighbour}`);
+    expect(await rebuilt()).toBe(1);
+  });
+
   it('forgets old drives, and a deleted trip’s', async () => {
-    await t.db.query(`UPDATE road_speed_samples SET observed_at = now() - interval '200 days' WHERE id = (SELECT min(id) FROM road_speed_samples)`);
+    await t.db.query(`UPDATE road_speed_samples SET observed_at = now() - interval '200 days' WHERE trip_id IN (SELECT id FROM trips WHERE user_id = (SELECT id FROM users WHERE email = 'neighbour@example.com'))`);
     expect(await speeds.rebuildRoadSpeeds(t.db)).toEqual({ roads: 0, pruned: 1 });
     await t.db.query('DELETE FROM trips');
     expect(Number((await t.db.query<{ n: string }>('SELECT count(*) AS n FROM road_speed_samples')).rows[0]!.n)).toBe(0);
