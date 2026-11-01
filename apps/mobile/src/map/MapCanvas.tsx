@@ -1,5 +1,7 @@
 import { Camera, type CameraRef, GeoJSONSource, Layer, Map, UserLocation } from '@maplibre/maplibre-react-native';
 import type { LngLat } from '@wayfinder/shared/geo';
+import { type LightState, lightsAhead } from '@wayfinder/shared/light-timing';
+import { cumulativeM } from '@wayfinder/shared/road-facts';
 import type { Route } from '@wayfinder/shared/schemas';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { type StyleProp, Text, View, type ViewStyle } from 'react-native';
@@ -34,7 +36,15 @@ interface Props {
   followUser?: boolean;
   onPress?: (p: LngLat) => void;
   onRegionChange?: (bounds: [number, number, number, number], zoom: number) => void;
+  /**
+   * Traffic lights to mark red (you'll likely have to stop) or green (likely not). Left out, the
+   * selected route's lights with a known timing are marked as if setting off now.
+   */
+  lights?: ReadonlyArray<{ at: LngLat; state: LightState }>;
 }
+
+/** Red and green as the lights themselves are, the same in light and dark. */
+export const LIGHT_COLOURS: Record<LightState, string> = { red: '#d93025', green: '#188038' };
 
 const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
@@ -70,7 +80,7 @@ export function boundsOf(coords: LngLat[]): [number, number, number, number] | n
 }
 
 export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
-  { style, routes = [], selectedRouteId = null, onRoutePress, markers = [], coverage, track, showUser = true, followUser = false, onPress, onRegionChange },
+  { style, routes = [], selectedRouteId = null, onRoutePress, markers = [], coverage, track, showUser = true, followUser = false, onPress, onRegionChange, lights },
   ref,
 ) {
   const t = useTheme();
@@ -132,6 +142,12 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   // the first position fix arrives; the country overview is for maps with nothing to follow.
   const start = (routes.find((r) => r.id === selectedRouteId) ?? routes[0])?.geometry[0];
   const initialView = followUser ? { center: isLngLat(start) ? start : OVERVIEW.center, zoom: FOLLOW_ZOOM } : OVERVIEW;
+  const chosen = routes.find((r) => r.id === selectedRouteId);
+  const shownLights = lights ?? (chosen && chosen.geometry.length > 1 ? lightsAhead(chosen, cumulativeM(chosen.geometry), 0, Date.now(), Infinity) : []);
+  const lightData: GeoJSON.FeatureCollection = {
+    type: 'FeatureCollection',
+    features: shownLights.map((l) => ({ type: 'Feature', properties: { state: l.state }, geometry: { type: 'Point', coordinates: l.at } })),
+  };
   const trackData: GeoJSON.FeatureCollection = track && track.length > 1
     ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: track } }] }
     : EMPTY;
@@ -185,6 +201,19 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         <Layer id="routes-casing" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': t.surface, 'line-width': ['case', ['get', 'selected'], 11, 8] }} />
         <Layer id="routes-fastest" type="line" filter={['==', ['get', 'kind'], 'fastest']} layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': t.accent, 'line-width': ['case', ['get', 'selected'], 7, 5], 'line-opacity': ['case', ['get', 'selected'], 1, 0.6] }} />
         <Layer id="routes-explore" type="line" filter={['!=', ['get', 'kind'], 'fastest']} layout={{ 'line-join': 'round' }} paint={{ 'line-color': t.exploreLine, 'line-width': ['case', ['get', 'selected'], 7, 5], 'line-opacity': ['case', ['get', 'selected'], 1, 0.65], 'line-dasharray': [2, 1] }} />
+      </GeoJSONSource>
+      <GeoJSONSource id="route-lights" data={lightData}>
+        <Layer
+          id="route-lights-circle"
+          type="circle"
+          minzoom={12}
+          paint={{
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 4, 16, 8],
+            'circle-color': ['match', ['get', 'state'], 'red', LIGHT_COLOURS.red, LIGHT_COLOURS.green],
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 2,
+          }}
+        />
       </GeoJSONSource>
       <GeoJSONSource id="markers" data={markerData}>
         <Layer id="markers-circle" type="circle" paint={{ 'circle-radius': 8, 'circle-color': ['match', ['get', 'kind'], 'end', t.danger, 'poi', t.exploreLine, 'position', t.accent, t.surface], 'circle-stroke-color': ['match', ['get', 'kind'], 'start', t.text, t.surface], 'circle-stroke-width': 3 }} />

@@ -217,3 +217,42 @@ describe('traffic lights', () => {
     expect(first.text).toBe('In 800 metres, at the lights, turn left onto Beta Road');
   });
 });
+
+describe('the lights ahead', () => {
+  const timing = (stopChance: number) => ({ stopChance, waitS: 30, waits: [10, 20, 30, 45, 60] });
+  // Lights at the corner (1 km) that usually hold drives, and one with no known timing.
+  const timed = (): Route => ({ ...lRoute(), trafficSignals: [{ index: 1, kind: 'signals', timing: timing(0.8) }, { index: 2, kind: 'signals' }] });
+  const at = (m: number, ts: number, speedMps: number | null) => {
+    const p = destination(start, 90, m);
+    return { ts, lon: p[0], lat: p[1], accuracyM: 5, speedMps };
+  };
+
+  it('are marked red where you’ll likely stop, from the start and as you go, and dropped once passed', () => {
+    const s = new NavigationSession(timed());
+    expect(s.snapshot.lightsAhead.map((l) => [l.at, l.state])).toEqual([[corner, 'red']]);
+    expect(s.update(at(500, 1000, 14)).state.lightsAhead).toHaveLength(1);
+    expect(s.update(at(990, 2000, 14)).state.lightsAhead).toHaveLength(1);
+    const past = destination(corner, 0, 100);
+    expect(s.update({ ts: 3000, lon: past[0], lat: past[1], accuracyM: 5, speedMps: 14 }).state.lightsAhead).toEqual([]);
+  });
+
+  it('say roughly how much longer while you wait at them', () => {
+    const s = new NavigationSession(timed());
+    s.update(at(500, 0, 14));
+    expect(s.update(at(980, 30_000, 0)).state.lightWait).toBe('Usually about 30 s more');
+    expect(s.update(at(980, 55_000, 0.2)).state.lightWait).toBe('Usually about 20 s more');
+    expect(s.update(at(980, 120_000, 0)).state.lightWait).toBe('Usually changes soon');
+    // Moving again, or stopped well short of them, there's nothing to say.
+    expect(s.update(at(985, 121_000, 3)).state.lightWait).toBeNull();
+    const short = new NavigationSession(timed());
+    expect(short.update(at(600, 0, 0)).state.lightWait).toBeNull();
+    // A phone that doesn't give its speed can't tell.
+    expect(short.update(at(980, 1000, null)).state.lightWait).toBeNull();
+  });
+
+  it('aren’t marked walking, or with no known timing', () => {
+    expect(new NavigationSession({ ...timed(), mode: 'foot' }).update(at(500, 0, 1.4)).state).toMatchObject({ lightsAhead: [], lightWait: null });
+    const plain = new NavigationSession({ ...lRoute(), trafficSignals: [{ index: 1, kind: 'signals' }] });
+    expect(plain.update(at(980, 0, 0)).state).toMatchObject({ lightsAhead: [], lightWait: null });
+  });
+});

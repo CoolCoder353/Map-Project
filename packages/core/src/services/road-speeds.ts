@@ -32,7 +32,43 @@ export interface SpeedSample {
   observedAt: Date;
 }
 
-const dayKindOf = (day: number): 0 | 1 => (day === 0 || day === 6 ? 1 : 0);
+export const dayKindOf = (day: number): 0 | 1 => (day === 0 || day === 6 ? 1 : 0);
+
+/** A fix placed along the matched line: how far along it, and when. */
+export interface PlacedFix {
+  m: number;
+  ts: number;
+}
+
+/**
+ * Each raw fix's distance along the matched line, never going backwards (each placed no further back
+ * than the one before). Fixes further than MAX_FIX_OFF_M from the line are left out.
+ */
+export function placeFixes(matched: readonly LngLat[], cum: readonly number[], fixes: ReadonlyArray<{ lon: number; lat: number; ts: number }>): PlacedFix[] {
+  const placed: PlacedFix[] = [];
+  let segment = 0;
+  for (const f of fixes) {
+    let best: { m: number; d: number; seg: number } | null = null;
+    for (let i = segment; i < Math.min(matched.length - 1, segment + 60); i++) {
+      const proj = projectOntoSegment([f.lon, f.lat], matched[i]!, matched[i + 1]!);
+      if (!best || proj.distanceM < best.d) best = { m: cum[i]! + (cum[i + 1]! - cum[i]!) * proj.t, d: proj.distanceM, seg: i };
+    }
+    if (!best || best.d > MAX_FIX_OFF_M) continue;
+    segment = best.seg;
+    placed.push({ m: Math.max(best.m, placed.at(-1)?.m ?? 0), ts: f.ts });
+  }
+  return placed;
+}
+
+/** When the trip was at distance m along the line, or null where the fixes either side are more than `maxGapMs` apart. */
+export function timeAlong(placed: readonly PlacedFix[], m: number, maxGapMs: number): number | null {
+  const after = placed.findIndex((p) => p.m >= m);
+  if (after <= 0) return null;
+  const a = placed[after - 1]!;
+  const b = placed[after]!;
+  if (b.ts - a.ts > maxGapMs) return null;
+  return b.m === a.m ? a.ts : a.ts + ((b.ts - a.ts) * (m - a.m)) / (b.m - a.m);
+}
 
 /**
  * How fast a trip went along each road it was matched to. The raw fixes are placed along the matched
@@ -47,29 +83,9 @@ export function speedSamples(
 ): SpeedSample[] {
   if (matched.length < 2 || fixes.length < 2) return [];
   const cum = cumulativeM(matched);
-  // Each fix's distance along the matched line, never going backwards.
-  const placed: Array<{ m: number; ts: number }> = [];
-  let segment = 0;
-  for (const f of fixes) {
-    let best: { m: number; d: number; seg: number } | null = null;
-    for (let i = segment; i < Math.min(matched.length - 1, segment + 60); i++) {
-      const proj = projectOntoSegment([f.lon, f.lat], matched[i]!, matched[i + 1]!);
-      if (!best || proj.distanceM < best.d) best = { m: cum[i]! + (cum[i + 1]! - cum[i]!) * proj.t, d: proj.distanceM, seg: i };
-    }
-    if (!best || best.d > MAX_FIX_OFF_M) continue;
-    segment = best.seg;
-    placed.push({ m: Math.max(best.m, placed.at(-1)?.m ?? 0), ts: f.ts });
-  }
+  const placed = placeFixes(matched, cum, fixes);
   if (placed.length < 2) return [];
-  /** When the trip was at distance m along the line, or null where the fixes around it are too far apart. */
-  const timeAt = (m: number): number | null => {
-    const after = placed.findIndex((p) => p.m >= m);
-    if (after <= 0) return null;
-    const a = placed[after - 1]!;
-    const b = placed[after]!;
-    if (b.ts - a.ts > MAX_GAP_MS) return null;
-    return b.m === a.m ? a.ts : a.ts + ((b.ts - a.ts) * (m - a.m)) / (b.m - a.m);
-  };
+  const timeAt = (m: number) => timeAlong(placed, m, MAX_GAP_MS);
   const runs = wayRuns.filter(([, , id]) => id > 0);
   const out: SpeedSample[] = [];
   runs.forEach(([from, to, wayId], i) => {

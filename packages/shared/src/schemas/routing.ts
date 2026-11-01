@@ -31,6 +31,14 @@ const SpeedLimitRunSchema = z.object({ from: z.number().int().nonnegative(), to:
 
 export const RouteKindSchema = z.enum(['fastest', 'explore', 'roundtrip']);
 
+export const LightTimingSchema = z.object({
+  stopChance: z.number().min(0).max(1),
+  waitS: z.number().nonnegative(),
+  waits: z.array(z.number().nonnegative()).max(5),
+  /** A fixed cycle, where its changes to green line up day after day: green from `offsetS` past local midnight, every `cycleS`, for `greenS`. */
+  cycle: z.object({ cycleS: z.number().positive(), greenS: z.number().nonnegative(), offsetS: z.number(), utcOffsetS: z.number() }).optional(),
+});
+
 export const RouteSchema = z.object({
   id: z.string(),
   kind: RouteKindSchema,
@@ -55,7 +63,21 @@ export const RouteSchema = z.object({
    */
   estimatedSpeedLimits: z.array(SpeedLimitRunSchema).optional(),
   /** The sets of traffic lights along the route, at their nearest geometry point. Absent from older servers. */
-  trafficSignals: z.array(z.object({ index: z.number().int().nonnegative(), kind: z.enum(['signals', 'crossing', 'ramp_meter']) })).optional(),
+  trafficSignals: z
+    .array(
+      z.object({
+        index: z.number().int().nonnegative(),
+        kind: z.enum(['signals', 'crossing', 'ramp_meter']),
+        /** The mapped light this set is known by. */
+        id: z.string().optional(),
+        /**
+         * How long these lights usually hold a car going this way at this time, where enough drives
+         * have shown it: for drawing them red or green ahead, and the wait while stopped there.
+         */
+        timing: LightTimingSchema.optional(),
+      }),
+    )
+    .optional(),
   /** Trips on these roads at this time of day usually take noticeably longer than the map alone suggests. */
   usuallySlow: z.boolean().optional(),
 });

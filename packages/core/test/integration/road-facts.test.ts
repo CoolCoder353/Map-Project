@@ -3,6 +3,7 @@ import { type LngLat, destination } from '@wayfinder/shared';
 import * as routing from '../../src/services/routing.js';
 import * as roads from '../../src/services/roads.js';
 import * as speeds from '../../src/services/road-speeds.js';
+import * as lightTiming from '../../src/services/light-timing.js';
 import { MetricsAggregator } from '../../src/lib/metrics.js';
 import type { GhPath, GraphHopperClient, RouteParams } from '../../src/lib/graphhopper.js';
 import { type TestDb, createTestDb } from '../helpers/db.js';
@@ -48,7 +49,7 @@ describe('routes and what the map knows about their roads', () => {
     const light = destination(from, 90, 1000);
     await t.db.query(`INSERT INTO traffic_signals (id, lon, lat, kind) VALUES (1, $1, $2, 'signals'), (2, 150, -30, 'signals')`, light);
     const route = await routing.fastestRoute(deps(), u.id, { from, to, mode: 'car', via: [] });
-    expect(route.trafficSignals).toEqual([{ index: 10, kind: 'signals' }]);
+    expect(route.trafficSignals).toEqual([{ index: 10, kind: 'signals', id: '1' }]);
     expect(route.durationS).toBeCloseTo(3000 / SPEED + 15, 0);
     // Walking, lights don't count.
     expect((await routing.fastestRoute(deps(), u.id, { from, to, mode: 'foot', via: [] })).trafficSignals).toBeUndefined();
@@ -173,5 +174,75 @@ describe('road speeds learned from drives', () => {
     await t.db.query(`UPDATE trips SET mode = 'foot' WHERE id = $1`, [id]);
     await roads.matchTrips(t.db, matcher as never, u.id);
     expect(Number((await t.db.query<{ n: string }>('SELECT count(*) AS n FROM road_speed_samples')).rows[0]!.n)).toBe(0);
+  });
+});
+
+describe('how long lights hold drives', () => {
+  const light = destination(from, 90, 1000);
+  const t0 = Date.parse('2026-11-02T08:00:00+10:00');
+  /** A drive east at 10 m/s with a fix a second, stopped for `stopS` 10 m before the lights. */
+  async function lightTrip(userId: string, stopS: number) {
+    const trip = await t.db.query<{ id: string }>(
+      `INSERT INTO trips (user_id, mode, source, started_at, ended_at) VALUES ($1, 'car', 'navigation', $2, $3) RETURNING id`,
+      [userId, new Date(t0), new Date(t0 + 400_000)],
+    );
+    const id = trip.rows[0]!.id;
+    const fixes: Array<{ p: LngLat; ts: number }> = [];
+    let m = 0;
+    let held = 0;
+    for (let ts = t0; m <= 2000; ts += 1000) {
+      fixes.push({ p: destination(from, 90, m), ts });
+      if (m >= 990 && held < stopS) held++;
+      else m += 10;
+    }
+    await t.db.query(
+      `INSERT INTO track_points (user_id, trip_id, batch_id, source, mode, ts, lon, lat)
+       SELECT $1, $2, gen_random_uuid(), 'navigation', 'car', ts, lon, lat FROM unnest($3::timestamptz[], $4::float8[], $5::float8[]) AS x(ts, lon, lat)`,
+      [userId, id, fixes.map((f) => new Date(f.ts)), fixes.map((f) => f.p[0]), fixes.map((f) => f.p[1])],
+    );
+    return id;
+  }
+  const matcher = {
+    async match(points: ReadonlyArray<{ lon: number; lat: number }>) {
+      // The road itself, a point every 20 m, whatever the fixes.
+      void points;
+      const coordinates = Array.from({ length: 101 }, (_, i) => destination(from, 90, i * 20));
+      return { distance: 2000, time: 0, points: { type: 'LineString' as const, coordinates }, instructions: [], details: { osm_way_id: [[0, 100, 801]] } };
+    },
+  };
+
+  it('times each drive through them, learns how long they usually hold drives going that way, and routes allow for it', async () => {
+    await t.db.query(`INSERT INTO traffic_signals (id, lon, lat, kind) VALUES (9, $1, $2, 'signals')`, light);
+    const a = await makeUser(t.db, 'stopper@example.com');
+    const b = await makeUser(t.db, 'other-stopper@example.com');
+    for (let i = 0; i < 3; i++) await lightTrip(a.id, 40);
+    for (let i = 0; i < 2; i++) await lightTrip(b.id, i ? 40 : 0);
+    await roads.matchTrips(t.db, matcher as never, a.id);
+    await roads.matchTrips(t.db, matcher as never, b.id);
+    const passes = await t.db.query<{ stopped: boolean; direction: string }>('SELECT stopped, direction FROM signal_passes ORDER BY id');
+    expect(passes.rows.map((p) => p.stopped)).toEqual([true, true, true, false, true]);
+    expect(new Set(passes.rows.map((p) => p.direction))).toEqual(new Set(['2straight']));
+
+    // The test drives were on a Monday; route at any time on any day, so the day's timing is copied to the weekend.
+    await t.db.query(`INSERT INTO signal_passes (trip_id, signal_id, direction, day_kind, hour, stopped, wait_s, local_day, arrive_s, green_s, observed_at)
+                      SELECT trip_id, signal_id, direction, 1, hour, stopped, wait_s, local_day, arrive_s, green_s, observed_at FROM signal_passes`);
+    await t.db.query(`UPDATE signal_passes SET observed_at = now() - interval '30 days'`);
+    expect(await lightTiming.rebuildLightTimings(t.db)).toMatchObject({ lights: 1, cycles: 0, pruned: 0 });
+
+    const u = await makeUser(t.db, 'router@example.com');
+    const route = await routing.fastestRoute(deps(), u.id, { from, to, mode: 'car', via: [] });
+    const timing = route.trafficSignals![0]!.timing!;
+    // Each person counts once: one always stopped, the other half the time.
+    expect(timing.stopChance).toBeCloseTo(0.75);
+    expect(timing.waitS).toBeCloseTo(40, -1);
+    expect(route.durationS).toBeCloseTo(3000 / SPEED + 0.75 * 40, -1);
+
+    // The second person's drives deleted: one person alone doesn't set it.
+    await t.db.query(`UPDATE trips SET deleted_at = now() WHERE user_id = $1`, [b.id]);
+    expect(await lightTiming.rebuildLightTimings(t.db)).toMatchObject({ lights: 0 });
+    expect((await routing.fastestRoute(deps(), u.id, { from, to, mode: 'car', via: [] })).trafficSignals![0]!.timing).toBeUndefined();
+    await t.db.query('DELETE FROM trips');
+    expect(Number((await t.db.query<{ n: string }>('SELECT count(*) AS n FROM signal_passes')).rows[0]!.n)).toBe(0);
+    await t.db.query('DELETE FROM traffic_signals');
   });
 });

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MapApi } from '../src/map/MapProvider';
 import { fakeApi } from './fakeApi';
 import { route } from './fixtures';
+import type { LngLat } from '@wayfinder/shared';
 
 vi.unmock('../src/map/MapProvider');
 vi.mock('maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url', () => ({ default: '/worker.js' }));
@@ -171,7 +172,7 @@ describe('MapProvider', () => {
     expect(ids).toEqual(expect.arrayContaining(['coverage-roads', 'track', 'travelled', 'routes-selected', 'routes-alt-explore', 'route-callouts', 'search-pin', 'markers', 'marker-labels']));
     expect(map.layers.find((l) => l.id === 'coverage-roads')!.before).toBe('place-label');
     expect(map.layers.find((l) => l.id === 'markers')!.before).toBeUndefined();
-    expect([...map.sources.keys()].sort()).toEqual(['coverage', 'markers', 'routeLabels', 'routes', 'search', 'track', 'travelled']);
+    expect([...map.sources.keys()].sort()).toEqual(['coverage', 'markers', 'routeLabels', 'routeLights', 'routes', 'search', 'track', 'travelled']);
   });
 
   it('skips text layers when the style has no fonts', async () => {
@@ -201,6 +202,20 @@ describe('MapProvider', () => {
     ]);
     const labels = (map.sources.get('routeLabels')!.data as GeoJSON.FeatureCollection).features.map((f) => f.properties!.label);
     expect(labels).toEqual(['15 min', '1 h 7 min · 6.2 km new']);
+  });
+
+  it('marks the chosen route’s lights red where you’ll likely stop and green where not', async () => {
+    const { map, handle } = await mount();
+    const timing = (stopChance: number) => ({ stopChance, waitS: 30, waits: [10, 20, 30, 40, 50] });
+    const geometry: LngLat[] = [[153, -27.4], [153.01, -27.4], [153.02, -27.4], [153.03, -27.4]];
+    const lit = route({ geometry, trafficSignals: [{ index: 1, kind: 'signals', timing: timing(0.8) }, { index: 2, kind: 'signals', timing: timing(0.2) }, { index: 3, kind: 'signals' }] });
+    act(() => handle.setRoutes([lit, route({ id: 'other' })], lit.id));
+    const lights = (map.sources.get('routeLights')!.data as GeoJSON.FeatureCollection).features;
+    expect(lights.map((f) => [f.properties!.state, (f.geometry as GeoJSON.Point).coordinates])).toEqual([['red', geometry[1]], ['green', geometry[2]]]);
+    expect(map.layers.find((l) => l.id === 'route-lights')).toBeDefined();
+    // Nothing chosen, nothing marked.
+    act(() => handle.setRoutes([lit], null));
+    expect((map.sources.get('routeLights')!.data as GeoJSON.FeatureCollection).features).toHaveLength(0);
   });
 
   it('draws markers, the search pin and a replayed track', async () => {

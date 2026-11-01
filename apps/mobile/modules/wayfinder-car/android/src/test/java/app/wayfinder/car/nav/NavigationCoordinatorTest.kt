@@ -83,8 +83,9 @@ class NavigationCoordinatorTest {
     api.pushNav(Samples.nav().copy(position = LngLat(153.0, -27.4)))
     driveScreen()
     api.pushNav(Samples.nav(routeId = "r-reroute").copy(position = LngLat(153.001, -27.4)))
-    api.pushNav(Samples.nav(routeId = "r-reroute").copy(position = LngLat(153.002, -27.4), speedLimitKmh = 60, speedKmh = 57, speedLimitEstimated = true))
+    api.pushNav(Samples.nav(routeId = "r-reroute").copy(position = LngLat(153.002, -27.4), speedLimitKmh = 60, speedKmh = 57, speedLimitEstimated = true, lights = listOf(app.wayfinder.car.bridge.RouteLight(LngLat(153.01, -27.4), true))))
     val shown = scenes.shown.last() as MapScene.Following
+    assertEquals("the lights ahead reach the map", listOf(app.wayfinder.car.bridge.RouteLight(LngLat(153.01, -27.4), true)), shown.lights)
     assertEquals(listOf(LngLat(153.0, -27.4), LngLat(153.001, -27.4), LngLat(153.002, -27.4)), shown.travelled)
     assertEquals(60, shown.speedLimitKmh)
     assertTrue("an estimated limit stays marked as one", shown.speedLimitEstimated)

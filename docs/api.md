@@ -81,6 +81,14 @@ Newer servers add, each left out where empty:
 - `trafficSignals` (driving only): `{ index, kind }`, the sets of lights along the route at their
   nearest geometry point; `kind` is `signals`, `crossing` or `ramp_meter`. A turn at a set of lights
   has `atTrafficLights: true` and text starting "At the lights, …", which older apps say as it is.
+  A set of lights drives have shown also has `id` (the OSM node an approach meets first) and
+  `timing`: `{ stopChance, waitS, waits, cycle? }` for going this way through it at this time of
+  day: how often drives stopped there (0–1), their median wait, and the 10th/25th/50th/75th/90th
+  percentile waits. `cycle` (`{ cycleS, greenS, offsetS, utcOffsetS }`) is a fixed cycle where one
+  was found: green from `offsetS` seconds past local midnight, every `cycleS`, for `greenS`;
+  `utcOffsetS` turns the phone's clock into the lights' local time. Apps draw the lights red or
+  green from these (`lightsAhead` in `packages/shared/src/light-timing.ts`), using the cycle only
+  for lights under 45 s away.
 - `usuallySlow`: trips on these roads at this time of day take noticeably longer than the map
   suggests. `durationS` and each instruction's `durationS` already allow for lights and for speeds
   learned from the group's drives.

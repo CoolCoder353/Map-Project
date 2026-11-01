@@ -1,4 +1,4 @@
-import type { CoverageResponse, LngLat, Route } from '@wayfinder/shared';
+import { type CoverageResponse, type LngLat, type Route, cumulativeM, lightsAhead } from '@wayfinder/shared';
 import * as maplibregl from 'maplibre-gl';
 import type {
   ExpressionSpecification,
@@ -13,6 +13,10 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 
 maplibregl.setWorkerUrl(maplibreWorkerUrl);
+
+/** Traffic lights ahead, red or green as the lights themselves (the same in both themes, as on the phone). */
+const LIGHT_RED = '#d93025';
+const LIGHT_GREEN = '#188038';
 import {
   type ReactNode,
   createContext,
@@ -134,6 +138,7 @@ export function MapProvider({
     travelled: EMPTY,
     search: EMPTY,
     routeLabels: EMPTY,
+    routeLights: EMPTY,
   });
   const clickHandlers = useRef(new Set<(p: LngLat) => void>());
   const routeClickHandlers = useRef(new Set<(id: string) => void>());
@@ -255,6 +260,20 @@ export function MapProvider({
       filter: ['all', ['get', 'selected'], ['!', isFastest]],
       layout: { 'line-join': 'round' },
       paint: { 'line-color': explore, 'line-width': 7, 'line-dasharray': [2, 0.6] },
+    });
+    // The chosen route's lights with a known timing, as if setting off now: red where you'll
+    // likely have to stop, green where not.
+    map.addLayer({
+      id: 'route-lights',
+      type: 'circle',
+      source: 'routeLights',
+      minzoom: 12,
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 4, 16, 8],
+        'circle-color': ['match', ['get', 'state'], 'red', LIGHT_RED, LIGHT_GREEN],
+        'circle-stroke-color': '#ffffff',
+        'circle-stroke-width': 2,
+      },
     });
     if (hasGlyphs) {
       // Route callouts: text chips placed beside each line (not along it), selected first.
@@ -529,6 +548,15 @@ export function MapProvider({
             type: 'Feature',
             properties: { id: r.id, kind: r.kind, selected: r.id === selectedId, hovered: r.id === hoveredId },
             geometry: { type: 'LineString', coordinates: r.geometry },
+          })),
+        });
+        const chosen = routes.find((r) => r.id === selectedId);
+        setSource('routeLights', {
+          type: 'FeatureCollection',
+          features: (chosen && chosen.geometry.length > 1 ? lightsAhead(chosen, cumulativeM(chosen.geometry), 0, Date.now(), Infinity) : []).map((l) => ({
+            type: 'Feature',
+            properties: { state: l.state },
+            geometry: { type: 'Point', coordinates: l.at },
           })),
         });
         // One chip per route at a point where the routes are furthest apart, offset to the

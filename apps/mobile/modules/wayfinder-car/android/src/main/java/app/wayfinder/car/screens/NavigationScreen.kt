@@ -88,7 +88,7 @@ class NavigationScreen(
 
   private fun showMap() {
     val n = nav
-    show(map, MapScene.Following(line, n?.position, n?.headingDeg, trail.points, n?.speedLimitKmh, n?.speedKmh, n?.speedLimitEstimated == true))
+    show(map, MapScene.Following(line, n?.position, n?.headingDeg, trail.points, n?.speedLimitKmh, n?.speedKmh, n?.speedLimitEstimated == true, n?.lights.orEmpty()))
   }
 
   /** One tap: the phone files a report with what the car is showing; the driver explains later. */

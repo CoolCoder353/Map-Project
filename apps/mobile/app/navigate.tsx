@@ -143,7 +143,14 @@ export default function Navigate() {
       </View>
       <View style={sideBySide ? { position: 'absolute', top: 0, bottom: 0, left: PANEL_WIDTH, right: 0 } : { flex: 1 }}>
         {/* Follows you close up. No fitting to the whole route: that zooms out of the drive. */}
-        <MapCanvas style={{ flex: 1 }} routes={nav.route ? [nav.route] : []} selectedRouteId={nav.route?.id ?? null} track={nav.travelled.length >= 2 ? nav.travelled : null} followUser />
+        <MapCanvas
+          style={{ flex: 1 }}
+          routes={nav.route ? [nav.route] : []}
+          selectedRouteId={nav.route?.id ?? null}
+          track={nav.travelled.length >= 2 ? nav.travelled : null}
+          lights={s?.status === 'navigating' ? s.lightsAhead : []}
+          followUser
+        />
         {limitKmh != null || speedKmh != null ? (
           <Press
             accessibilityRole="button"
@@ -155,9 +162,9 @@ export default function Navigate() {
             {speedKmh != null ? <Speed kmh={speedKmh} over={overLimit(limitKmh, speedKmh)} /> : null}
           </Press>
         ) : null}
-        {reported ? (
-          <View style={{ position: 'absolute', bottom: space[3], left: space[3], right: space[3] }}>
-            <Notice tone="info">{reported}</Notice>
+        {reported || s?.lightWait ? (
+          <View style={{ position: 'absolute', bottom: space[3], left: space[3], right: space[3] }} accessibilityLiveRegion="polite">
+            <Notice tone="info">{reported ?? s!.lightWait!}</Notice>
           </View>
         ) : null}
       </View>

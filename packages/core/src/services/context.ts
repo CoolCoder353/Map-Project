@@ -11,6 +11,7 @@ export type JobName =
   | 'system-sample'
   | 'metrics-maintenance'
   | 'road-speeds'
+  | 'light-timings'
   | 'osm-refresh';
 
 export interface JobQueue {

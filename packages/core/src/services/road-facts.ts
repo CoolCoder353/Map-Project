@@ -8,6 +8,8 @@ import {
   type SignalKind,
   applyWayLimitRules,
   bboxOf,
+  cumulativeM,
+  directionAt,
   markTurnsAtLights,
   signalsAlongRoute,
   speedLimitRuns,
@@ -22,6 +24,7 @@ import type { DbClient } from '../db/pool.js';
 import type { GhPath } from '../lib/graphhopper.js';
 import { wallClock } from '../lib/hours.js';
 import { learnedSpeeds } from './road-speeds.js';
+import { NO_TIMINGS, type TimingLookup, lightTimingsIn } from './light-timing.js';
 
 export interface WayRule {
   conditional: string | null;
@@ -35,9 +38,11 @@ export interface RoadFacts {
   rules: Map<number, WayRule>;
   /** Typical km/h on a way at the time the routes start, where enough trips have driven it then. */
   speeds: Map<number, number>;
+  /** How long a set of lights usually holds a car going one way through it now, where drives have shown it. */
+  timings: TimingLookup;
 }
 
-export const NO_ROAD_FACTS: RoadFacts = { signals: [], rules: new Map(), speeds: new Map() };
+export const NO_ROAD_FACTS: RoadFacts = { signals: [], rules: new Map(), speeds: new Map(), timings: NO_TIMINGS };
 
 const wayIdsOf = (paths: readonly GhPath[]) => [...new Set(paths.flatMap((p) => (p.details?.osm_way_id ?? []).map((r) => r[2]).filter((id) => id > 0)))];
 
@@ -55,9 +60,10 @@ export async function loadRoadFacts(db: DbClient, paths: readonly GhPath[], mode
   const coords = paths.flatMap((p) => p.points.coordinates);
   if (coords.length === 0) return NO_ROAD_FACTS;
   const ways = wayIdsOf(paths);
-  const [signals, rules, speeds] = await Promise.all([
+  const box = bboxOf(coords, 30);
+  const [signals, rules, speeds, timings] = await Promise.all([
     // Lights are for driving: on foot they're crossings, which a walk's time already allows for.
-    mode === 'car' ? signalsIn(db, bboxOf(coords, 30)) : Promise.resolve([]),
+    mode === 'car' ? signalsIn(db, box) : Promise.resolve([]),
     ways.length
       ? db
           .query<{ way_id: string; conditional: string | null; variable: boolean; state: string | null }>(
@@ -67,8 +73,9 @@ export async function loadRoadFacts(db: DbClient, paths: readonly GhPath[], mode
           .then((r) => new Map(r.rows.map((x) => [Number(x.way_id), { conditional: x.conditional, variable: x.variable, state: x.state }])))
       : Promise.resolve(new Map<number, WayRule>()),
     mode === 'car' ? learnedSpeeds(db, ways, now, coords[0]!) : Promise.resolve(new Map<number, number>()),
+    mode === 'car' ? lightTimingsIn(db, box, now, coords[0]!) : Promise.resolve(NO_TIMINGS),
   ]);
-  return { signals, rules, speeds };
+  return { signals, rules, speeds, timings };
 }
 
 const parsedConditions = new Map<string, OpeningHours | null>();
@@ -131,7 +138,8 @@ export function conditionalLimitNow(tag: string, timeZone: string, now: Date): n
 /**
  * Finish a route with what the database knows about its roads: lights (driving only) and turns made
  * at them, signposted limits apart from estimated ones, school zones in force and roads whose limit
- * is on electronic signs, and the time the drive takes going by trips actually made.
+ * is on electronic signs, the time the drive takes going by trips actually made, and how long each
+ * set of lights usually holds a car going this way at this time.
  */
 export function finishRoute(route: Route, path: GhPath, facts: RoadFacts, now: Date): Route {
   const coords = path.points.coordinates;
@@ -153,7 +161,13 @@ export function finishRoute(route: Route, path: GhPath, facts: RoadFacts, now: D
   // Lights, ignoring any beside a bridge or tunnel (the junction under or over it).
   const environment = path.details?.road_environment ?? [];
   const offTheGround = (segment: number) => environment.some(([from, to, env]) => from <= segment && segment < to && (env === 'bridge' || env === 'tunnel'));
-  const signals: RouteSignal[] = route.mode === 'car' ? signalsAlongRoute(coords, facts.signals, offTheGround) : [];
+  const cum = cumulativeM(coords);
+  // Each set with how long it usually holds a car going the way this route goes through it.
+  const signals: RouteSignal[] = (route.mode === 'car' ? signalsAlongRoute(coords, facts.signals, offTheGround) : []).map((s) => {
+    const direction = s.id ? directionAt(coords, cum, cum[s.index]!) : null;
+    const timing = s.id && direction ? facts.timings(s.id, direction) : null;
+    return timing ? { ...s, timing } : s;
+  });
 
   const instructions = markTurnsAtLights(route.instructions, coords, signals);
   const time = travelTime({

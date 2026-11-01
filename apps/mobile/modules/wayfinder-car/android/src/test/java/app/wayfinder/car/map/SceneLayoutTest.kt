@@ -71,6 +71,12 @@ class SceneLayoutTest {
     assertEquals(emptyList<LngLat>(), SceneLayout.drawing(MapScene.Overview(here)).travelled)
   }
 
+  @Test fun drawsTheLightsAheadOnlyWhileFollowing() {
+    val lights = listOf(app.wayfinder.car.bridge.RouteLight(here, true))
+    assertEquals(lights, SceneLayout.drawing(MapScene.Following(emptyList(), here, 90.0, lights = lights)).lights)
+    assertEquals(emptyList<app.wayfinder.car.bridge.RouteLight>(), SceneLayout.drawing(MapScene.Overview(here)).lights)
+  }
+
   /** The marker sits where the camera keeps the car: middle across, low in the visible area. */
   @Test fun theCarSitsLowInTheMiddleOfWhatIsVisible() {
     // Visible area 100..900 across, 0..500 down: 40% kept above for the road ahead.

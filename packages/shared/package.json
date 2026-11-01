@@ -38,6 +38,11 @@
       "development": "./src/road-facts.ts",
       "types": "./dist/road-facts.d.ts",
       "default": "./dist/road-facts.js"
+    },
+    "./light-timing": {
+      "development": "./src/light-timing.ts",
+      "types": "./dist/light-timing.d.ts",
+      "default": "./dist/light-timing.js"
     }
   },
   "scripts": {

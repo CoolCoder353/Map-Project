@@ -183,6 +183,20 @@ it('shows the speed limit of the road you are on, when it is known', async () =>
   expect(screen.queryByLabelText(/Speed limit/)).toBeNull();
 });
 
+it('marks the lights ahead while driving, and how much longer while waiting at them', async () => {
+  const { rerender } = await renderScreen(<Navigate />);
+  const lightsAhead = [{ at: [153.01, -27.4], progressM: 300, state: 'red', waitS: 30 }];
+  mockNav.state = { status: 'navigating', nextInstruction: { sign: 0, text: 'Continue' }, distanceToNextManeuverM: 900, remainingDurationS: 600, remainingDistanceM: 5400, speedLimitKmh: null, lightsAhead, lightWait: 'Usually about 20 s more' };
+  await rerender(<Navigate />);
+  expect(fake.map.props.lights).toBe(lightsAhead);
+  expect(screen.getByText('Usually about 20 s more')).toBeOnTheScreen();
+  // Off route, the lights ahead are the route's, not the road you're on.
+  mockNav.state = { ...(mockNav.state as object), status: 'offRoute', lightWait: null };
+  await rerender(<Navigate />);
+  expect(fake.map.props.lights).toEqual([]);
+  expect(screen.queryByText('Usually about 20 s more')).toBeNull();
+});
+
 it('shows a limit that is only the legal default in a grey ring', async () => {
   const { rerender } = await renderScreen(<Navigate />);
   mockNav.state = { status: 'navigating', nextInstruction: { sign: 0, text: 'Continue' }, distanceToNextManeuverM: 900, remainingDurationS: 600, remainingDistanceM: 5400, speedLimitKmh: 50, speedLimitEstimated: true };

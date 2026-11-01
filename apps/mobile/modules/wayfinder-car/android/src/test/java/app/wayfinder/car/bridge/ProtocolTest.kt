@@ -51,6 +51,7 @@ class ProtocolTest {
     assertEquals(60, n.speedLimitKmh)
     assertTrue("a limit that is only the road's legal default", n.speedLimitEstimated)
     assertEquals(57, n.speedKmh)
+    assertEquals(listOf(RouteLight(LngLat(152.985, -27.481), true), RouteLight(LngLat(152.98, -27.482), false)), n.lights)
   }
 
   @Test fun arrived() {
@@ -66,11 +67,12 @@ class ProtocolTest {
 
   /** A phone app one version behind sends none of the newer fields; the car still reads the rest. */
   @Test fun navigatingFromAnOlderPhoneApp() {
-    val o = fixture("nav-navigating.json").apply { remove("speedLimitKmh"); remove("speedLimitEstimated"); remove("speedKmh"); getJSONObject("maneuver").remove("exitAngleDeg") }
+    val o = fixture("nav-navigating.json").apply { remove("speedLimitKmh"); remove("speedLimitEstimated"); remove("speedKmh"); remove("lights"); getJSONObject("maneuver").remove("exitAngleDeg") }
     val n = Protocol.nav(o)
     assertEquals(CarManeuver("roundabout", 2, null), n.maneuver)
     assertNull(n.speedLimitKmh)
     assertFalse(n.speedLimitEstimated)
+    assertEquals(emptyList<RouteLight>(), n.lights)
   }
 
   @Test fun statusKnowsSignedOutAndOffline() {

@@ -4,20 +4,29 @@
  * server to finish each route and by the turn-by-turn engine to say which set of lights to turn at.
  */
 import { type LngLat, type SpeedLimitRun, haversineM, projectOntoSegment } from './geo.js';
+import { type LightTiming, expectedDelayS } from './light-timing.js';
 
 /** `signals` a junction's lights, `crossing` lights for people crossing, `ramp_meter` a motorway on-ramp's. */
 export type SignalKind = 'signals' | 'crossing' | 'ramp_meter';
 
 export interface MappedSignal {
+  /** The OSM node, where known. */
+  id?: string;
   lon: number;
   lat: number;
   kind: SignalKind;
 }
 
-/** A set of lights on a route: the route point nearest it, and what kind it is. */
+/**
+ * A set of lights on a route: the route point nearest it, and what kind it is. `id` is the first of
+ * its mapped lights along the route (the one an approach meets first, so the same each time), and
+ * `timing` how long it usually holds a car going this way at this time, where drives have shown it.
+ */
 export interface RouteSignal {
   index: number;
   kind: SignalKind;
+  id?: string;
+  timing?: LightTiming;
 }
 
 /** How far from the route line a mapped light can be and still be on it (the stop line is off the centre line). */
@@ -77,7 +86,7 @@ export function signalsAlongRoute(
       }
     }
   }
-  const found: Array<{ progressM: number; index: number; kind: SignalKind }> = [];
+  const found: Array<{ progressM: number; index: number; kind: SignalKind; id?: string }> = [];
   for (const s of signals) {
     const p: LngLat = [s.lon, s.lat];
     let best: { d: number; segment: number; t: number } | null = null;
@@ -87,19 +96,19 @@ export function signalsAlongRoute(
     }
     if (!best || skipSegment(best.segment)) continue;
     const progressM = cum[best.segment]! + (cum[best.segment + 1]! - cum[best.segment]!) * best.t;
-    found.push({ progressM, index: best.t > 0.5 ? best.segment + 1 : best.segment, kind: s.kind });
+    found.push({ progressM, index: best.t > 0.5 ? best.segment + 1 : best.segment, kind: s.kind, ...(s.id ? { id: s.id } : {}) });
   }
   found.sort((a, b) => a.progressM - b.progressM);
-  const sets: Array<{ startM: number; index: number; kind: SignalKind }> = [];
+  const sets: Array<{ startM: number; index: number; kind: SignalKind; id?: string }> = [];
   for (const f of found) {
     const last = sets.at(-1);
     if (last && f.progressM - last.startM < SIGNAL_SET_M) {
       if (KIND_RANK[f.kind] > KIND_RANK[last.kind]) last.kind = f.kind;
       continue;
     }
-    sets.push({ startM: f.progressM, index: f.index, kind: f.kind });
+    sets.push({ startM: f.progressM, index: f.index, kind: f.kind, ...(f.id ? { id: f.id } : {}) });
   }
-  return sets.map(({ index, kind }) => ({ index, kind }));
+  return sets.map(({ index, kind, id }) => ({ index, kind, ...(id ? { id } : {}) }));
 }
 
 /** GraphHopper signs for turns (sharp, ordinary and slight, each way). Keeping left or right isn't a turn at the lights. */
@@ -174,7 +183,8 @@ export interface TravelTime {
 /**
  * How long a route takes: the engine's time for each stretch, replaced by the time trips actually
  * took where enough of them have driven that road at this time of day, plus a wait at each set of
- * lights. Learned times already include their lights, so those roads add no wait.
+ * lights: what drives going that way through it usually lose there where that's known, else a
+ * typical wait for its kind. Learned times already include their lights, so those roads add no wait.
  */
 export function travelTime(input: TravelTimeInput): TravelTime {
   const { coords } = input;
@@ -206,7 +216,7 @@ export function travelTime(input: TravelTimeInput): TravelTime {
   for (const s of input.signals) {
     // The wait is spent on the stretch arriving at the lights.
     const i = Math.min(Math.max(s.index - 1, 0), n - 1);
-    if (n > 0 && !learnedSeg[i]) seg[i] = seg[i]! + SIGNAL_DELAY_S[s.kind];
+    if (n > 0 && !learnedSeg[i]) seg[i] = seg[i]! + (s.timing ? expectedDelayS(s.timing) : SIGNAL_DELAY_S[s.kind]);
   }
   const instructionS = input.instructions.map((ins) => seg.slice(ins.interval[0], ins.interval[1]).reduce((a, b) => a + b, 0));
   return { totalS: seg.reduce((a, b) => a + b, 0), instructionS, learnedExtraS, learnedEngineS };

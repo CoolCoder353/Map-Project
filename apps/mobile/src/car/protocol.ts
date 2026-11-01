@@ -79,6 +79,8 @@ export const CarNavSchema = z.object({
   speedLimitEstimated: z.boolean(),
   /** How fast the phone says you're going, km/h. */
   speedKmh: z.number().nullable(),
+  /** Traffic lights ahead with a known timing: red where you'll likely have to stop, else green. */
+  lights: z.array(z.object({ at: LngLatSchema, red: z.boolean() })),
 });
 
 /** What the car sends with each request. */

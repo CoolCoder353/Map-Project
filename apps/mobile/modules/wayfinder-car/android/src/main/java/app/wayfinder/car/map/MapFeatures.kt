@@ -1,6 +1,7 @@
 package app.wayfinder.car.map
 
 import app.wayfinder.car.bridge.LngLat
+import app.wayfinder.car.bridge.RouteLight
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
@@ -15,6 +16,13 @@ object MapFeatures {
     FeatureCollection.fromFeatures(ls.filter { it.size >= 2 }.map { l -> Feature.fromGeometry(LineString.fromLngLats(l.map { point(it) })) })
 
   fun points(ps: List<LngLat>): FeatureCollection = FeatureCollection.fromFeatures(ps.map { Feature.fromGeometry(point(it)) })
+
+  /** The property saying a set of lights is expected red. */
+  const val RED = "red"
+
+  /** Lights ahead, each saying whether it's expected red. */
+  fun lights(ls: List<RouteLight>): FeatureCollection =
+    FeatureCollection.fromFeatures(ls.map { l -> Feature.fromGeometry(point(l.at)).also { it.addBooleanProperty(RED, l.red) } })
 
   /** The numbered pins, then the destination on top, each naming its image. */
   fun markers(d: SceneDrawing): FeatureCollection =

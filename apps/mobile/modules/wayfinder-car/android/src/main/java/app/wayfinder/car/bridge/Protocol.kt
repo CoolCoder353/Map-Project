@@ -32,6 +32,8 @@ data class CarFix(val lon: Double, val lat: Double, val accuracyM: Double?, val 
 }
 /** The step after the next one and how far it is from here, for the car's cluster. */
 data class FollowingStep(val maneuver: CarManeuver, val cue: String, val road: String, val distanceM: Double)
+/** A set of lights ahead: [red] where the car will likely have to stop there, else green. */
+data class RouteLight(val at: LngLat, val red: Boolean)
 enum class NavStatus { STARTING, NAVIGATING, OFF_ROUTE, ARRIVED }
 data class CarNav(
   val routeId: String, val destinationName: String?, val status: NavStatus,
@@ -43,6 +45,8 @@ data class CarNav(
   val speedLimitKmh: Int? = null, val speedKmh: Int? = null,
   /** [speedLimitKmh] is the legal default for the road, not a mapped sign (absent from older phones: false). */
   val speedLimitEstimated: Boolean = false,
+  /** Lights ahead with a known timing (absent from older phones: none). */
+  val lights: List<RouteLight> = emptyList(),
 )
 
 /**
@@ -109,6 +113,7 @@ object Protocol {
     speedLimitKmh = o.doubleOrNull("speedLimitKmh")?.let(Math::round)?.toInt(),
     speedKmh = o.doubleOrNull("speedKmh")?.let(Math::round)?.toInt(),
     speedLimitEstimated = o.optBoolean("speedLimitEstimated", false),
+    lights = o.optJSONArray("lights")?.objects()?.map { RouteLight(lngLat(it.getJSONArray("at")), it.getBoolean("red")) }.orEmpty(),
   )
 
   private fun maneuver(o: JSONObject) =

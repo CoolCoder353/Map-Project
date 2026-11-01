@@ -186,11 +186,19 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
     style.addSource(GeoJsonSource(SELECTED))
     style.addSource(GeoJsonSource(MARKERS))
     style.addSource(GeoJsonSource(POSITION))
+    style.addSource(GeoJsonSource(LIGHTS))
     style.addLayer(LineLayer(OTHERS, OTHERS).withProperties(lineColor(GREY), lineWidth(6f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
     style.addLayer(LineLayer(TRAVELLED, TRAVELLED).withProperties(lineColor(TRAVELLED_COLOUR), lineWidth(6f), lineOpacity(0.85f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
     // A white edge keeps the chosen route clear of the roads and labels under it, day and night.
     style.addLayer(LineLayer(CASING, SELECTED).withProperties(lineColor(WHITE), lineWidth(12f), lineOpacity(0.9f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
     style.addLayer(LineLayer(SELECTED, SELECTED).withProperties(lineColor(ACCENT), lineWidth(8f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
+    // Lights ahead on the route: red where the car will likely stop, green where not.
+    style.addLayer(
+      CircleLayer(LIGHTS, LIGHTS).withProperties(
+        circleColor(Expression.switchCase(Expression.get(MapFeatures.RED), Expression.color(android.graphics.Color.parseColor(LIGHT_RED)), Expression.color(android.graphics.Color.parseColor(LIGHT_GREEN)))),
+        circleRadius(7f), circleStrokeColor(WHITE), circleStrokeWidth(2.5f),
+      ),
+    )
     style.addLayer(CircleLayer(POSITION, POSITION).withProperties(circleColor(ACCENT), circleRadius(10f), circleStrokeColor(WHITE), circleStrokeWidth(3f)))
     // Numbered pins and the destination (MapPins), on top and never hidden for overlapping.
     style.addLayer(SymbolLayer(MARKERS, MARKERS).withProperties(iconImage(Expression.get(MapFeatures.IMAGE)), iconAllowOverlap(true), iconIgnorePlacement(true)))
@@ -205,6 +213,7 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
     // Drawn for the car screen's density, the first time a scene needs each one.
     MapPins.missing(d, style::getImage).forEach { style.addImage(it, MapPins.image(it, dpi)) }
     style.getSourceAs<GeoJsonSource>(MARKERS)?.setGeoJson(MapFeatures.markers(d))
+    style.getSourceAs<GeoJsonSource>(LIGHTS)?.setGeoJson(MapFeatures.lights(d.lights))
     // Following the car, its marker is the fixed view over the map (no jumping from fix to fix).
     val onMap = d.position?.takeUnless { followingCar() }
     style.getSourceAs<GeoJsonSource>(POSITION)?.setGeoJson(MapFeatures.points(listOfNotNull(onMap)))
@@ -285,6 +294,10 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
     const val CASING = "wf-route-casing"
     const val POSITION = "wf-position"
     const val TRAVELLED = "wf-travelled"
+    const val LIGHTS = "wf-lights"
+    // As the phone draws them (MapCanvas LIGHT_COLOURS).
+    const val LIGHT_RED = "#d93025"
+    const val LIGHT_GREEN = "#188038"
     // The phone's accent (src/lib/theme.ts) and a quiet grey for the routes not chosen.
     const val ACCENT = "#1765cc"
     const val GREY = "#8a94a6"

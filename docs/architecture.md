@@ -110,6 +110,24 @@ routes; nothing user-facing shows them.
   the fastest route is usually slow at this time, the routing engine's alternatives are asked for
   and the quickest by the same measure is offered, marked "Usually slow at this time" if it still
   is. With a small group most roads have no learned speed, and keep the engine's.
+- **Waits at lights learned from drives** (`light-timing.ts`, `packages/shared/src/light-timing.ts`):
+  matching a car trip also times it through each set of lights where its fixes are at most 5 s
+  apart (in practice navigated drives, a fix a second): which way it went (the heading it came on,
+  in eighths, and straight, left, right or U-turn), whether it stopped within 120 m before them and
+  for how long, and for a stop near the front of the queue when they most likely turned green (when
+  it moved off, less 1.5 s, and 1.5 s per car ahead) (`signal_passes`). The nightly `light-timings`
+  job keeps, per set of lights, way through, weekday or weekend and hour (and the whole day, and
+  every way through), how often drives stopped and the spread of their waits, wherever five passes
+  from two people agree, each person counting once (`signal_timings`). Where the changes to green
+  from four or more days line up on one cycle (40–180 s), the cycle is kept too, but only if a
+  cycle fitted without each day in turn predicts that day's drives better than how often drives
+  stop there; most lights adjust to traffic and won't have one. The job's result also says how many
+  of the last 14 days' passes the older ones predicted right. Finishing a route gives each set of
+  lights its timing for the way the route goes through; arrival times use the expected wait in
+  place of the flat one, and the maps draw lights with a timing red (stopped on half or more of
+  drives, or red on its cycle when under 45 s away) or green. While navigating, stopped at such
+  lights, the phone says roughly how much longer drives usually wait ("Usually about 20 s more").
+  Only drives that still stand count, as for speeds; passes go with their trip and after 180 days.
 - **Round trip:** loops through unexplored areas around the start. Driving loops that need a
   U-turn aren't offered, so when the first six directions leave fewer than three loops, the other
   six are tried, then the 15° directions between them.
@@ -158,6 +176,7 @@ pg-boss queues, handled in `apps/worker/src/jobs.ts`:
 | `system-sample` | every minute | CPU, memory, disk, queue depth, worker heartbeat |
 | `metrics-maintenance` | hourly | roll up and prune metrics |
 | `road-speeds` | daily 03:37 | rebuild typical road speeds from drives, drop samples over 180 days old |
+| `light-timings` | daily 03:41 | rebuild how long lights hold drives, and fixed cycles; check against the last 14 days; drop passes over 180 days old |
 | `osm-refresh` | `OSM_REFRESH_CRON`, or the admin button | the map data refresh |
 
 ## Clients and the API contract

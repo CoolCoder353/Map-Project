@@ -2,6 +2,7 @@ package app.wayfinder.car.map
 
 import app.wayfinder.car.bridge.CarPlace
 import app.wayfinder.car.bridge.LngLat
+import app.wayfinder.car.bridge.RouteLight
 import app.wayfinder.car.bridge.RouteOption
 
 /** What the car map should be showing; each screen says which. */
@@ -25,6 +26,8 @@ sealed interface MapScene {
     val speedKmh: Int? = null,
     /** [speedLimitKmh] is the legal default for the road, not a mapped sign. */
     val speedLimitEstimated: Boolean = false,
+    /** Lights ahead, red where the car will likely have to stop. */
+    val lights: List<RouteLight> = emptyList(),
   ) : MapScene
 }
 

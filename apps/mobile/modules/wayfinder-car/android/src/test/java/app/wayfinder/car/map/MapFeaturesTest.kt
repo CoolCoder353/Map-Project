@@ -1,6 +1,7 @@
 package app.wayfinder.car.map
 
 import app.wayfinder.car.bridge.LngLat
+import app.wayfinder.car.bridge.RouteLight
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.maplibre.geojson.LineString
@@ -27,6 +28,12 @@ class MapFeaturesTest {
     val features = MapFeatures.lines(listOf(listOf(here, there), listOf(here), emptyList())).features()!!
     assertEquals(1, features.size)
     assertEquals(2, (features[0].geometry() as LineString).coordinates().size)
+  }
+
+  @Test fun lightsSayWhetherTheyAreExpectedRed() {
+    val features = MapFeatures.lights(listOf(RouteLight(here, true), RouteLight(there, false))).features()!!
+    assertEquals(listOf(true, false), features.map { it.getBooleanProperty(MapFeatures.RED) })
+    assertEquals(152.957, (features[1].geometry() as Point).longitude(), 0.0)
   }
 
   @Test fun pointsAreDrawnWhereTheyAre() =

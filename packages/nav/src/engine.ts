@@ -1,5 +1,6 @@
 import { type LngLat, bearingDeg, destination, haversineM, projectOntoSegment } from '@wayfinder/shared/geo';
 import { AT_LIGHTS_BEFORE_M, atNthLights } from '@wayfinder/shared/road-facts';
+import { type LightAhead, type LightTiming, lightWaitText, lightsAhead, remainingWaitS } from '@wayfinder/shared/light-timing';
 import type { Instruction, Mode, Route } from '@wayfinder/shared/schemas';
 import { announcementText } from './phrasing.js';
 
@@ -56,7 +57,16 @@ export interface NavState {
   speedLimitKmh: number | null;
   /** The limit is the legal default for the kind of road, not one signposted in the map data. */
   speedLimitEstimated: boolean;
+  /** Lights ahead whose timing drives have shown, each red where you'll likely have to stop, green where not. */
+  lightsAhead: LightAhead[];
+  /** Stopped at a set of lights with a known timing: about how much longer it usually takes, e.g. "Usually about 20 s more". */
+  lightWait: string | null;
 }
+
+/** Slower than this is stopped, for the wait at the lights. */
+const STOPPED_MPS = 0.8;
+/** Stopped within this far before a set of lights is waiting at it. */
+const WAITING_AT_LIGHTS_M = 60;
 
 export class NavigationSession {
   readonly mode: Mode;
@@ -69,6 +79,10 @@ export class NavigationSession {
   private viaPassed = new Set<number>();
   /** How far along the route each set of lights is (ramp meters aside). */
   private lightsAt: number[] = [];
+  /** The timed sets of lights, by how far along the route they are. */
+  private timedLights: Array<{ m: number; timing: LightTiming }> = [];
+  /** When the car came to a stop, while it's stopped. */
+  private stoppedSince: number | null = null;
   private announced = new Set<string>();
   private lastSegment = 0;
   private lastProgress = 0;
@@ -127,6 +141,8 @@ export class NavigationSession {
       from = best;
     }
     this.lightsAt = (route.trafficSignals ?? []).filter((s) => s.kind !== 'ramp_meter').map((s) => this.cum[Math.min(s.index, this.cum.length - 1)]!);
+    this.timedLights = (route.trafficSignals ?? []).flatMap((s) => (s.timing ? [{ m: this.cum[Math.min(s.index, this.cum.length - 1)]!, timing: s.timing }] : []));
+    this.stoppedSince = null;
     this.announced = new Set();
     this.lastSegment = 0;
     this.lastProgress = 0;
@@ -151,7 +167,22 @@ export class NavigationSession {
       distanceToNextManeuverM: this.instructionStart[1] ?? null,
       speedLimitKmh: null,
       speedLimitEstimated: false,
+      lightsAhead: lightsAhead(this.route, this.cum, 0, Date.now()),
+      lightWait: null,
     };
+  }
+
+  /** Stopped just before a set of lights with a known timing: about how much longer, from how long you've waited. */
+  private waitAtLights(fix: NavFix, progress: number): string | null {
+    const speed = fix.speedMps;
+    if (speed === null || speed === undefined || !Number.isFinite(speed) || speed > STOPPED_MPS) {
+      this.stoppedSince = null;
+      return null;
+    }
+    this.stoppedSince ??= fix.ts;
+    const at = this.timedLights.find((l) => l.m >= progress - 5 && l.m - progress <= WAITING_AT_LIGHTS_M);
+    if (!at || at.timing.waits.length === 0) return null;
+    return lightWaitText(remainingWaitS(at.timing, (fix.ts - this.stoppedSince) / 1000));
   }
 
   /** The limit on route segment i (between geometry points i and i + 1): signposted first, else estimated. */
@@ -282,6 +313,7 @@ export class NavigationSession {
     }
 
     const limit = status === 'arrived' ? { kmh: null, estimated: false } : this.speedLimitOn(snap.segment);
+    const driving = status !== 'arrived' && this.mode === 'car';
     this.state = {
       status,
       snapped: snap.point,
@@ -295,6 +327,8 @@ export class NavigationSession {
       distanceToNextManeuverM: distanceToNext,
       speedLimitKmh: limit.kmh,
       speedLimitEstimated: limit.estimated,
+      lightsAhead: driving ? lightsAhead(this.route, this.cum, progress, fix.ts) : [],
+      lightWait: driving ? this.waitAtLights(fix, progress) : null,
     };
     return { state: this.state, events };
   }

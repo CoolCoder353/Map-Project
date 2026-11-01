@@ -2,6 +2,8 @@ import { type BBox, type LngLat, bboxOf, lineLengthM, mergeStretches } from '@wa
 import { type Db, type DbClient, withTransaction } from '../db/pool.js';
 import type { GhPath, GraphHopperClient } from '../lib/graphhopper.js';
 import { recordSpeedSamples, speedSamples } from './road-speeds.js';
+import { lightPasses, recordLightPasses } from './light-timing.js';
+import { signalsIn } from './road-facts.js';
 
 /** The stretches of one OSM way that a trip travelled. */
 export interface TravelledWay {
@@ -171,7 +173,12 @@ export async function matchTrips(
     }
     const travelled = waysOfPath(path);
     // Drives also say how fast each road really goes, for travel times.
-    if (trip.mode === 'car') await recordSpeedSamples(db, trip.id, speedSamples(path.points.coordinates, path.details?.osm_way_id ?? [], points));
+    if (trip.mode === 'car') {
+      await recordSpeedSamples(db, trip.id, speedSamples(path.points.coordinates, path.details?.osm_way_id ?? [], points));
+      // And how long each set of lights held it.
+      const signals = await signalsIn(db, bboxOf(path.points.coordinates, 30));
+      await recordLightPasses(db, trip.id, lightPasses(path.points.coordinates, points, signals));
+    }
     const fresh = await recordTravelledWays(db, userId, travelled, trip.mode, trip.started_at);
     // Added, not set: a trip still being recorded is matched again each time it grows, and the
     // roads it was first on earlier are no longer new by then.

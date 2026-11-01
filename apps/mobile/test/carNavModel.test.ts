@@ -39,7 +39,7 @@ describe('toCarNav', () => {
   it('shows the next manoeuvre, and the one after when it comes close behind', () => {
     const n = toCarNav(snap({
       route: r, position: [153, -27.4], headingDeg: 90,
-      state: { status: 'navigating', snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 4000, remainingDurationS: 500, currentInstruction: instructions[0]!, nextInstruction: instructions[1]!, nextInstructionIndex: 1, distanceToNextManeuverM: 250, speedLimitKmh: 60, speedLimitEstimated: false },
+      state: { status: 'navigating', snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 4000, remainingDurationS: 500, currentInstruction: instructions[0]!, nextInstruction: instructions[1]!, nextInstructionIndex: 1, distanceToNextManeuverM: 250, speedLimitKmh: 60, speedLimitEstimated: false, lightsAhead: [], lightWait: null },
     }), 0)!;
     expect(n).toMatchObject({ status: 'navigating', maneuver: { type: 'left', exit: null }, cue: 'Turn left onto Main St', road: 'Main St', distanceToManeuverM: 250, next: { maneuver: { type: 'right', exit: null }, cue: 'Turn right' } });
     expect(n).toMatchObject({ speedLimitKmh: 60, speedKmh: null });
@@ -50,7 +50,7 @@ describe('toCarNav', () => {
   it('always gives the cluster the manoeuvre after the next, with how far away it is', () => {
     const n = toCarNav(snap({
       route: r, position: [153, -27.4],
-      state: { status: 'navigating', snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: instructions[1]!, nextInstruction: instructions[2]!, nextInstructionIndex: 2, distanceToNextManeuverM: 50, speedLimitKmh: null, speedLimitEstimated: false },
+      state: { status: 'navigating', snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: instructions[1]!, nextInstruction: instructions[2]!, nextInstructionIndex: 2, distanceToNextManeuverM: 50, speedLimitKmh: null, speedLimitEstimated: false, lightsAhead: [], lightWait: null },
     }), 0)!;
     expect(n.next).toBeNull();
     expect(n.following).toEqual({ maneuver: { type: 'destination', exit: null, exitAngleDeg: null }, cue: 'Arrive', road: '', distanceM: 850 });
@@ -60,7 +60,7 @@ describe('toCarNav', () => {
   it('has nothing after the last manoeuvre', () => {
     const n = toCarNav(snap({
       route: r,
-      state: { status: 'navigating', snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 40, remainingDurationS: 4, currentInstruction: instructions[2]!, nextInstruction: instructions[3]!, nextInstructionIndex: 3, distanceToNextManeuverM: 40, speedLimitKmh: null, speedLimitEstimated: false },
+      state: { status: 'navigating', snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 40, remainingDurationS: 4, currentInstruction: instructions[2]!, nextInstruction: instructions[3]!, nextInstructionIndex: 3, distanceToNextManeuverM: 40, speedLimitKmh: null, speedLimitEstimated: false, lightsAhead: [], lightWait: null },
     }), 0)!;
     expect(n.following).toBeNull();
   });
@@ -68,30 +68,45 @@ describe('toCarNav', () => {
   it('leaves out a manoeuvre that is still far behind the next one', () => {
     const n = toCarNav(snap({
       route: r,
-      state: { status: 'navigating', snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: instructions[1]!, nextInstruction: instructions[2]!, nextInstructionIndex: 2, distanceToNextManeuverM: 50, speedLimitKmh: null, speedLimitEstimated: false },
+      state: { status: 'navigating', snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: instructions[1]!, nextInstruction: instructions[2]!, nextInstructionIndex: 2, distanceToNextManeuverM: 50, speedLimitKmh: null, speedLimitEstimated: false, lightsAhead: [], lightWait: null },
     }), 0)!;
     expect(n.next).toBeNull();
   });
 
   it('gives the speed limit only while on the route, and your speed in km/h', () => {
-    const state = { status: 'navigating' as const, snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: instructions[1]!, nextInstruction: instructions[2]!, nextInstructionIndex: 2, distanceToNextManeuverM: 50, speedLimitKmh: 80, speedLimitEstimated: false };
+    const state = { status: 'navigating' as const, snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: instructions[1]!, nextInstruction: instructions[2]!, nextInstructionIndex: 2, distanceToNextManeuverM: 50, speedLimitKmh: 80, speedLimitEstimated: false, lightsAhead: [], lightWait: null };
     expect(toCarNav(snap({ route: r, state, speedMps: 22.3 }), 0)).toMatchObject({ speedLimitKmh: 80, speedKmh: 80 });
     expect(toCarNav(snap({ route: r, state: { ...state, status: 'offRoute' }, speedMps: 10 }), 0)).toMatchObject({ speedLimitKmh: null, speedKmh: 36 });
     expect(toCarNav(snap({ route: r }), 0)).toMatchObject({ speedLimitKmh: null, speedKmh: null });
   });
 
   it('says when the limit is only the road’s legal default, and never without a limit', () => {
-    const state = { status: 'navigating' as const, snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: instructions[1]!, nextInstruction: instructions[2]!, nextInstructionIndex: 2, distanceToNextManeuverM: 50, speedLimitKmh: 50, speedLimitEstimated: true };
+    const state = { status: 'navigating' as const, snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: instructions[1]!, nextInstruction: instructions[2]!, nextInstructionIndex: 2, distanceToNextManeuverM: 50, speedLimitKmh: 50, speedLimitEstimated: true, lightsAhead: [], lightWait: null };
     expect(toCarNav(snap({ route: r, state }), 0)).toMatchObject({ speedLimitKmh: 50, speedLimitEstimated: true });
     expect(toCarNav(snap({ route: r, state: { ...state, speedLimitKmh: null } }), 0)).toMatchObject({ speedLimitKmh: null, speedLimitEstimated: false });
     expect(toCarNav(snap({ route: r, state: { ...state, status: 'offRoute' } }), 0)).toMatchObject({ speedLimitEstimated: false });
   });
 });
 
+describe('lights ahead on the car map', () => {
+  const instructions = [ins(0, 'Continue', 300), ins(4, 'Arrive', 0)];
+  const r = route(instructions);
+  const state = { status: 'navigating' as const, snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: instructions[0]!, nextInstruction: instructions[1]!, nextInstructionIndex: 1, distanceToNextManeuverM: 50, speedLimitKmh: null, speedLimitEstimated: false, lightWait: null,
+    lightsAhead: [{ at: [153.01, -27.4] as [number, number], progressM: 400, state: 'red' as const, waitS: 30 }, { at: [153.02, -27.4] as [number, number], progressM: 900, state: 'green' as const, waitS: 0 }] };
+
+  it('sends each as red or green while on the route, and none off it', () => {
+    const n = toCarNav(snap({ route: r, state }), 0)!;
+    expect(n.lights).toEqual([{ at: [153.01, -27.4], red: true }, { at: [153.02, -27.4], red: false }]);
+    expect(CarNavSchema.safeParse(n).success).toBe(true);
+    expect(toCarNav(snap({ route: r, state: { ...state, status: 'offRoute' } }), 0)!.lights).toEqual([]);
+    expect(toCarNav(snap({ route: r }), 0)!.lights).toEqual([]);
+  });
+});
+
 describe('thenAfter (the phone’s Navigate screen and the car share it)', () => {
   const instructions = [ins(0, 'Continue', 300), ins(-2, 'Turn left onto Main St', THEN_WITHIN_M), ins(2, 'Turn right', THEN_WITHIN_M + 1), ins(4, 'Arrive', 0)];
   const r = route(instructions);
-  const at = (nextInstructionIndex: number | null) => ({ status: 'navigating' as const, snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: null, nextInstruction: null, nextInstructionIndex, distanceToNextManeuverM: 50, speedLimitKmh: null, speedLimitEstimated: false });
+  const at = (nextInstructionIndex: number | null) => ({ status: 'navigating' as const, snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: null, nextInstruction: null, nextInstructionIndex, distanceToNextManeuverM: 50, speedLimitKmh: null, speedLimitEstimated: false, lightsAhead: [], lightWait: null });
 
   it('is the manoeuvre after the next when it comes within reach of it', () => expect(thenAfter(r, at(1))?.text).toBe('Turn right'));
   it('is nothing when it comes later', () => expect(thenAfter(r, at(2))).toBeNull());

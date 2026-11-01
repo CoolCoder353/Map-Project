@@ -8,6 +8,7 @@ export const JOB_NAMES: JobName[] = [
   'system-sample',
   'metrics-maintenance',
   'road-speeds',
+  'light-timings',
   'osm-refresh',
 ];
 

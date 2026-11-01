@@ -1,6 +1,7 @@
 package app.wayfinder.car.map
 
 import app.wayfinder.car.bridge.LngLat
+import app.wayfinder.car.bridge.RouteLight
 
 /** A numbered marker on the map; the row with the same number in the list beside it is the same thing. */
 data class Pin(val at: LngLat, val label: String)
@@ -13,6 +14,8 @@ data class SceneDrawing(
   val travelled: List<LngLat> = emptyList(),
   /** Where the chosen route ends, marked with the destination pin. */
   val destination: LngLat? = null,
+  /** Lights ahead, red or green, while driving. */
+  val lights: List<RouteLight> = emptyList(),
 )
 
 sealed interface CameraSpec {
@@ -70,7 +73,7 @@ object SceneLayout {
         destination = chosen.lastOrNull(),
       )
     }
-    is MapScene.Following -> SceneDrawing(scene.line, emptyList(), emptyList(), scene.position, scene.travelled, destination = scene.line.lastOrNull())
+    is MapScene.Following -> SceneDrawing(scene.line, emptyList(), emptyList(), scene.position, scene.travelled, destination = scene.line.lastOrNull(), lights = scene.lights)
   }
 
   /** Numbered by place in the list, so a row with nothing to mark doesn't renumber the ones after it. */

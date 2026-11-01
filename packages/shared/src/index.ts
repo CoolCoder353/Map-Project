@@ -9,3 +9,4 @@ export * from './australia.js';
 export * from './categories.js';
 export * from './address.js';
 export * from './road-facts.js';
+export * from './light-timing.js';

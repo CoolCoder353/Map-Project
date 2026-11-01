@@ -230,6 +230,15 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   tapping the sign to report, lights on the map at zoom 15 and in the car, and "at the third set of
   lights" spoken. Learned speeds need three trips from two people on a road before they count, so expect few at first.
   School and public holidays aren't known, so a school zone shows on holidays too.
+- **Lights red or green ahead (2026-11-02, not deployed).** Checked by tests only, with made-up
+  drives. Needs migration 010 with the deploy, then navigated drives through the same lights by
+  two or more people (five passes going one way) before any light is coloured; until then routes
+  and maps are as before. To check on real data: after a few weeks, the `light-timings` job's
+  result on the admin jobs page (`checked` and `correct`: how many recent passes the older ones
+  predicted), lights coloured on the route preview and while driving on the phone and in the car,
+  and "Usually about … more" while stopped. Expect few or no fixed cycles: most lights here adjust
+  to traffic. The pass detector's stop and queue rules are set from first principles, not yet
+  tuned against real drives.
 - **The 1 October reports** of wrong speed limits and traffic lights not recognised: the limits
   matched OSM then; school zones were the likely cause, and lights weren't used at all. Both are
   addressed above, not yet confirmed with the reporter.

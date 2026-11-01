@@ -4,5 +4,5 @@
   "maneuver": { "type": "destination", "exit": null, "exitAngleDeg": null }, "cue": "Arrive at destination", "road": "",
   "distanceToManeuverM": null, "next": null, "following": null,
   "remainingDistanceM": 0, "remainingDurationS": 0, "arrivalEpochMs": 1790000000000,
-  "position": null, "headingDeg": null, "speedLimitKmh": null, "speedLimitEstimated": false, "speedKmh": null
+  "position": null, "headingDeg": null, "speedLimitKmh": null, "speedLimitEstimated": false, "speedKmh": null, "lights": []
 }

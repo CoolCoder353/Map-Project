@@ -68,3 +68,13 @@ export function localDayHour(at: Date, timeZone: string): { day: number; hour: n
   const weekday = parts.find((p) => p.type === 'weekday')?.value ?? 'Mon';
   return { day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(weekday), hour: Number(parts.find((p) => p.type === 'hour')?.value ?? 0) };
 }
+
+/** A time zone's wall clock minus UTC at a moment, in seconds (36 000 in Brisbane). */
+export function utcOffsetS(at: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-AU', {
+    timeZone, year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23',
+  }).formatToParts(at);
+  const n = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const wall = Date.UTC(n('year'), n('month') - 1, n('day'), n('hour'), n('minute'), n('second'));
+  return Math.round((wall - Math.floor(at.getTime() / 1000) * 1000) / 1000);
+}

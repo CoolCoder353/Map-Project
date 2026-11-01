@@ -20,6 +20,7 @@ export * as savedPlaceService from './services/saved-places.js';
 export * as roadService from './services/roads.js';
 export * as roadFactsService from './services/road-facts.js';
 export * as roadSpeedService from './services/road-speeds.js';
+export * as lightTimingService from './services/light-timing.js';
 export * as adminService from './services/admin.js';
 export * as opsService from './services/ops.js';
 export * as accountService from './services/account.js';

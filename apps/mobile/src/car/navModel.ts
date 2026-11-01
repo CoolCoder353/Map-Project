@@ -80,5 +80,6 @@ export function toCarNav(s: NavSnapshot, now: number): CarNav | null {
     speedLimitKmh: st?.status === 'navigating' ? st.speedLimitKmh : null,
     speedLimitEstimated: st?.status === 'navigating' && st.speedLimitKmh !== null ? st.speedLimitEstimated : false,
     speedKmh: s.speedMps != null ? Math.round(s.speedMps * 3.6) : null,
+    lights: st?.status === 'navigating' ? st.lightsAhead.map((l) => ({ at: l.at, red: l.state === 'red' })) : [],
   };
 }

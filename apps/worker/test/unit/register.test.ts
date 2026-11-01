@@ -43,6 +43,7 @@ describe('worker job registration', () => {
       ['metrics-maintenance', '7 * * * *'],
       ['purge-deleted', '17 3 * * *'],
       ['road-speeds', '37 3 * * *'],
+      ['light-timings', '41 3 * * *'],
       ['osm-refresh', '0 3 2 * *'],
     ]);
     expect(boss.unschedule).not.toHaveBeenCalled();

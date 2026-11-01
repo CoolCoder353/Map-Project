@@ -89,6 +89,19 @@ it('draws routes with the selected one last, markers, the track and travelled ro
   expect(onRoutePress.mock.calls).toEqual([['b']]);
 });
 
+it('marks the chosen route’s lights red where you’ll likely stop and green where not, or the ones it’s given', async () => {
+  const timing = (stopChance: number) => ({ stopChance, waitS: 30, waits: [10, 20, 30, 40, 50] });
+  const geometry: Array<[number, number]> = [[153, -27.4], [153.01, -27.4], [153.02, -27.4]];
+  const lit = route({ id: 'a', geometry, trafficSignals: [{ index: 1, kind: 'signals', timing: timing(0.9) }, { index: 2, kind: 'signals', timing: timing(0.1) }] });
+  const { rerender } = await render(<MapCanvas routes={[lit]} selectedRouteId="a" />);
+  await screen.findByTestId('native-map');
+  expect(mockSources['route-lights']!.data.features.map((f) => [f.properties!.state, (f.geometry as GeoJSON.Point).coordinates])).toEqual([['red', geometry[1]], ['green', geometry[2]]]);
+  await rerender(<MapCanvas routes={[lit]} selectedRouteId={null} />);
+  expect(mockSources['route-lights']!.data.features).toHaveLength(0);
+  await rerender(<MapCanvas routes={[lit]} selectedRouteId="a" lights={[{ at: [153.05, -27.4], state: 'green' }]} />);
+  expect(mockSources['route-lights']!.data.features.map((f) => f.properties!.state)).toEqual(['green']);
+});
+
 it('leaves out travelled roads when none are given, and a one-point track', async () => {
   await render(<MapCanvas track={[[153, -27]]} />);
   await screen.findByTestId('native-map');

@@ -11,6 +11,7 @@ export const SCHEDULES: Array<[JobName, string]> = [
   ['metrics-maintenance', '7 * * * *'],
   ['purge-deleted', '17 3 * * *'],
   ['road-speeds', '37 3 * * *'],
+  ['light-timings', '41 3 * * *'],
 ];
 
 export async function registerJobs(

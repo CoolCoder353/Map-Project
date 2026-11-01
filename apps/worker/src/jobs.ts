@@ -5,6 +5,7 @@ import {
   opsService,
   roadService,
   roadSpeedService,
+  lightTimingService,
   recordErrorEvent,
   trackService,
 } from '@wayfinder/core';
@@ -50,6 +51,7 @@ export function jobHandlers(deps: WorkerDeps): Record<JobName, Handler> {
     'system-sample': async () => opsService.sampleSystem(db, graphhopper, deps.queueDepth, deps.diskPath),
     'metrics-maintenance': async () => adminService.maintainMetrics(db),
     'road-speeds': async () => roadSpeedService.rebuildRoadSpeeds(db),
+    'light-timings': async () => lightTimingService.rebuildLightTimings(db),
     'osm-refresh': async (data) => {
       let runId = typeof data.runId === 'string' ? data.runId : null;
       if (!runId) runId = await opsService.createPipelineRun(db, 'osm_refresh', null); // scheduled run
