@@ -139,6 +139,7 @@ and adaptive quality gaps, in
 - [ ] Roundabout icons turn clockwise (both kinds of roundabout)
 - [ ] Music dips for each spoken direction and comes back after; the speaker button silences them and shows struck through until tapped again
 - [ ] Phone locked for the whole drive: directions keep coming
+- [ ] Android 16 phone, trip started on the phone or the car, then the phone locked: the car's directions and map keep moving straight away, not only once it is unlocked (feedback 2026-11-01, 0.5.4)
 - [ ] Trip started on the phone appears in the car; trip started in the car shows the phone banner, with its padding clear of the status bar and gesture bar
 - [ ] End in the car, End on the phone, and the car's own "End navigation" each end the trip everywhere
 - [ ] Night mode switches the map to the dark style; OSM attribution visible

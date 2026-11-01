@@ -170,7 +170,10 @@ request `BridgeCarApi.kt` sends has a handler in `src/car/handlers.ts`.
 
 Navigation is one session for the whole app (`src/nav/navigationService.ts`), followed by the
 phone's Navigate screen and the car alike; a trip started on either shows on both. While it runs,
-a location foreground service keeps directions coming with the phone locked; its starts and stops
+a location foreground service keeps directions coming with the phone locked. With the phone locked, expo-location
+stops its watch and passes the service's fixes on through one background job each, which Android 16
+holds back under its job quota, so the module's own listener (`PhoneLocation.kt`, events `onPhoneFix`)
+sends each fix to navigation directly for the length of the trip (`src/nav/navigationLocation.ts`); its starts and stops
 run one at a time, and one left over from a trip the app never ended (swiped away mid-trip) is
 stopped when the app starts. A request for a new route that hasn't answered within 20 s is given up
 on as the next fix arrives (timers don't run with the phone locked) and asked again later. A new

@@ -8,10 +8,11 @@ import expo.modules.kotlin.modules.ModuleDefinition
 /** The JavaScript side's handle on the car app. */
 class WayfinderCarModule : Module() {
   private val voiceLazy = lazy { NavVoice(appContext.reactContext!!) }
+  private val phoneLocation = lazy { PhoneLocation(LocationManagerFixSource(appContext.reactContext!!)) { sendEvent("onPhoneFix", it) } }
 
   override fun definition() = ModuleDefinition {
     Name("WayfinderCar")
-    Events("onCall")
+    Events("onCall", "onPhoneFix")
 
     // JavaScript calls this once it is listening; anything the car asked meanwhile goes out now.
     Function("ready") {
@@ -28,7 +29,13 @@ class WayfinderCarModule : Module() {
     Function("speak") { text: String -> if (appContext.reactContext != null) voiceLazy.value.speak(text) }
     Function("stopSpeaking") { if (voiceLazy.isInitialized()) voiceLazy.value.stop() }
 
+    // The phone's positions for a trip, as onPhoneFix events that keep coming with the phone locked
+    // (see PhoneLocation). False when they can't start.
+    Function("watchPhoneLocation") { appContext.reactContext != null && phoneLocation.value.start() }
+    Function("stopPhoneLocation") { if (phoneLocation.isInitialized()) phoneLocation.value.stop() }
+
     OnDestroy {
+      if (phoneLocation.isInitialized()) phoneLocation.value.stop()
       CarBridge.shared.disconnect()
       if (voiceLazy.isInitialized()) voiceLazy.value.shutdown()
     }
