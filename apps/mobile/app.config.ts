@@ -5,12 +5,12 @@ const config: ExpoConfig = {
   name: process.env.APP_DISPLAY_NAME ?? 'Wayfinder',
   slug: 'wayfinder',
   scheme: 'wayfinder',
-  version: '0.5.5',
+  version: '0.5.6',
   icon: './assets/icons/icon.png',
   userInterfaceStyle: 'automatic',
   android: {
     package: 'app.wayfinder.maps',
-    versionCode: 11,
+    versionCode: 12,
     adaptiveIcon: {
       foregroundImage: './assets/icons/adaptive-foreground.png',
       monochromeImage: './assets/icons/adaptive-monochrome.png',

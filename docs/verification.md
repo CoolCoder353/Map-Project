@@ -216,7 +216,7 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
 
 ## Open / manual
 
-- **Traffic lights, school zones, estimated limits and learned speeds (2026-11-01, not deployed).**
+- **Traffic lights, school zones, estimated limits and learned speeds (2026-11-01, deployed 2026-11-02 with a rebuilt graph and places; see deploy-small-server.md).**
   Checked by tests, and by hand against real data: a Brisbane extract (152.98–153.12°E,
   27.42–27.53°S) built into a GraphHopper 11 graph with the new `config.yml` (estimates on), which
   answers routes with `max_speed_estimated`, `road_environment` and `time` details and names an
@@ -224,14 +224,12 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   limit rules (286 school zones). A route from the CBD to Carina (9.2 km) finds 15 sets of lights,
   four turns "at the lights" (onto Ann Street, Cavendish Road, Old Cleveland Road, Leicester Street),
   40 in a school zone at 8 am on a Tuesday and 60 there at noon, and three short estimated stretches;
-  its time goes from GraphHopper's 11.4 min to 15.0 min. Still to do: the next map data refresh (the
-  graph must be rebuilt for estimates; until then routes come without them, no harm done), then
-  `deploy-small.sh data` and `places` and migration 009 with the deploy; on a device, the grey ring,
+  its time goes from GraphHopper's 11.4 min to 15.0 min. Live since 2026-11-02 (graph and places rebuilt, migration 009 run). Still to do: on a device, the grey ring,
   tapping the sign to report, lights on the map at zoom 15 and in the car, and "at the third set of
   lights" spoken. Learned speeds need three trips from two people on a road before they count, so expect few at first.
   School and public holidays aren't known, so a school zone shows on holidays too.
-- **Lights red or green ahead (2026-11-02, not deployed).** Checked by tests only, with made-up
-  drives. Needs migration 010 with the deploy, then navigated drives through the same lights by
+- **Lights red or green ahead (2026-11-02, deployed 2026-11-02; app 0.5.6 on internal testing).**
+  Checked by tests only, with made-up drives. It needs navigated drives through the same lights by
   two or more people (five passes going one way) before any light is coloured; until then routes
   and maps are as before. To check on real data: after a few weeks, the `light-timings` job's
   result on the admin jobs page (`checked` and `correct`: how many recent passes the older ones
