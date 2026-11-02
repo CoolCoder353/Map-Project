@@ -45,6 +45,7 @@ routing engine, live checks).
 | What falls short of Google's Android quality guidelines  | [docs/quality-gaps.md](docs/quality-gaps.md)                                           |
 | The live server (`maps.coolcodertech.com`, Queensland)      | [docs/deploy-small-server.md](docs/deploy-small-server.md)                             |
 | What's verified and what's open                          | [docs/verification.md](docs/verification.md)                                           |
+| Improvements to do next                                  | [docs/todo.md](docs/todo.md)                                                           |
 | Why things are the way they are                          | [docs/adr](docs/adr)                                                                   |
 | Web look and feel                                        | [apps/web/PRODUCT.md](apps/web/PRODUCT.md), [apps/web/DESIGN.md](apps/web/DESIGN.md)   |
 
