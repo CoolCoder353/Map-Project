@@ -179,21 +179,17 @@ export async function carReports(db: DbClient, userId: string): Promise<CarRepor
 export async function addCarReportDetails(db: DbClient, userId: string, id: string, input: CarReportDetails, now = new Date()): Promise<void> {
   if (!(await getAppSettings(db)).feedbackEnabled) throw new AppError(404, 'feedback_disabled', 'Feedback is turned off');
   if (!isUuid(id)) throw notFound('No such report from the car');
-  const r = await db.query<{ message: string }>(
-    `SELECT message FROM feedback
-     WHERE id = $1 AND user_id = $2 AND context->>'screen' = $3 AND created_at > now() - make_interval(days => $4)`,
-    [id, userId, CAR_REPORT_SCREEN, CAR_REPORT_DAYS],
-  );
-  const report = r.rows[0];
-  if (!report) throw notFound('No such report from the car');
-  if (report.message.split(DRIVER_DETAILS).length - 1 >= MAX_DETAILS) {
-    throw new AppError(429, 'rate_limited', 'That report already has all the details it can take. Send anything else as new feedback.');
-  }
   const image = screenshotBytes(input.screenshot);
   const when = now.toLocaleString('en-AU', { timeZone: 'Australia/Brisbane', dateStyle: 'medium', timeStyle: 'short' });
-  await db.query(
-    `UPDATE feedback SET message = message || $2, screenshot = coalesce(screenshot, $3), screenshot_type = coalesce(screenshot_type, $4), updated_at = now()
-     WHERE id = $1`,
-    [id, `\n\n${DRIVER_DETAILS}, ${when}:\n${input.message}`, image, image ? input.screenshot!.mediaType : null],
+  const yours = `id = $1 AND user_id = $2 AND context->>'screen' = $3 AND created_at > now() - make_interval(days => $4)`;
+  // Checked and added in one statement, so requests at the same moment can't all pass the check.
+  const added = await db.query(
+    `UPDATE feedback SET message = message || $5, screenshot = coalesce(screenshot, $6), screenshot_type = coalesce(screenshot_type, $7), updated_at = now()
+     WHERE ${yours} AND (length(message) - length(replace(message, $8, ''))) / length($8) < $9`,
+    [id, userId, CAR_REPORT_SCREEN, CAR_REPORT_DAYS, `\n\n${DRIVER_DETAILS}, ${when}:\n${input.message}`, image, image ? input.screenshot!.mediaType : null, DRIVER_DETAILS, MAX_DETAILS],
   );
+  if (added.rowCount) return;
+  const found = await db.query(`SELECT 1 FROM feedback WHERE ${yours}`, [id, userId, CAR_REPORT_SCREEN, CAR_REPORT_DAYS]);
+  if (!found.rowCount) throw notFound('No such report from the car');
+  throw new AppError(429, 'rate_limited', 'That report already has all the details it can take. Send anything else as new feedback.');
 }

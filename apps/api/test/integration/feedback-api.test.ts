@@ -133,6 +133,12 @@ describe('user feedback', () => {
     expect((await add(driver, id, { message: 'Second thoughts' })).statusCode).toBe(204);
     expect((await add(driver, id, { message: 'Third thoughts' })).statusCode).toBe(204);
     expect((await add(driver, id, { message: 'Fourth thoughts' })).statusCode).toBe(429);
+
+    // All at once, the limit still holds: each addition checks and adds in one step.
+    const again = (await send(driver, { message: 'Another one from the car', context: car })).json().id as string;
+    const codes = await Promise.all([1, 2, 3, 4, 5].map((n) => add(driver, again, { message: `At once ${n}` }).then((r) => r.statusCode)));
+    expect(codes.filter((c) => c === 204)).toHaveLength(3);
+    expect(codes.filter((c) => c === 429)).toHaveLength(2);
   });
 
   it('turning it off stops new reports but keeps existing ones', async () => {
