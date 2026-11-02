@@ -112,7 +112,9 @@ routes; nothing user-facing shows them.
   is. With a small group most roads have no learned speed, and keep the engine's.
 - **Waits at lights learned from drives** (`light-timing.ts`, `packages/shared/src/light-timing.ts`):
   matching a car trip also times it through each set of lights where its fixes are at most 5 s
-  apart (in practice navigated drives, a fix a second): which way it went (the heading it came on,
+  apart while moving (in practice navigated drives, a fix a second; standing still the phone sends
+  none, as navigation asks for a fix every second or 5 m, so a silence between fixes within 15 m of
+  each other is a wait, not missing data): which way it went (the heading it came on,
   in eighths, and straight, left, right or U-turn), whether it stopped within 120 m before them and
   for how long, and for a stop near the front of the queue when they most likely turned green (when
   it moved off, less 1.5 s, and 1.5 s per car ahead) (`signal_passes`). The nightly `light-timings`
@@ -126,7 +128,9 @@ routes; nothing user-facing shows them.
   lights its timing for the way the route goes through; arrival times use the expected wait in
   place of the flat one, and the maps draw lights with a timing red (stopped on half or more of
   drives, or red on its cycle when under 45 s away) or green. While navigating, stopped at such
-  lights, the phone says roughly how much longer drives usually wait ("Usually about 20 s more").
+  lights, the phone says roughly how much longer drives usually wait ("Usually about 20 s more"),
+  counting down from the usual wait; the navigation service asks the engine every second, so the
+  count goes on with no fixes coming.
   Only drives that still stand count, as for speeds; passes go with their trip and after 180 days.
 - **Round trip:** loops through unexplored areas around the start. Driving loops that need a
   U-turn aren't offered, so when the first six directions leave fewer than three loops, the other

@@ -63,6 +63,16 @@ describe('finishing a route with what the map knows about its roads', () => {
     expect(done.usuallySlow).toBeUndefined();
   });
 
+  it('takes a main road’s estimate from the same road’s signs, not the built-up default', () => {
+    const path = base();
+    const last = path.points.coordinates.length - 1;
+    path.details!.max_speed = [[0, 5, 60], [5, last, 50]];
+    path.details!.max_speed_estimated = [[0, 5, false], [5, last, true]];
+    path.details!.road_class = [[0, last, 'trunk']];
+    path.details!.street_ref = [[0, last, '47']];
+    expect(finishRoute(route(path), path, NO_ROAD_FACTS, brisbane('12:00')).estimatedSpeedLimits).toEqual([{ from: 5, to: 10, kmh: 60 }]);
+  });
+
   it('lowers the limit in a school zone while it’s in force, and drops it on electronic signs', () => {
     const path = base();
     const rules = new Map([

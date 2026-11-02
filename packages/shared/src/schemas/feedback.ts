@@ -42,17 +42,17 @@ export type SpeedLimitReport = z.infer<typeof SpeedLimitReportSchema>;
 
 export const FEEDBACK_SCREENSHOT_MAX_BYTES = 2 * 1024 * 1024;
 
+export const FeedbackScreenshotSchema = z.object({
+  mediaType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  /** base64, no data: prefix */
+  data: z.string().max(Math.ceil((FEEDBACK_SCREENSHOT_MAX_BYTES * 4) / 3) + 4),
+});
+
 export const FeedbackCreateSchema = z.object({
   type: FeedbackTypeSchema,
   message: z.string().trim().min(3, 'Tell us a little more').max(4000),
   context: FeedbackContextSchema,
-  screenshot: z
-    .object({
-      mediaType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
-      /** base64, no data: prefix */
-      data: z.string().max(Math.ceil((FEEDBACK_SCREENSHOT_MAX_BYTES * 4) / 3) + 4),
-    })
-    .optional(),
+  screenshot: FeedbackScreenshotSchema.optional(),
   /** Only with type speed_limit, which needs it. */
   speedLimit: SpeedLimitReportSchema.optional(),
 }).refine((v) => (v.type === 'speed_limit') === (v.speedLimit !== undefined), { message: 'A speed limit report needs where it was', path: ['speedLimit'] });
@@ -83,3 +83,26 @@ export const FeedbackListQuerySchema = z.object({
 export const FeedbackUpdateSchema = z
   .object({ status: FeedbackStatusSchema.optional(), adminNotes: z.string().max(4000).optional() })
   .refine((v) => v.status !== undefined || v.adminNotes !== undefined, 'Nothing to update');
+
+/** The screen Android Auto's one-tap Report says it came from. */
+export const CAR_REPORT_SCREEN = 'Android Auto: driving';
+/** How long after a report from the car the driver can still add what was wrong. */
+export const CAR_REPORT_DAYS = 7;
+
+/** One of your own reports from the car, to add details to once it's safe. */
+export const CarReportSchema = z.object({
+  id: z.string(),
+  createdAt: z.string(),
+  /** The direction the car was showing, when there was one. */
+  showing: z.string().nullable(),
+  detailsAdded: z.boolean(),
+});
+export type CarReport = z.infer<typeof CarReportSchema>;
+export const CarReportListSchema = z.object({ reports: z.array(CarReportSchema) });
+
+/** What was wrong, added to a report sent from the car with one tap. */
+export const CarReportDetailsSchema = z.object({
+  message: z.string().trim().min(3, 'Tell us a little more').max(4000),
+  screenshot: FeedbackScreenshotSchema.optional(),
+});
+export type CarReportDetails = z.infer<typeof CarReportDetailsSchema>;

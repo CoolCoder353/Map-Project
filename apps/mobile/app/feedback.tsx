@@ -1,16 +1,25 @@
-import { FEEDBACK_SCREENSHOT_MAX_BYTES, FEEDBACK_TYPE_LABEL, type FeedbackCreate, type FeedbackType } from '@wayfinder/shared/schemas';
+import {
+  type CarReport,
+  type CarReportDetails,
+  CarReportListSchema,
+  FEEDBACK_SCREENSHOT_MAX_BYTES,
+  FEEDBACK_TYPE_LABEL,
+  type FeedbackCreate,
+  type FeedbackType,
+} from '@wayfinder/shared/schemas';
 import Constants from 'expo-constants';
 import * as ImagePicker from 'expo-image-picker';
 import { ArrowLeft, Bug, ImagePlus, Lightbulb, MessageSquare, Trash2 } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, Platform, ScrollView, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../src/lib/api';
+import { formatDateTime } from '../src/lib/format';
 import { goBack } from '../src/lib/goBack';
 import { CONTENT_MAX_WIDTH, useLayout } from '../src/lib/layout';
 import { lastMapView } from '../src/lib/mapView';
 import { space, useTheme } from '../src/lib/theme';
-import { Body, Button, Field, Notice, Segmented, Small, Title } from '../src/ui/kit';
+import { Body, Button, Card, Field, Notice, Segmented, Small, Title } from '../src/ui/kit';
 
 type Shot = { uri: string; base64: string; mediaType: 'image/jpeg' | 'image/png' | 'image/webp'; bytes: number };
 
@@ -23,6 +32,21 @@ export default function FeedbackScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  // The car's Report sends what it showed with one tap and says to explain later from here: your
+  // recent ones, to pick one and say what was wrong.
+  const [carReports, setCarReports] = useState<CarReport[]>([]);
+  const [about, setAbout] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    // None to show is no reason to stop anyone sending something new.
+    void api
+      .request('api/feedback/car-reports', { schema: CarReportListSchema })
+      .then((r) => live && setCarReports(r.reports))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
   const mapView = lastMapView();
   // Where a hardware keyboard is likely (not a phone), Enter sends, as it does in a chat box.
   const enterSends = !useLayout().phone;
@@ -57,6 +81,12 @@ export default function FeedbackScreen() {
     setBusy(true);
     setError(null);
     try {
+      if (about) {
+        const details: CarReportDetails = { message: message.trim(), ...(shot ? { screenshot: { mediaType: shot.mediaType, data: shot.base64 } } : {}) };
+        await api.request(`api/feedback/${about}/details`, { method: 'POST', body: details, timeoutMs: 120_000 });
+        setSent(true);
+        return;
+      }
       const body: FeedbackCreate = {
         type,
         message: message.trim(),
@@ -86,11 +116,24 @@ export default function FeedbackScreen() {
         <Title>Send feedback</Title>
         {sent ? (
           <>
-            <Notice tone="info">Thanks — your feedback was sent.</Notice>
+            <Notice tone="info">{about ? 'Thanks — that’s been added to your report from the car.' : 'Thanks — your feedback was sent.'}</Notice>
             <Button label="Done" onPress={() => goBack('/settings')} />
           </>
         ) : (
           <>
+            {carReports.length ? (
+              <View style={{ gap: space[2] }}>
+                <Text style={{ color: t.text2, fontSize: 13, fontWeight: '600' }}>Reports from the car</Text>
+                <Small>Pick one to say what was wrong, or leave them all unpicked to send something new.</Small>
+                {carReports.map((r) => (
+                  <Card key={r.id} selected={about === r.id} onPress={() => setAbout(about === r.id ? null : r.id)}>
+                    <Body>{formatDateTime(r.createdAt)}</Body>
+                    <Small>{`${r.showing ?? 'No directions showing'}${r.detailsAdded ? ' · details added' : ''}`}</Small>
+                  </Card>
+                ))}
+              </View>
+            ) : null}
+            {about ? null : (
             <Segmented<FeedbackType>
               label="Kind of feedback"
               value={type}
@@ -101,8 +144,9 @@ export default function FeedbackScreen() {
                 { value: 'other', label: FEEDBACK_TYPE_LABEL.other, icon: MessageSquare },
               ]}
             />
+            )}
             <Field
-              label={type === 'bug' ? 'What went wrong?' : type === 'idea' ? 'What would you like?' : 'Your message'}
+              label={about || type === 'bug' ? 'What went wrong?' : type === 'idea' ? 'What would you like?' : 'Your message'}
               value={message}
               onChangeText={setMessage}
               multiline
@@ -130,7 +174,7 @@ export default function FeedbackScreen() {
                 </>
               )}
             </View>
-            {mapView ? (
+            {mapView && !about ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
                 <View style={{ flex: 1 }}>
                   <Body>Include what the map was showing</Body>
@@ -139,7 +183,7 @@ export default function FeedbackScreen() {
                 <Switch accessibilityLabel="Include what the map was showing" value={includeMap} onValueChange={setIncludeMap} trackColor={{ true: t.accent, false: t.borderStrong }} />
               </View>
             ) : null}
-            <Small>Also sent: your Android version, phone model and the app version.</Small>
+            {about ? null : <Small>Also sent: your Android version, phone model and the app version.</Small>}
             {error ? <Notice tone="error">{error}</Notice> : null}
             <Button label="Send" onPress={() => void send()} busy={busy} disabled={message.trim().length < 3} />
           </>

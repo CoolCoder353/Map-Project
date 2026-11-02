@@ -77,7 +77,10 @@ is always one instruction with the exit actually taken, even where a stop on a d
 Newer servers add, each left out where empty:
 
 - `estimatedSpeedLimits`: the same runs where no limit is mapped and GraphHopper estimated the legal
-  default for the road. Kept apart so older apps never show a guess as a sign.
+  default for the road. Kept apart so older apps never show a guess as a sign. On a main road
+  (motorway, trunk, primary, secondary), which is always signposted, the estimate is the same road's
+  signposted limit within 2 km either side along the route (same route number, else name), or no
+  limit at all, never the built-up default of 50.
 - `trafficSignals` (driving only): `{ index, kind }`, the sets of lights along the route at their
   nearest geometry point; `kind` is `signals`, `crossing` or `ramp_meter`. A turn at a set of lights
   has `atTrafficLights: true` and text starting "At the lights, …", which older apps say as it is.
@@ -109,6 +112,8 @@ Newer servers add, each left out where empty:
 
 | Method | Path | Schema / notes |
 |---|---|---|
+| GET | `/api/feedback/car-reports` | Your own reports from Android Auto's **Report** in the last 7 days, newest first: `{ reports: [{ id, createdAt, showing, detailsAdded }] }`, `showing` the direction the car showed (or null) |
+| POST | `/api/feedback/:id/details` | `CarReportDetailsSchema` (`message`, optional `screenshot`) → `204`: adds what was wrong to one of your own reports from the car, within 7 days (anyone else's, or an older one, is `404`), under "Details from the driver"; a screenshot only if it has none. Three times per report, then `429`. `404 feedback_disabled` while feedback is off |
 | POST | `/api/feedback` | `FeedbackCreateSchema` → `201 { id }`. `404 feedback_disabled` while an admin has it switched off. 5 an hour per person; screenshot up to 2 MB. Android Auto's **Report** sends one too (`screen` "Android Auto: driving"), its message saying what the car showed. `type: "speed_limit"` needs `speedLimit` (`SpeedLimitReportSchema`: `location`, `shownKmh` or null, optional `headingDeg`, `estimated`, `signedKmh`), and only that type takes one; the Android Navigate screen sends it when the limit sign is tapped |
 
 ## Map (no auth)

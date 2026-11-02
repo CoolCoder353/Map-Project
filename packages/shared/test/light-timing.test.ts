@@ -68,7 +68,8 @@ describe('red or green when you get there', () => {
 describe('waiting at the lights', () => {
   it('says roughly how much longer, from how long you have waited', () => {
     expect(remainingWaitS(timing(), 0)).toBe(30);
-    expect(remainingWaitS(timing(), 25)).toBe(20);
+    expect(remainingWaitS(timing(), 18)).toBe(12);
+    expect(remainingWaitS(timing(), 29)).toBeNull();
     expect(remainingWaitS(timing(), 70)).toBeNull();
     expect(lightWaitText(30)).toBe('Usually about 30 s more');
     expect(lightWaitText(22)).toBe('Usually about 20 s more');

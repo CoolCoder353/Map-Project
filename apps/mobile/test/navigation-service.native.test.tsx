@@ -41,6 +41,9 @@ import * as NavLocation from '../src/nav/navigationLocation';
 const mockFeed = jest.mocked(NavLocation.setNavigationFixHandler).mock.calls[0]![0]!;
 const stopsAtLoad = jest.mocked(NavLocation.stopNavigationLocation).mock.calls.length;
 const mockResults: Array<{ state: object; events: object[] } | Error> = [];
+/** What the engine says between fixes; null leaves the state as it was. */
+let mockTick: object | null = null;
+const mockTicks: number[] = [];
 jest.mock('@wayfinder/nav', () => ({
   NavigationSession: class {
     mode: string;
@@ -53,6 +56,10 @@ jest.mock('@wayfinder/nav', () => ({
       return next ?? { state: { status: 'navigating' }, events: [] };
     }
     replaceRoute() {}
+    tick(now: number) {
+      mockTicks.push(now);
+      return mockTick ?? { status: 'navigating' };
+    }
   },
 }));
 
@@ -398,6 +405,27 @@ it('ends the trip by itself a little while after arriving, even with the phone l
     expect(mockSync).toHaveBeenCalled();
   } finally {
     now.mockRestore();
+  }
+});
+
+it('asks the engine every second between fixes, so a wait at the lights counts on with none coming', async () => {
+  jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
+  try {
+    mockTicks.length = 0;
+    navigation.start(route({ id: 'r1' }));
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    mockOnFix!(fix(153, -27.4, 1000));
+    mockTick = { status: 'navigating', lightWait: 'Usually about 25 s more' };
+    jest.advanceTimersByTime(1000);
+    expect(navigation.getSnapshot().state).toMatchObject({ lightWait: 'Usually about 25 s more' });
+    // Ended, it stops asking.
+    navigation.stop();
+    const asked = mockTicks.length;
+    jest.advanceTimersByTime(5000);
+    expect(mockTicks.length).toBe(asked);
+  } finally {
+    mockTick = null;
+    jest.useRealTimers();
   }
 });
 

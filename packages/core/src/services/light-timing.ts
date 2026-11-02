@@ -13,7 +13,7 @@ import {
   utcOffsetS,
 } from '@wayfinder/shared';
 import type { DbClient } from '../db/pool.js';
-import { dayKindOf, placeFixes, timeAlong } from './road-speeds.js';
+import { dayKindOf, placeFixes, timeAlong, timedBetween } from './road-speeds.js';
 
 /**
  * How long each set of traffic lights usually holds a car going each way through it, learned from
@@ -39,7 +39,7 @@ const APPROACH_M = 120;
 const COVER_BEFORE_M = 100;
 /** ...to this far past them... */
 const COVER_AFTER_M = 10;
-/** ...with no gap longer than this: anything sparser can't time a light. */
+/** ...with no gap longer than this while moving (standing still, there are none: see timedBetween). */
 const MAX_GAP_MS = 5000;
 /** Slower than this between two fixes is standing still. */
 const STOP_MPS = 1.5;
@@ -97,7 +97,7 @@ export function lightPasses(
     const last = placed.findIndex((p) => p.m >= lm + COVER_AFTER_M);
     if (first <= 0 || last < 0) continue;
     let gappy = false;
-    for (let i = first; i <= last; i++) if (placed[i]!.ts - placed[i - 1]!.ts > MAX_GAP_MS) gappy = true;
+    for (let i = first; i <= last; i++) if (!timedBetween(placed[i - 1]!, placed[i]!, MAX_GAP_MS)) gappy = true;
     if (gappy) continue;
     const crossTs = timeAlong(placed, lm, MAX_GAP_MS);
     const direction = directionAt(matched, cum, lm);

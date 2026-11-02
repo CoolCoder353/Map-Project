@@ -147,6 +147,8 @@ export function createNavigationService(): NavigationService {
   let sessionId = '';
   let watch: Location.LocationSubscription | null = null;
   let uploader: ReturnType<typeof setInterval> | null = null;
+  /** Asks the engine every second between fixes (see NavigationSession.tick). */
+  let ticker: ReturnType<typeof setInterval> | null = null;
   let reroutingNow = false;
   /** When the request for a new route in flight was made, and its number: one given up on is ignored. */
   let reroutingSince = 0;
@@ -373,6 +375,8 @@ export function createNavigationService(): NavigationService {
     if (wasActive && !wasSimulated) void inTurn(stopNavigationLocation).catch(() => undefined);
     if (uploader) clearInterval(uploader);
     uploader = null;
+    if (ticker) clearInterval(ticker);
+    ticker = null;
     session = null;
     pendingReroute = null;
     reroutingNow = false;
@@ -411,6 +415,14 @@ export function createNavigationService(): NavigationService {
     set({ ...idle(), active: true, route, destinationName: opts.destinationName ?? null });
     // A test drive is fed its fixes by the caller and saves nothing.
     if (simulated) return;
+    // Standing still, the phone sends no fixes (one a second or every 5 m): a wait at the lights still
+    // counts on. (A test drive is fed a fix every second, so needs none.)
+    ticker = setInterval(() => {
+      const nav = session;
+      if (!nav || !snap.state) return;
+      const state = nav.tick(Date.now());
+      if (state !== snap.state) set({ state });
+    }, 1000);
     // No fix yet after a while: say so, rather than leave the car on "Starting…" with no reason.
     later(FIRST_FIX_WAIT_MS, () => {
       if (snap.position === null && snap.error === null) set({ error: NO_FIX_YET });

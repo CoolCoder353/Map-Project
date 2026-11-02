@@ -67,6 +67,12 @@ export interface NavState {
 const STOPPED_MPS = 0.8;
 /** Stopped within this far before a set of lights is waiting at it. */
 const WAITING_AT_LIGHTS_M = 60;
+/**
+ * The phone asks for a fix every second or every 5 m, so a car standing still sends none. This long
+ * without a fix, after one slower than SLOWING_MPS, is standing still.
+ */
+const SILENT_MS = 3000;
+const SLOWING_MPS = 7;
 
 export class NavigationSession {
   readonly mode: Mode;
@@ -83,6 +89,8 @@ export class NavigationSession {
   private timedLights: Array<{ m: number; timing: LightTiming }> = [];
   /** When the car came to a stop, while it's stopped. */
   private stoppedSince: number | null = null;
+  /** The last fix followed on the route, for telling a car standing still from one still moving. */
+  private lastFix: NavFix | null = null;
   private announced = new Set<string>();
   private lastSegment = 0;
   private lastProgress = 0;
@@ -143,6 +151,7 @@ export class NavigationSession {
     this.lightsAt = (route.trafficSignals ?? []).filter((s) => s.kind !== 'ramp_meter').map((s) => this.cum[Math.min(s.index, this.cum.length - 1)]!);
     this.timedLights = (route.trafficSignals ?? []).flatMap((s) => (s.timing ? [{ m: this.cum[Math.min(s.index, this.cum.length - 1)]!, timing: s.timing }] : []));
     this.stoppedSince = null;
+    this.lastFix = null;
     this.announced = new Set();
     this.lastSegment = 0;
     this.lastProgress = 0;
@@ -172,17 +181,36 @@ export class NavigationSession {
     };
   }
 
+  /**
+   * Called every second or so between fixes: a car that slowed just short of a set of lights and has
+   * sent no fix since is waiting there (the phone sends none standing still), so how much longer is
+   * counted on from the time, not only from fixes.
+   */
+  tick(nowMs: number): NavState {
+    const last = this.lastFix;
+    if (this.mode !== 'car' || this.state.status !== 'navigating' || !last || nowMs - last.ts < SILENT_MS) return this.state;
+    const speed = last.speedMps;
+    if (speed === null || speed === undefined || !Number.isFinite(speed) || speed > SLOWING_MPS) return this.state;
+    const lightWait = this.waitText(this.state.progressM, (this.stoppedSince ??= last.ts), nowMs);
+    if (lightWait !== this.state.lightWait) this.state = { ...this.state, lightWait };
+    return this.state;
+  }
+
+  private waitText(progress: number, since: number, nowMs: number): string | null {
+    const at = this.timedLights.find((l) => l.m >= progress - 5 && l.m - progress <= WAITING_AT_LIGHTS_M);
+    if (!at || at.timing.waits.length === 0) return null;
+    return lightWaitText(remainingWaitS(at.timing, (nowMs - since) / 1000));
+  }
+
   /** Stopped just before a set of lights with a known timing: about how much longer, from how long you've waited. */
   private waitAtLights(fix: NavFix, progress: number): string | null {
+    this.lastFix = fix;
     const speed = fix.speedMps;
     if (speed === null || speed === undefined || !Number.isFinite(speed) || speed > STOPPED_MPS) {
       this.stoppedSince = null;
       return null;
     }
-    this.stoppedSince ??= fix.ts;
-    const at = this.timedLights.find((l) => l.m >= progress - 5 && l.m - progress <= WAITING_AT_LIGHTS_M);
-    if (!at || at.timing.waits.length === 0) return null;
-    return lightWaitText(remainingWaitS(at.timing, (fix.ts - this.stoppedSince) / 1000));
+    return this.waitText(progress, (this.stoppedSince ??= fix.ts), fix.ts);
   }
 
   /** The limit on route segment i (between geometry points i and i + 1): signposted first, else estimated. */

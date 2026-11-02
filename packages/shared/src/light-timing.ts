@@ -96,13 +96,13 @@ export function expectedDelayS(timing: LightTiming): number {
 }
 
 /**
- * Stopped at the lights for `waitedS` already: about how much longer, going by the waits of drives
- * that stopped there. Null when you've waited longer than most do (it should change soon).
+ * Stopped at the lights for `waitedS` already: about how much longer, counting down from the usual
+ * wait there, so it only ever goes down. Null once you've waited about as long as usual (it should
+ * change soon).
  */
 export function remainingWaitS(timing: LightTiming, waitedS: number): number | null {
-  const longer = timing.waits.filter((w) => w > waitedS + 2);
-  if (longer.length === 0) return null;
-  return longer[Math.floor(longer.length / 2)]! - waitedS;
+  const left = timing.waitS - waitedS;
+  return left > 2 ? left : null;
 }
 
 /** Shown while stopped at a set of lights with a known wait. Rough on purpose: it's what usually happens, not a countdown. */

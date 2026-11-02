@@ -295,3 +295,63 @@ export function withoutCovered(runs: readonly SpeedLimitRun[], cover: readonly S
 
 /** Shown with a route whose roads are usually slow at this time. */
 export const USUALLY_SLOW_TEXT = 'Usually slow at this time';
+
+/** Roads important enough always to be signposted: a limit guessed for one from the legal default is a poor guess. */
+export const MAIN_ROAD_CLASSES = new Set(['motorway', 'trunk', 'primary', 'secondary']);
+/** How far along the same road a signposted limit is carried to a stretch with none mapped. */
+const CARRY_LIMIT_M = 2000;
+
+type TextRun = readonly [number, number, string | null];
+
+/**
+ * Estimated limits on main roads, mended. The engine estimates a stretch with no limit mapped from
+ * the legal default for a built-up area (50), but a highway is always signposted, usually higher:
+ * there the same road's signposted limit on either side, within CARRY_LIMIT_M, is a better guess,
+ * and with none the stretch is better shown with no limit than a wrong one. The same road is the
+ * same route number (`refs`), else the same name; smaller roads keep the legal default.
+ */
+export function mainRoadEstimates(
+  estimated: readonly Run[],
+  signed: readonly Run[],
+  roadClass: readonly TextRun[],
+  names: readonly TextRun[],
+  refs: readonly TextRun[],
+  coords: readonly LngLat[],
+): Array<[number, number, number | null]> {
+  const n = coords.length - 1;
+  if (n < 1 || roadClass.length === 0) return estimated.map(([a, b, v]) => [a, b, v]);
+  const perSegment = <T>(runs: ReadonlyArray<readonly [number, number, T]>): Array<T | null> => {
+    const out = new Array<T | null>(n).fill(null);
+    for (const [a, b, v] of runs) for (let i = a; i < b && i < n; i++) out[i] = v;
+    return out;
+  };
+  const signs = perSegment(signed);
+  const classes = perSegment(roadClass);
+  const nameOf = perSegment(names);
+  const refOf = perSegment(refs);
+  const road = (i: number) => refOf[i] || nameOf[i] || null;
+  const len = Array.from({ length: n }, (_, i) => haversineM(coords[i]!, coords[i + 1]!));
+  const carried = (i: number): number | null => {
+    const key = road(i);
+    if (!key) return null;
+    for (const dir of [-1, 1]) {
+      let d = 0;
+      for (let j = i + dir; j >= 0 && j < n && road(j) === key; j += dir) {
+        if (signs[j] !== null && signs[j] !== undefined) return signs[j]!;
+        d += len[j]!;
+        if (d > CARRY_LIMIT_M) break;
+      }
+    }
+    return null;
+  };
+  const out: Array<[number, number, number | null]> = [];
+  for (const [a, b, kmh] of estimated) {
+    for (let i = a; i < b && i < n; i++) {
+      const v = MAIN_ROAD_CLASSES.has(classes[i] ?? '') ? carried(i) : kmh;
+      const last = out.at(-1);
+      if (last && last[1] === i && last[2] === v) last[1] = i + 1;
+      else out.push([i, i + 1, v]);
+    }
+  }
+  return out;
+}

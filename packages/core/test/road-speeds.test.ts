@@ -44,6 +44,16 @@ describe('how fast trips went along each road', () => {
     expect(samples[0]!.kmh).toBeCloseTo((1000 / 160) * 3.6, 0);
   });
 
+  it('counts a long stop with no fixes, as the phone sends none standing still', () => {
+    // Two minutes stopped half way along road 2: one fix as it stops, the next as it moves off.
+    const fixes = drive(() => 10).filter((f) => f.ts <= t0 + 100_000);
+    const stoppedAt = fixes.at(-1)!;
+    const rest = drive(() => 10).filter((f) => f.ts > t0 + 100_000).map((f) => ({ ...f, ts: f.ts + 120_000 }));
+    const samples = speedSamples(matched, ways, [...fixes, { ...stoppedAt, ts: stoppedAt.ts + 120_000 }, ...rest]);
+    expect(samples).toHaveLength(1);
+    expect(samples[0]!.kmh).toBeCloseTo((1000 / 220) * 3.6, 0);
+  });
+
   it('leaves out stretches it can’t time well', () => {
     // A gap of a minute in the fixes.
     const gappy = drive(() => 10).filter((f) => f.ts < t0 + 40_000 || f.ts > t0 + 100_000);

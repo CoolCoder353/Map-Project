@@ -7,6 +7,7 @@ import {
   applyWayLimitRules,
   atNthLights,
   cumulativeM,
+  mainRoadEstimates,
   markTurnsAtLights,
   signalsAlongRoute,
   splitEstimatedLimits,
@@ -180,6 +181,42 @@ describe('speed limits beyond the engine’s', () => {
 
   it('drops estimates where a better limit already covers the road', () => {
     expect(withoutCovered([{ from: 0, to: 3, kmh: 50 }, { from: 5, to: 8, kmh: 50 }], [{ from: 2, to: 4, kmh: 40 }])).toEqual([{ from: 5, to: 8, kmh: 50 }]);
+  });
+});
+
+describe('estimated limits on main roads', () => {
+  // 3 km east, a point every 100 m: 30 segments.
+  const coords = line(31);
+  const highway: Array<[number, number, string]> = [[0, 30, 'trunk']];
+  const ref: Array<[number, number, string | null]> = [[0, 30, '47']];
+
+  it('take the signposted limit of the same road next to them, rather than a built-up area’s 50', () => {
+    // Cleveland Redland Bay Road: signposted 60 for a kilometre, then no limit mapped, guessed at 50.
+    const signed: Array<[number, number, number | null]> = [[0, 10, 60], [10, 30, null]];
+    expect(mainRoadEstimates([[10, 30, 50]], signed, highway, [], ref, coords)).toEqual([[10, 30, 60]]);
+    // From further on too, when that's the nearer side.
+    expect(mainRoadEstimates([[0, 20, 50]], [[0, 20, null], [20, 30, 70]], highway, [], ref, coords)).toEqual([[0, 20, 70]]);
+  });
+
+  it('go by the road’s name where it has no number', () => {
+    const names: Array<[number, number, string | null]> = [[0, 30, 'Panorama Drive']];
+    expect(mainRoadEstimates([[10, 30, 50]], [[0, 10, 60], [10, 30, null]], [[0, 30, 'primary']], names, [], coords)).toEqual([[10, 30, 60]]);
+  });
+
+  it('are left out where the same road has no sign within reach', () => {
+    // Signposted on another road, or more than 2 km back along this one.
+    const otherRoad: Array<[number, number, string | null]> = [[0, 10, '21'], [10, 30, '47']];
+    expect(mainRoadEstimates([[10, 30, 50]], [[0, 10, 60], [10, 30, null]], highway, [], otherRoad, coords)).toEqual([[10, 30, null]]);
+    expect(mainRoadEstimates([[25, 30, 50]], [[0, 2, 60], [2, 30, null]], highway, [], ref, coords)).toEqual([[25, 30, null]]);
+    // No name or number to go by.
+    expect(mainRoadEstimates([[10, 30, 50]], [[0, 10, 60], [10, 30, null]], highway, [], [], coords)).toEqual([[10, 30, null]]);
+  });
+
+  it('stay as they are on smaller roads, where the legal default is the limit', () => {
+    const streets: Array<[number, number, string]> = [[0, 30, 'residential']];
+    expect(mainRoadEstimates([[10, 30, 50]], [[0, 10, 60], [10, 30, null]], streets, [], ref, coords)).toEqual([[10, 30, 50]]);
+    // A graph that gives no road classes changes nothing.
+    expect(mainRoadEstimates([[10, 30, 50]], [], [], [], [], coords)).toEqual([[10, 30, 50]]);
   });
 });
 

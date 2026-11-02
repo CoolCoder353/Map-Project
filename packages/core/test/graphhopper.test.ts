@@ -62,7 +62,7 @@ describe('GraphHopper requests', () => {
       instructions: true,
       calc_points: true,
       locale: 'en',
-      details: ['osm_way_id', 'max_speed', 'max_speed_estimated', 'road_environment', 'time'],
+      details: ['osm_way_id', 'max_speed', 'max_speed_estimated', 'road_environment', 'time', 'road_class', 'street_name', 'street_ref'],
     });
   });
 

@@ -10,6 +10,7 @@ import {
   bboxOf,
   cumulativeM,
   directionAt,
+  mainRoadEstimates,
   markTurnsAtLights,
   signalsAlongRoute,
   speedLimitRuns,
@@ -147,7 +148,11 @@ export function finishRoute(route: Route, path: GhPath, facts: RoadFacts, now: D
   const startZone = coords[0] ? timeZoneAt(coords[0]) : stateTimeZone(null);
 
   // Limits: the engine's, split into signposted and estimated, then the roads' own rules on top.
-  const { signed, estimated } = splitEstimatedLimits(path.details?.max_speed ?? [], path.details?.max_speed_estimated ?? []);
+  const split = splitEstimatedLimits(path.details?.max_speed ?? [], path.details?.max_speed_estimated ?? []);
+  const { signed } = split;
+  // On a highway, the same road's signs beat the built-up default (or no limit beats a wrong one).
+  const d = path.details;
+  const estimated = mainRoadEstimates(split.estimated, signed, d?.road_class ?? [], d?.street_name ?? [], d?.street_ref ?? [], coords);
   const ruleFor = (wayId: number) => {
     const rule = facts.rules.get(wayId);
     if (!rule) return null;

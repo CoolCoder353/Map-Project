@@ -240,7 +240,7 @@ describe('the lights ahead', () => {
     const s = new NavigationSession(timed());
     s.update(at(500, 0, 14));
     expect(s.update(at(980, 30_000, 0)).state.lightWait).toBe('Usually about 30 s more');
-    expect(s.update(at(980, 55_000, 0.2)).state.lightWait).toBe('Usually about 20 s more');
+    expect(s.update(at(980, 45_000, 0.2)).state.lightWait).toBe('Usually about 15 s more');
     expect(s.update(at(980, 120_000, 0)).state.lightWait).toBe('Usually changes soon');
     // Moving again, or stopped well short of them, there's nothing to say.
     expect(s.update(at(985, 121_000, 3)).state.lightWait).toBeNull();
@@ -248,6 +248,28 @@ describe('the lights ahead', () => {
     expect(short.update(at(600, 0, 0)).state.lightWait).toBeNull();
     // A phone that doesn't give its speed can't tell.
     expect(short.update(at(980, 1000, null)).state.lightWait).toBeNull();
+  });
+
+  it('keep saying how much longer when the phone sends no fixes while you wait', () => {
+    // Android sends a fix every second or 5 m: slowing to a stop just short of the lights, then nothing.
+    const s = new NavigationSession(timed());
+    s.update(at(900, 0, 14));
+    s.update(at(975, 10_000, 4));
+    expect(s.tick(11_000).lightWait).toBeNull(); // a second's silence is just the next fix not here yet
+    expect(s.tick(14_000).lightWait).toBe('Usually about 25 s more');
+    expect(s.tick(30_000).lightWait).toBe('Usually about 10 s more');
+    expect(s.tick(130_000).lightWait).toBe('Usually changes soon');
+    // Moving off, the next fix ends the wait.
+    expect(s.update(at(990, 131_000, 6)).state.lightWait).toBeNull();
+    // Silence while driving fast (a tunnel, a lost signal) isn't a wait at the lights.
+    const fast = new NavigationSession(timed());
+    fast.update(at(975, 0, 14));
+    expect(fast.tick(10_000).lightWait).toBeNull();
+    // Nor is silence well short of the lights, or before the first fix.
+    const short = new NavigationSession(timed());
+    expect(short.tick(10_000).lightWait).toBeNull();
+    short.update(at(500, 0, 2));
+    expect(short.tick(10_000).lightWait).toBeNull();
   });
 
   it('aren’t marked walking, or with no known timing', () => {

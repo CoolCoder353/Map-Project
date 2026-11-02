@@ -237,6 +237,18 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   and "Usually about … more" while stopped. Expect few or no fixed cycles: most lights here adjust
   to traffic. The pass detector's stop and queue rules are set from first principles, not yet
   tuned against real drives.
+- **The 2 November playtest (app 0.5.6), fixed 2026-11-02.** Four reports. The car's one-tap
+  Report says the driver can explain from Settings → Send feedback, which couldn't attach anything
+  to it: it now lists your reports from the car to add to. The car's position marker vanished while
+  the map kept following: MapLibre reports a tile that fails to load (a weak signal) as the map
+  failing, which reloaded the whole style on the next update, and the marker waited on the style;
+  now only a style that never loaded is retried, and the marker and camera don't wait on it (by
+  reasoning from the code; not reproduced, as the head unit isn't set up). Cleveland Redland Bay
+  Road, unsigned in OSM at Cleveland, showed an estimated 50: main roads now take the same road's
+  signs or show none. A right turn at Boundary Road and Panorama Drive reported as banned is
+  allowed in OSM and was made on the drive; left as it is. Found in the playtest's fixes: the phone
+  sends no fixes standing still, so passes through lights with a stop were all dropped (every
+  light would have learned "usually green") and the wait line never showed; both fixed.
 - **The 1 October reports** of wrong speed limits and traffic lights not recognised: the limits
   matched OSM then; school zones were the likely cause, and lights weren't used at all. Both are
   addressed above, not yet confirmed with the reporter.

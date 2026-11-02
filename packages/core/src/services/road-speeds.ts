@@ -60,13 +60,28 @@ export function placeFixes(matched: readonly LngLat[], cum: readonly number[], f
   return placed;
 }
 
-/** When the trip was at distance m along the line, or null where the fixes either side are more than `maxGapMs` apart. */
+/** Two fixes this close along the line were standing still between them, however long apart in time. */
+const STILL_M = 15;
+/** ...up to this long: longer, it was parked, or the phone lost its position, not a wait in traffic. */
+const MAX_STILL_MS = 10 * 60_000;
+
+/**
+ * Whether the time between two fixes is known: they're at most `maxGapMs` apart, or the car didn't
+ * move between them. Navigation asks for a fix every second or every 5 m, so a car waiting at the
+ * lights sends none until it moves off; that silence is a wait, not missing data.
+ */
+export function timedBetween(a: PlacedFix, b: PlacedFix, maxGapMs: number): boolean {
+  const gap = b.ts - a.ts;
+  return gap <= maxGapMs || (b.m - a.m <= STILL_M && gap <= MAX_STILL_MS);
+}
+
+/** When the trip was at distance m along the line, or null where the time between the fixes either side isn't known. */
 export function timeAlong(placed: readonly PlacedFix[], m: number, maxGapMs: number): number | null {
   const after = placed.findIndex((p) => p.m >= m);
   if (after <= 0) return null;
   const a = placed[after - 1]!;
   const b = placed[after]!;
-  if (b.ts - a.ts > maxGapMs) return null;
+  if (!timedBetween(a, b, maxGapMs)) return null;
   return b.m === a.m ? a.ts : a.ts + ((b.ts - a.ts) * (m - a.m)) / (b.m - a.m);
 }
 

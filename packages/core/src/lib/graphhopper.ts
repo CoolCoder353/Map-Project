@@ -33,6 +33,9 @@ export interface GhPath {
     max_speed_estimated?: Array<[number, number, boolean | null]>;
     road_environment?: Array<[number, number, string]>;
     time?: Array<[number, number, number]>;
+    road_class?: Array<[number, number, string]>;
+    street_name?: Array<[number, number, string | null]>;
+    street_ref?: Array<[number, number, string | null]>;
   };
 }
 
@@ -89,7 +92,7 @@ const BASE_DETAILS = ['osm_way_id', 'max_speed'];
  * Details for lights and travel times. `max_speed_estimated` only exists in graphs built with the
  * limit estimates switched on, so until a graph like that is in, routes go without it.
  */
-const FULL_DETAILS = [...BASE_DETAILS, 'max_speed_estimated', 'road_environment', 'time'];
+const FULL_DETAILS = [...BASE_DETAILS, 'max_speed_estimated', 'road_environment', 'time', 'road_class', 'street_name', 'street_ref'];
 /** How long to keep to the base details after the graph turned the full ones down. */
 const BASE_DETAILS_FOR_MS = 10 * 60_000;
 

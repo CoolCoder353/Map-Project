@@ -154,6 +154,7 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
     val m = map ?: return
     val url = styleLoads.next(if (carContext.isDarkMode) styles.second else styles.first) ?: return
     m.setStyle(Style.Builder().fromUri(url)) { style ->
+      styleLoads.loaded()
       addLayers(style)
       applyScene()
     }
@@ -205,7 +206,13 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
   }
 
   private fun applyScene() {
-    val style = map?.style?.takeIf { it.isFullyLoaded } ?: return
+    // The camera and the car's marker don't wait on the style: while one loads, the map still
+    // follows the car, with its marker over it.
+    val style = map?.style?.takeIf { it.isFullyLoaded } ?: run {
+      applyCamera()
+      applyOverlays()
+      return
+    }
     val d = SceneLayout.drawing(scene)
     style.getSourceAs<GeoJsonSource>(SELECTED)?.setGeoJson(MapFeatures.lines(listOf(d.selected)))
     style.getSourceAs<GeoJsonSource>(OTHERS)?.setGeoJson(MapFeatures.lines(d.others))
@@ -226,7 +233,7 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
   private fun applyOverlays() {
     val s = scene as? MapScene.Following
     puck?.let { p ->
-      val on = s != null && map?.style?.isFullyLoaded == true && followingCar()
+      val on = s != null && map != null && followingCar()
       p.visibility = if (on) View.VISIBLE else View.GONE
       if (on && !visible.isEmpty) {
         val (x, y) = SceneLayout.followPoint(visible.left, visible.top, visible.right, visible.bottom)

@@ -12,15 +12,20 @@ const signals = [{ id: '7', lon: light[0], lat: light[1], kind: 'signals' as con
 const t0 = Date.parse('2026-11-02T08:00:00+10:00');
 const local8am = 8 * 3600;
 
-/** Fixes every `everyS` along the road at 10 m/s, stopping `stopS` seconds at `stopAtM`. */
-function drive({ stopAtM = 990, stopS = 0, everyS = 1 } = {}) {
+/**
+ * Fixes every `everyS` along the road at 10 m/s, stopping `stopS` seconds at `stopAtM`. `silentStill`
+ * leaves out the fixes while stopped, as the phone does: navigation asks for one a second or every
+ * 5 m, so a car standing at the lights gets none until it moves off.
+ */
+function drive({ stopAtM = 990, stopS = 0, everyS = 1, silentStill = false } = {}) {
   const fixes: Array<{ lon: number; lat: number; ts: number }> = [];
   let m = 0;
   let ts = t0;
   let held = 0;
   while (m <= 2000) {
     const p = destination(east(m), 0, 3);
-    fixes.push({ lon: p[0], lat: p[1], ts });
+    const still = m >= stopAtM && held > 0 && held < stopS;
+    if (!(silentStill && still)) fixes.push({ lon: p[0], lat: p[1], ts });
     if (m >= stopAtM && held < stopS) held += everyS;
     else m += 10 * everyS;
     ts += everyS * 1000;
@@ -43,6 +48,16 @@ describe('timing a drive through the lights', () => {
     // Stopped 10 m short after 99 s, last still 30 s later; first in the queue, so green 1.5 s before moving.
     expect(pass!.arriveS).toBeCloseTo(local8am + 99, 0);
     expect(pass!.greenS).toBeCloseTo(local8am + 129 - 1.5, 0);
+  });
+
+  it('times a wait with no fixes while stopped, as the phone sends none standing still', () => {
+    const [pass] = lightPasses(matched, drive({ stopS: 30, silentStill: true }), signals);
+    expect(pass).toMatchObject({ stopped: true });
+    expect(pass!.waitS).toBeCloseTo(30, -1);
+    expect(pass!.greenS).toBeCloseTo(local8am + 129 - 1.5, -0.5);
+    // But a silence while moving is still a gap that can't be timed.
+    const gap = drive().filter((f) => f.ts < t0 + 95_000 || f.ts > t0 + 105_000);
+    expect(lightPasses(matched, gap, signals)).toEqual([]);
   });
 
   it('waits back in the queue, too deep to say when they turned green', () => {

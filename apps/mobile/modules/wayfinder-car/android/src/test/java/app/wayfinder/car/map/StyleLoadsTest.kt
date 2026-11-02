@@ -24,6 +24,22 @@ class StyleLoadsTest {
     assertNull(loads.next(light))
   }
 
+  /**
+   * MapLibre reports any failed load as the map failing: a tile on a weak signal mid-drive as much as
+   * the style itself. Once the style is in, that's no reason to load it all again, which blanked the
+   * map and hid the car's position marker on every navigation update until a load got through.
+   */
+  @Test fun keepsALoadedStyleWhenOnlyATileFails() {
+    val loads = StyleLoads()
+    loads.next(light)
+    loads.loaded()
+    loads.failed()
+    assertNull("a tile failing isn't the style failing", loads.next(light))
+    assertEquals("night still falls", dark, loads.next(dark))
+    loads.failed() // the night style itself failing, before it's in
+    assertEquals(dark, loads.next(dark))
+  }
+
   @Test fun startsAfreshWithANewMap() {
     val loads = StyleLoads()
     loads.next(light)

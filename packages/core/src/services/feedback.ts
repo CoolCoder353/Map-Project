@@ -1,4 +1,8 @@
 import {
+  CAR_REPORT_DAYS,
+  CAR_REPORT_SCREEN,
+  type CarReport,
+  type CarReportDetails,
   FEEDBACK_SCREENSHOT_MAX_BYTES,
   type FeedbackContext,
   type FeedbackCreate,
@@ -53,6 +57,15 @@ const MAGIC: Record<string, (b: Buffer) => boolean> = {
 };
 
 
+/** A screenshot's bytes, checked to be an image of a sensible size. */
+function screenshotBytes(shot: FeedbackCreate['screenshot']): Buffer | null {
+  if (!shot) return null;
+  const image = Buffer.from(shot.data, 'base64');
+  if (image.length === 0 || image.length > FEEDBACK_SCREENSHOT_MAX_BYTES) throw badRequest('The screenshot must be under 2 MB');
+  if (!MAGIC[shot.mediaType]!(image)) throw badRequest('The screenshot isn’t a JPEG, PNG or WebP image');
+  return image;
+}
+
 /** A user's report. Rejected when feedback is switched off, too frequent, or the image isn't one. */
 export async function createFeedback(db: DbClient, userId: string, input: FeedbackCreate): Promise<FeedbackItem> {
   if (!(await getAppSettings(db)).feedbackEnabled) throw new AppError(404, 'feedback_disabled', 'Feedback is turned off');
@@ -63,12 +76,7 @@ export async function createFeedback(db: DbClient, userId: string, input: Feedba
   if (Number(recent.rows[0]!.n) >= REPORTS_PER_HOUR) {
     throw new AppError(429, 'rate_limited', 'Thanks — that’s a lot of reports in an hour. Please try again later.');
   }
-  let image: Buffer | null = null;
-  if (input.screenshot) {
-    image = Buffer.from(input.screenshot.data, 'base64');
-    if (image.length === 0 || image.length > FEEDBACK_SCREENSHOT_MAX_BYTES) throw badRequest('The screenshot must be under 2 MB');
-    if (!MAGIC[input.screenshot.mediaType]!(image)) throw badRequest('The screenshot isn’t a JPEG, PNG or WebP image');
-  }
+  const image = screenshotBytes(input.screenshot);
   const r = await db.query<{ id: string }>(
     `INSERT INTO feedback (user_id, type, message, context, screenshot, screenshot_type, speed_limit)
      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
@@ -137,4 +145,55 @@ export async function deleteFeedback(db: DbClient, id: string): Promise<void> {
 
 export async function countNewFeedback(db: DbClient): Promise<number> {
   return Number((await db.query<{ n: string }>(`SELECT count(*) AS n FROM feedback WHERE status = 'new'`)).rows[0]!.n);
+}
+
+/** Starts each lot of details added to a report from the car. */
+export const DRIVER_DETAILS = 'Details from the driver';
+/** Times details can be added to one report: enough to correct yourself, not a chat. */
+export const MAX_DETAILS = 3;
+
+/**
+ * Your own reports from the car in the last CAR_REPORT_DAYS, newest first. The car's Report sends
+ * what it showed with one tap and says the driver can explain later from Settings → Send feedback;
+ * these are what they can explain.
+ */
+export async function carReports(db: DbClient, userId: string): Promise<CarReport[]> {
+  const r = await db.query<{ id: string; message: string; created_at: Date }>(
+    `SELECT id, message, created_at FROM feedback
+     WHERE user_id = $1 AND context->>'screen' = $2 AND created_at > now() - make_interval(days => $3)
+     ORDER BY created_at DESC LIMIT 20`,
+    [userId, CAR_REPORT_SCREEN, CAR_REPORT_DAYS],
+  );
+  return r.rows.map((x) => ({
+    id: x.id,
+    createdAt: x.created_at.toISOString(),
+    showing: /^Showing: "(.*)"/m.exec(x.message)?.[1] ?? null,
+    detailsAdded: x.message.includes(DRIVER_DETAILS),
+  }));
+}
+
+/**
+ * Add what was wrong to one of your own reports from the car (and a screenshot, if it has none),
+ * within CAR_REPORT_DAYS of sending it. Anyone else's report, or an older one, isn't found.
+ */
+export async function addCarReportDetails(db: DbClient, userId: string, id: string, input: CarReportDetails, now = new Date()): Promise<void> {
+  if (!(await getAppSettings(db)).feedbackEnabled) throw new AppError(404, 'feedback_disabled', 'Feedback is turned off');
+  if (!isUuid(id)) throw notFound('No such report from the car');
+  const r = await db.query<{ message: string }>(
+    `SELECT message FROM feedback
+     WHERE id = $1 AND user_id = $2 AND context->>'screen' = $3 AND created_at > now() - make_interval(days => $4)`,
+    [id, userId, CAR_REPORT_SCREEN, CAR_REPORT_DAYS],
+  );
+  const report = r.rows[0];
+  if (!report) throw notFound('No such report from the car');
+  if (report.message.split(DRIVER_DETAILS).length - 1 >= MAX_DETAILS) {
+    throw new AppError(429, 'rate_limited', 'That report already has all the details it can take. Send anything else as new feedback.');
+  }
+  const image = screenshotBytes(input.screenshot);
+  const when = now.toLocaleString('en-AU', { timeZone: 'Australia/Brisbane', dateStyle: 'medium', timeStyle: 'short' });
+  await db.query(
+    `UPDATE feedback SET message = message || $2, screenshot = coalesce(screenshot, $3), screenshot_type = coalesce(screenshot_type, $4), updated_at = now()
+     WHERE id = $1`,
+    [id, `\n\n${DRIVER_DETAILS}, ${when}:\n${input.message}`, image, image ? input.screenshot!.mediaType : null],
+  );
 }

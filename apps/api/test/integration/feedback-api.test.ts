@@ -32,6 +32,8 @@ describe('user feedback', () => {
     const res = await send(sam, {});
     expect(res.statusCode).toBe(404);
     expect(res.json().error.code).toBe('feedback_disabled');
+    const details = await ta.app.inject({ method: 'POST', url: '/api/feedback/11111111-1111-4111-8111-111111111111/details', headers: await auth(sam), payload: { message: 'What went wrong' } });
+    expect(details.json().error.code).toBe('feedback_disabled');
   });
 
   it('an admin switches it on; users can then send a report with a screenshot', async () => {
@@ -98,6 +100,39 @@ describe('user feedback', () => {
     expect((await ta.app.inject({ method: 'GET', url: `/api/admin/feedback/${reportId}`, headers: admins })).statusCode).toBe(404);
     const actions = (await ta.app.inject({ method: 'GET', url: '/api/admin/audit?action=feedback.&limit=50', headers: admins })).json().items.map((a: { action: string }) => a.action);
     expect(actions).toEqual(expect.arrayContaining(['feedback.view', 'feedback.update', 'feedback.delete']));
+  });
+
+  it('lets a driver add what was wrong to their own reports from the car, later', async () => {
+    const driver = await makeUser(ta.t.db, 'driver@example.com', 'user');
+    const car = { screen: 'Android Auto: driving', platform: 'android', appVersion: '0.5.6', device: 'Android 36 · A059' };
+    const tapped = await send(driver, { message: 'Reported from the car with one tap.\nShowing: "At roundabout, take exit 1 onto Moselle Drive" in 460 m.', context: car });
+    expect(tapped.statusCode, tapped.body).toBe(201);
+    const id = tapped.json().id as string;
+    await send(driver, { message: 'Sent from Settings, not the car' });
+    const old = await send(driver, { message: 'A week and more ago, from the car', context: car });
+    await ta.t.db.query(`UPDATE feedback SET created_at = now() - interval '8 days' WHERE id = $1`, [old.json().id]);
+
+    const list = async (u: { id: string }) => (await ta.app.inject({ method: 'GET', url: '/api/feedback/car-reports', headers: await auth(u) })).json().reports;
+    expect(await list(driver)).toEqual([{ id, createdAt: expect.any(String), showing: 'At roundabout, take exit 1 onto Moselle Drive', detailsAdded: false }]);
+    expect(await list(sam)).toEqual([]);
+
+    const add = async (u: { id: string }, reportId: string, body: Record<string, unknown>) =>
+      ta.app.inject({ method: 'POST', url: `/api/feedback/${reportId}/details`, headers: await auth(u), payload: body });
+    const added = await add(driver, id, { message: 'Couldn’t see the marker of me, but the map still followed', screenshot: { mediaType: 'image/png', data: PNG } });
+    expect(added.statusCode, added.body).toBe(204);
+    const item = (await ta.app.inject({ method: 'GET', url: `/api/admin/feedback/${id}`, headers: await auth(admin, 'admin') })).json();
+    expect(item.message).toMatch(/^Reported from the car[\s\S]*\n\nDetails from the driver, .+:\nCouldn’t see the marker of me, but the map still followed$/);
+    expect(item.hasScreenshot).toBe(true);
+    expect((await list(driver))[0].detailsAdded).toBe(true);
+
+    // Only your own, from the car, from the last week; and a few times at most.
+    expect((await add(sam, id, { message: 'Not mine' })).statusCode).toBe(404);
+    expect((await add(driver, old.json().id, { message: 'Too late' })).statusCode).toBe(404);
+    expect((await add(driver, 'not-an-id', { message: 'Nonsense' })).statusCode).toBe(404);
+    expect((await add(driver, id, { message: 'x' })).statusCode).toBe(400);
+    expect((await add(driver, id, { message: 'Second thoughts' })).statusCode).toBe(204);
+    expect((await add(driver, id, { message: 'Third thoughts' })).statusCode).toBe(204);
+    expect((await add(driver, id, { message: 'Fourth thoughts' })).statusCode).toBe(429);
   });
 
   it('turning it off stops new reports but keeps existing ones', async () => {
