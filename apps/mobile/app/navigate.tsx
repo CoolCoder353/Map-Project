@@ -1,6 +1,6 @@
 import { formatDistanceShort, formatDuration } from '@wayfinder/nav';
 import { useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, ArrowRight, ArrowUp, Flag, RotateCcw, Volume2, VolumeX, X } from 'lucide-react-native';
+import { FastForward, Flag, Volume2, VolumeX, X } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,8 +14,8 @@ import { MapCanvas } from '../src/map/MapCanvas';
 import { sendSpeedLimitReport } from '../src/nav/speedLimitReport';
 import { useTurnByTurn } from '../src/nav/useTurnByTurn';
 import { Button, Empty, Notice, Press } from '../src/ui/kit';
+import { ManeuverIcon } from '../src/ui/ManeuverIcon';
 
-const iconFor = (sign: number) => (sign === 4 ? Flag : sign <= -2 ? ArrowLeft : sign >= 2 && sign <= 3 ? ArrowRight : sign === 6 || Math.abs(sign) === 8 ? RotateCcw : ArrowUp);
 
 /**
  * The limit as Australian signs show it: black on white in a red ring, in both themes. A limit that
@@ -93,10 +93,8 @@ export default function Navigate() {
 
   const s = nav.state;
   const next = s?.nextInstruction ?? s?.currentInstruction;
-  const Icon = iconFor(next?.sign ?? 0);
   const arrived = s?.status === 'arrived';
   const then = nav.route && !arrived ? thenAfter(nav.route, s) : null;
-  const ThenIcon = iconFor(then?.sign ?? 0);
   // Only while on the route: off it, the road you are on isn't the one the limit is for.
   const limitKmh = s?.status === 'navigating' ? s.speedLimitKmh : null;
   // A speedometer is for driving; walking, it's only something else to look at.
@@ -109,6 +107,22 @@ export default function Navigate() {
       { text: 'Report', onPress: () => void sendSpeedLimitReport({ state: s, position: nav.position }).then(setReported) },
     ]);
 
+  const end = () => {
+    leaving.current = true;
+    nav.stop();
+    goBack();
+  };
+  // A trip ends with one tap once you're there; before that, a stray tap mustn't end it.
+  const confirmEnd = () =>
+    arrived
+      ? end()
+      : Alert.alert('End this trip?', 'Directions stop, and the trip so far is kept.', [
+          { text: 'Keep going', style: 'cancel' },
+          { text: 'End trip', style: 'destructive', onPress: end },
+        ]);
+  // On an explore route, the detour can be dropped for the fastest way from here.
+  const canSkipDetour = nav.route?.kind === 'explore' && s?.status === 'navigating' && !nav.rerouting;
+
   // The same views in every window size: the map is never remounted, so a trip keeps running
   // and following you through a rotation or a fold. Narrow: banner, map, bar stacked. Wide: the
   // banner and bar stack in a left panel and the map fills the rest (taken out of the flow).
@@ -117,7 +131,7 @@ export default function Navigate() {
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
       <View style={panel}>
       <View style={{ backgroundColor: banner, padding: space[4], flexDirection: 'row', alignItems: 'center', gap: space[4] }} accessibilityLiveRegion="polite">
-        <Icon size={40} color="#ffffff" />
+        <ManeuverIcon sign={next?.sign ?? 0} exitAngleDeg={next?.exitAngleDeg} size={40} color="#ffffff" />
         <View style={{ flex: 1 }}>
           {s?.distanceToNextManeuverM != null && !arrived ? (
             <Text style={{ color: '#ffffff', fontSize: 28, fontWeight: '800', fontVariant: ['tabular-nums'] }}>{formatDistanceShort(s.distanceToNextManeuverM)}</Text>
@@ -132,7 +146,7 @@ export default function Navigate() {
         <View accessible accessibilityLabel={`Then ${then.text.charAt(0).toLowerCase()}${then.text.slice(1)}`} style={{ backgroundColor: banner, paddingHorizontal: space[4], paddingBottom: space[3], marginTop: -space[2] }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], alignSelf: 'flex-start', paddingVertical: 6, paddingHorizontal: space[3], borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.22)' }}>
             <Text style={{ color: '#ffffff', fontWeight: '700' }}>Then</Text>
-            <ThenIcon size={20} color="#ffffff" />
+            <ManeuverIcon sign={then?.sign ?? 0} exitAngleDeg={then?.exitAngleDeg} size={20} color="#ffffff" />
             <Text style={{ color: '#ffffff', fontWeight: '600', flexShrink: 1 }} numberOfLines={1}>{then.text}</Text>
           </View>
         </View>
@@ -140,6 +154,11 @@ export default function Navigate() {
       {nav.rerouting ? <Notice tone="warning">Finding a new route…</Notice> : null}
       {s?.status === 'offRoute' && !nav.rerouting ? <Notice tone="warning">Off route</Notice> : null}
       {nav.error ? <Notice tone="error">{nav.error}</Notice> : null}
+      {canSkipDetour ? (
+        <View style={{ paddingHorizontal: space[4], paddingTop: space[2] }}>
+          <Button label="Skip the detour" kind="secondary" icon={FastForward} compact onPress={nav.skipDetour} style={{ alignSelf: 'flex-start' }} />
+        </View>
+      ) : null}
       </View>
       <View style={sideBySide ? { position: 'absolute', top: 0, bottom: 0, left: PANEL_WIDTH, right: 0 } : { flex: 1 }}>
         {/* Follows you close up. No fitting to the whole route: that zooms out of the drive. */}
@@ -179,7 +198,7 @@ export default function Navigate() {
         <Press accessibilityRole="button" accessibilityLabel={nav.muted ? 'Unmute voice' : 'Mute voice'} onPress={() => nav.setMuted(!nav.muted)} style={({ hovered }) => ({ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: hovered ? t.surface3 : 'transparent' })}>
           {nav.muted ? <VolumeX size={24} color={t.text2} /> : <Volume2 size={24} color={t.text} />}
         </Press>
-        <Button label={arrived ? 'Done' : 'End'} kind={arrived ? 'primary' : 'secondary'} icon={X} onPress={() => { leaving.current = true; nav.stop(); goBack(); }} compact />
+        <Button label={arrived ? 'Done' : 'End'} kind={arrived ? 'primary' : 'secondary'} icon={X} onPress={confirmEnd} compact />
       </View>
     </SafeAreaView>
   );

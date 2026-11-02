@@ -42,6 +42,8 @@ export function SearchField({ label, placeholder, value, onChange, near, allowCu
   const [active, setActive] = useState(-1);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  /** The search the results shown answer, so "no places match" is only said once it's been asked. */
+  const [answered, setAnswered] = useState('');
   const wrap = useRef<HTMLDivElement>(null);
 
   useEffect(() => setText(value?.name ?? ''), [value]);
@@ -61,6 +63,7 @@ export function SearchField({ label, placeholder, value, onChange, near, allowCu
           signal: ctrl.signal,
         });
         setResults(res.results);
+        setAnswered(q);
         // Highlight the first search result, not the fixed options above it.
         setActive(res.results.length ? (allowCurrentLocation ? 1 : 0) + (onPickOnMap ? 1 : 0) : -1);
         setError(null);
@@ -108,6 +111,8 @@ export function SearchField({ label, placeholder, value, onChange, near, allowCu
     ...(onPickOnMap ? [{ key: 'map', label: 'Choose on map', icon: Crosshair, run: () => { setOpen(false); onPickOnMap(); } }] : []),
   ];
   const total = extras.length + results.length;
+  const typed = text.trim();
+  const noMatch = !loading && !error && typed.length >= 2 && typed !== value?.name && answered === typed && results.length === 0;
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
@@ -173,7 +178,7 @@ export function SearchField({ label, placeholder, value, onChange, near, allowCu
           </button>
         ) : null}
       </div>
-      {open && (total > 0 || error) && (
+      {open && (total > 0 || error || noMatch) && (
         <ul className="search-list" id={`${id}-list`} role="listbox" aria-label={`${label} suggestions`}>
           {extras.map((x, i) => (
             <li
@@ -210,6 +215,11 @@ export function SearchField({ label, placeholder, value, onChange, near, allowCu
               </li>
             );
           })}
+          {noMatch && (
+            <li className="search-empty" role="option" aria-disabled="true" aria-selected={false}>
+              No places match “{typed}”.
+            </li>
+          )}
           {error && <li className="search-error">{error}</li>}
         </ul>
       )}

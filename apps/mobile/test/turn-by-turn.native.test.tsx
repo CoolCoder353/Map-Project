@@ -37,15 +37,25 @@ const mockReplaced: unknown[] = [];
 jest.mock('@wayfinder/nav', () => ({
   NavigationSession: class {
     mode: string;
+    currentRoute: unknown;
+    state: unknown = { status: 'navigating' };
     constructor(r: { mode: string; geometry: unknown[] }) {
       if (r.geometry.length < 2) throw new Error('Route geometry needs at least two points');
       this.mode = r.mode;
+      this.currentRoute = r;
     }
     update() {
-      return mockResults.shift() ?? { state: { status: 'navigating' }, events: [] };
+      const next = mockResults.shift() ?? { state: { status: 'navigating' }, events: [] };
+      this.state = next.state;
+      return next;
     }
     replaceRoute(r: unknown) {
       mockReplaced.push(r);
+      this.currentRoute = r;
+    }
+    // Between fixes nothing changes here: the same state back.
+    tick() {
+      return this.state;
     }
   },
 }));

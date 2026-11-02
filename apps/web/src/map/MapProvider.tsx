@@ -45,7 +45,12 @@ export interface MapApi {
   setMarkers(markers: MapMarker[]): void;
   setCoverageEnabled(enabled: boolean): void;
   coverageEnabled: boolean;
-  setTrack(line: LngLat[] | null, travelled?: LngLat[] | null): void;
+  /** Set while the roads travelled couldn't be loaded, so the map isn't left looking empty without a word. */
+  coverageError: string | null;
+  /** Ask for the roads travelled in view again. */
+  retryCoverage(): void;
+  /** A trip's line, how much of it a replay has covered, and the roads it was first to travel. */
+  setTrack(line: LngLat[] | null, travelled?: LngLat[] | null, newRoads?: LngLat[][] | null): void;
   fitTo(coords: LngLat[], maxZoom?: number): void;
   flyTo(center: LngLat, zoom?: number): void;
   center(): LngLat;
@@ -130,12 +135,14 @@ export function MapProvider({
   const [ready, setReady] = useState(false);
   const [tilesAvailable, setTilesAvailable] = useState<boolean | null>(null);
   const [coverageEnabled, setCoverageEnabledState] = useState(false);
+  const [coverageError, setCoverageError] = useState<string | null>(null);
   const data = useRef({
     routes: EMPTY,
     markers: EMPTY,
     coverage: EMPTY,
     track: EMPTY,
     travelled: EMPTY,
+    trackNew: EMPTY,
     search: EMPTY,
     routeLabels: EMPTY,
     routeLights: EMPTY,
@@ -200,6 +207,14 @@ export function MapProvider({
       source: 'track',
       layout: { 'line-cap': 'round', 'line-join': 'round' },
       paint: { 'line-color': text, 'line-opacity': 0.35, 'line-width': 5 },
+    });
+    // The roads a trip was first to travel, in the explore colour as on the coverage map.
+    addUnderLabels({
+      id: 'track-new',
+      type: 'line',
+      source: 'trackNew',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: { 'line-color': explore, 'line-width': 6 },
     });
     addUnderLabels({
       id: 'travelled',
@@ -409,8 +424,11 @@ export function MapProvider({
           geometry: { type: 'LineString', coordinates: r.geometry },
         })),
       });
+      setCoverageError(null);
     } catch (err) {
-      if ((err as Error).name !== 'AbortError') console.warn('coverage failed', err);
+      if ((err as Error).name === 'AbortError') return;
+      console.warn('coverage failed', err);
+      setCoverageError('Couldn’t load the roads you’ve travelled.');
     }
   }, [setSource, coverageUrl]);
 
@@ -532,6 +550,10 @@ export function MapProvider({
       ready,
       tilesAvailable,
       coverageEnabled,
+      coverageError,
+      retryCoverage() {
+        void refreshCoverage();
+      },
       attach,
       setRoutes(routes, selectedId, hoveredId = null) {
         // Draw selected last so it sits on top within its layer.
@@ -616,9 +638,14 @@ export function MapProvider({
         if (enabled) void refreshCoverage();
         else {
           setSource('coverage', EMPTY);
+          setCoverageError(null);
         }
       },
-      setTrack(line, travelled) {
+      setTrack(line, travelled, newRoads) {
+        setSource('trackNew', {
+          type: 'FeatureCollection',
+          features: (newRoads ?? []).filter((l) => l.length > 1).map((l) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: l } })),
+        });
         setSource(
           'track',
           line
@@ -743,7 +770,7 @@ export function MapProvider({
         });
       },
     }),
-    [ready, tilesAvailable, coverageEnabled, attach, setSource, refreshCoverage, insetForPanel],
+    [ready, tilesAvailable, coverageEnabled, coverageError, attach, setSource, refreshCoverage, insetForPanel],
   );
 
   return <MapContext.Provider value={value}>{children}</MapContext.Provider>;

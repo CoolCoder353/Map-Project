@@ -105,6 +105,9 @@ describe('track ingestion and coverage', () => {
     const detail = await tracks.getTrip(t.db, u.id, trip.id);
     expect(detail.points).toHaveLength(walk.length);
     expect(detail.geometry.length).toBeLessThan(walk.length); // simplified
+    // Drawn along the roads it took, with the two it was first on.
+    expect(detail.matchedGeometry).toHaveLength(walk.length);
+    expect(detail.newRoadLines).toHaveLength(2);
   });
 
   it('joins consecutive batches into one trip and splits after a long gap; mode by speed', async () => {
@@ -274,6 +277,20 @@ describe('track ingestion and coverage', () => {
     expect(n).toBeGreaterThanOrEqual(west[1]);
     const { items } = await tracks.listTrips(t.db, u.id, 10);
     expect(items.map((i) => i.newRoads)).toEqual([0, 0, 1]);
+    // Only the trip that first took the road shows it as new; the later ones were on it already.
+    expect((await tracks.getTrip(t.db, u.id, items[2]!.id)).newRoadLines!.length).toBeGreaterThan(0);
+    expect((await tracks.getTrip(t.db, u.id, items[0]!.id)).newRoadLines).toEqual([]);
+    expect((await tracks.getTrip(t.db, u.id, items[1]!.id)).newRoadLines).toEqual([]);
+  });
+
+  it('draws a trip that couldn’t be matched to roads by its GPS alone', async () => {
+    const u = await makeUser(t.db, 'bushwalk@example.com');
+    await tracks.ingestBatch(t.db, queue, u.id, { batchId: randomUUID(), source: 'background', points: drive(base, [148.0, -34.0], 0, 2, 1.4) });
+    await runJobs(u.id, { async match() { return null; } } as never);
+    const [trip] = (await tracks.listTrips(t.db, u.id, 10)).items;
+    const detail = await tracks.getTrip(t.db, u.id, trip!.id);
+    expect(detail.matchedGeometry).toBeUndefined();
+    expect(detail.newRoadLines).toEqual([]);
   });
 
   it('frames the map around where someone has been, leaving out a lone trip far away', async () => {

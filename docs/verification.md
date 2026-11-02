@@ -237,6 +237,16 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   and "Usually about … more" while stopped. Expect few or no fixed cycles: most lights here adjust
   to traffic. The pass detector's stop and queue rules are set from first principles, not yet
   tuned against real drives.
+- **The 2026-11-03 to-do list (docs/todo.md), done 2026-11-03.** Checked by tests only. Trips
+  draw the roads they took and pick out their new roads (phone and web); the web's Discover says
+  "Beach" and "Historic site" (one table with the phone's) and its search says when nothing
+  matches; the phone waits 400 ms for extra-time taps to stop, and cancels a request a newer one
+  replaces; an explore trip stays one (and green) through a reroute, and the phone offers "Skip
+  the detour" (not the car yet); phone and web draw the car's turn arrows (shared paths, roundabouts
+  with the exit); coverage that fails to load says so with Try again; phone navigation has
+  Re-centre after the map is dragged, and End asks first unless you've arrived. Still to see on a
+  device: the arrows' look, and Re-centre with the real MapLibre camera. The device and head-unit
+  checks stay on docs/todo.md: they need a phone with Play.
 - **The 2 November playtest (app 0.5.6), fixed 2026-11-02 (server live, app 0.5.7 on internal testing; the reports marked done or won't fix with notes).** Four reports. The car's one-tap
   Report says the driver can explain from Settings → Send feedback, which couldn't attach anything
   to it: it now lists your reports from the car to add to. The car's position marker vanished while

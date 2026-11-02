@@ -18,6 +18,8 @@ export function makeFakeMap(overrides: Partial<MapApi> = {}): FakeMap {
     ready: true,
     tilesAvailable: true,
     coverageEnabled: false,
+    coverageError: null,
+    retryCoverage: vi.fn(),
     setRoutes: vi.fn(),
     setMarkers: vi.fn(),
     setCoverageEnabled: vi.fn(),

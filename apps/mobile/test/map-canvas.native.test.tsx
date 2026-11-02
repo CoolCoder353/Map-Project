@@ -1,5 +1,5 @@
 /// <reference types="jest" />
-import { act, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
 import { createRef } from 'react';
 import { FOLLOW_ZOOM, MapCanvas, type MapCanvasHandle } from '../src/map/MapCanvas';
@@ -138,6 +138,26 @@ it('zooms in when following you, starting at the route’s start before a fix ar
   expect(mockCameraProps.zoom).toBe(FOLLOW_ZOOM);
   expect(FOLLOW_ZOOM).toBeGreaterThanOrEqual(15);
   expect(mockCameraProps.initialViewState).toEqual({ center: [153.02, -27.47], zoom: FOLLOW_ZOOM });
+});
+
+it('stops following once the map is dragged, and Re-centre picks it up again', async () => {
+  await render(<MapCanvas followUser />);
+  await screen.findByTestId('native-map');
+  expect(screen.queryByRole('button', { name: 'Re-centre' })).toBeNull();
+  // MapLibre says it stopped tracking when the map is moved by hand.
+  await act(async () => (mockCameraProps.onTrackUserLocationChange as (e: unknown) => void)({ nativeEvent: { trackUserLocation: null } }));
+  expect(mockCameraProps.trackUserLocation).toBeUndefined();
+  await fireEvent.press(screen.getByRole('button', { name: 'Re-centre' }));
+  expect(mockCameraProps.trackUserLocation).toBe('course');
+  expect(mockCameraProps.zoom).toBe(FOLLOW_ZOOM);
+  expect(screen.queryByRole('button', { name: 'Re-centre' })).toBeNull();
+});
+
+it('has no Re-centre on a map that isn’t following you', async () => {
+  await render(<MapCanvas />);
+  await screen.findByTestId('native-map');
+  expect(mockCameraProps.onTrackUserLocationChange).toBeUndefined();
+  expect(screen.queryByRole('button', { name: 'Re-centre' })).toBeNull();
 });
 
 it('still zooms in to follow you when there is no usable route start', async () => {

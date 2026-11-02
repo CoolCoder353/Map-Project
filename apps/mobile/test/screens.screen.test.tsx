@@ -54,6 +54,22 @@ describe('Coverage', () => {
     expect(fake.api.callsTo('GET api/coverage')[0]!.query).toEqual({ bbox: '152.90000,-27.60000,180.00000,-27.30000', zoom: 12.5, format: 'geojson' });
   });
 
+  it('says when the roads on the map couldn’t be loaded, and tries again', async () => {
+    let fail = true;
+    fake.api.on({
+      'GET api/coverage/stats': () => coverageStats(),
+      'GET api/coverage': () => (fail ? apiError(503, 'Coverage is unavailable') : { type: 'FeatureCollection', features: [] }),
+    });
+    await renderScreen(<Coverage />);
+    await screen.findByRole('header', { name: /km of road travelled/ });
+    await (fake.map.props.onRegionChange as (b: number[], z: number) => void)([152.9, -27.6, 153.2, -27.3], 12);
+    expect(await screen.findByText('Couldn’t load the roads you’ve travelled on the map.')).toBeOnTheScreen();
+    fail = false;
+    await fireEvent.press(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(screen.queryByText('Couldn’t load the roads you’ve travelled on the map.')).toBeNull());
+    expect(fake.api.callsTo('GET api/coverage')).toHaveLength(2);
+  });
+
   it('opens on the roads travelled, and fetches them again on coming back or pulling down', async () => {
     let roadKm = 412.5;
     fake.api.on({
@@ -253,6 +269,7 @@ describe('Trip', () => {
     expect(await screen.findByText('Drive · 18 km')).toBeOnTheScreen();
     expect(screen.getByText('3 roads you’d never travelled before')).toBeOnTheScreen();
     expect(fake.map.props.track).toEqual([[153, -27.4], [153.05, -27.45], [153.1, -27.5]]);
+    expect(fake.map.props.coverage).toBeNull();
     expect(fake.map.fitTo).toHaveBeenCalled();
     await fireEvent.press(screen.getByRole('button', { name: 'Delete trip' }));
     expect(alert.mock.calls[0]![0]).toBe('Delete this trip?');
@@ -260,6 +277,19 @@ describe('Trip', () => {
     await act(async () => buttons.find((b) => b.text === 'Delete')!.onPress!());
     await waitFor(() => expect(fake.router.back).toHaveBeenCalled());
     expect(fake.api.callsTo('DELETE api/trips/t-1')).toHaveLength(1);
+  });
+
+  it('draws the trip along the roads it took, with the roads it was first on picked out', async () => {
+    fake.params = { id: 't-1' };
+    const matchedGeometry: Array<[number, number]> = [[153, -27.4], [153.1, -27.41], [153.1, -27.5]];
+    fake.api.on({ 'GET api/trips/t-1': () => tripDetail({ matchedGeometry, newRoadLines: [[[153.1, -27.41], [153.1, -27.5]]] }) });
+    await renderScreen(<Trip />);
+    expect(await screen.findByText('New roads are picked out on the map.')).toBeOnTheScreen();
+    expect(fake.map.props.track).toEqual(matchedGeometry);
+    expect(fake.map.props.coverage).toEqual({
+      type: 'FeatureCollection',
+      features: [{ type: 'Feature', properties: { recent: true }, geometry: { type: 'LineString', coordinates: [[153.1, -27.41], [153.1, -27.5]] } }],
+    });
   });
 
   it('says how long the trip took, and how fast it went on average', async () => {

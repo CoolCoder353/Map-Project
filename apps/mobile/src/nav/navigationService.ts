@@ -80,6 +80,11 @@ export interface NavigationService {
   stop(): void;
   setMuted(muted: boolean): void;
   /**
+   * Leave an explore route's detour: the fastest way from here to the destination, dropping the
+   * detour points still ahead. Nothing happens on any other trip, or before the first fix.
+   */
+  skipDetour(): void;
+  /**
    * `source` 'simulation' is the test drive's own fixes: the only ones a test drive follows. 'car' is
    * the car's own location, followed only while the phone's has been silent for [CAR_FIX_AFTER_MS].
    */
@@ -154,7 +159,7 @@ export function createNavigationService(): NavigationService {
   let reroutingSince = 0;
   let rerouteAttempt = 0;
   /** Set while off route without a new route yet, so a failed attempt is retried. */
-  let pendingReroute: { to: LngLat; via: LngLat[]; at: number } | null = null;
+  let pendingReroute: { to: LngLat; via: LngLat[]; at: number; kind?: Route['kind'] } | null = null;
   /** Bumped by every start and stop, so work from an earlier trip that finishes late is dropped. */
   let generation = 0;
   let lastFixTs = -Infinity;
@@ -200,21 +205,26 @@ export function createNavigationService(): NavigationService {
     quietly(() => say(text));
   };
 
-  async function reroute(from: LngLat, to: LngLat, via: LngLat[]) {
+  /**
+   * A new route from here. It stays the kind of trip it was (an explore route stays one, its
+   * remaining detour points kept), unless `kind` says otherwise, as skipping the detour does.
+   */
+  async function reroute(from: LngLat, to: LngLat, via: LngLat[], kind?: Route['kind']) {
     const current = session;
     if (!current || reroutingNow) return;
     const attempt = ++rerouteAttempt;
     reroutingNow = true;
     reroutingSince = Date.now();
-    pendingReroute = { to, via, at: reroutingSince };
+    pendingReroute = { to, via, at: reroutingSince, ...(kind ? { kind } : {}) };
     set({ rerouting: true });
     // Navigation ended, or this attempt was given up on, while waiting.
     const stale = () => session !== current || attempt !== rerouteAttempt;
     try {
       // On foot, turning round is no trouble; in a car it can mean a long way back.
       const heading = current.mode === 'car' && travelHeading !== null ? { heading: travelHeading } : {};
-      const next = await api.request('api/routes/fastest', { method: 'POST', body: { from, to, via, mode: current.mode, ...heading }, schema: RouteSchema });
+      const fresh = await api.request('api/routes/fastest', { method: 'POST', body: { from, to, via, mode: current.mode, ...heading }, schema: RouteSchema });
       if (stale()) return;
+      const next: Route = { ...fresh, kind: kind ?? current.currentRoute.kind };
       current.replaceRoute(next);
       pendingReroute = null;
       set({ route: next, error: null });
@@ -232,6 +242,13 @@ export function createNavigationService(): NavigationService {
         set({ rerouting: false });
       }
     }
+  }
+
+  function skipDetour() {
+    const nav = session;
+    const here = snap.position;
+    if (!nav || !here || nav.currentRoute.kind !== 'explore' || snap.rerouting) return;
+    void reroute(here, nav.currentRoute.geometry.at(-1)!, [], 'fastest');
   }
 
   /** Stop waiting for a new route that hasn't come; ask again a little later if still off route. */
@@ -319,7 +336,7 @@ export function createNavigationService(): NavigationService {
     // Still off route after a failed attempt: ask again from here, now and then.
     const pending = pendingReroute;
     if (result.state.status === 'offRoute' && pending && !reroutingNow && Date.now() - pending.at >= REROUTE_RETRY_MS) {
-      void reroute([lon, lat], pending.to, pending.via);
+      void reroute([lon, lat], pending.to, pending.via, pending.kind);
     }
     if (simulated) return;
     void sqliteQueueStore
@@ -465,6 +482,7 @@ export function createNavigationService(): NavigationService {
     stop,
     handleFix,
     setMuted,
+    skipDetour,
     getSnapshot: () => snap,
     subscribe(listener) {
       listeners.add(listener);

@@ -1,4 +1,4 @@
-import { POI_CATEGORIES, type DiscoverItem, type PoiCategory } from '@wayfinder/shared';
+import { POI_CATEGORIES, type DiscoverItem, type PoiCategory, poiKind } from '@wayfinder/shared';
 import { Binoculars, Coffee, Compass, Info, Landmark, Mountain, Navigation, Palmtree, Sparkles, Trees, Umbrella, Waves } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -117,7 +117,7 @@ export function DiscoverPanel() {
         ) : (
           <ul className="place-list">
             {discoverItems.map((item) => {
-              const { icon: Icon, label } = CATEGORY[item.category];
+              const { icon: Icon } = CATEGORY[item.category];
               return (
                 <li key={item.id} onMouseEnter={() => setFocused(item.id)} onMouseLeave={() => setFocused(null)}>
                   <button type="button" className="place-row" onClick={() => map.flyTo(item.location, 15)}>
@@ -127,7 +127,7 @@ export function DiscoverPanel() {
                     <span className="place-body">
                       <span className="place-name">{item.name}</span>
                       <span className="place-meta num">
-                        {label.replace(/s$/, '')} · {formatDistanceShort(item.distanceM)} away
+                        {poiKind(item.category)} · {formatDistanceShort(item.distanceM)} away
                         {item.areaUnexploredPct >= 50 && <span className="badge badge-new">{item.areaUnexploredPct}% unexplored area</span>}
                       </span>
                     </span>
@@ -137,7 +137,7 @@ export function DiscoverPanel() {
                     className="icon-btn"
                     aria-label={`Directions to ${item.name}`}
                     onClick={() => {
-                      planner.setTo({ name: item.name, description: label, location: item.location });
+                      planner.setTo({ name: item.name, description: poiKind(item.category), location: item.location });
                       if (discoverOrigin) planner.setFrom(discoverOrigin);
                       navigate('/directions');
                     }}

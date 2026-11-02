@@ -23,6 +23,9 @@ import { useApproxLocation } from '../../src/lib/useApproxLocation';
 
 type Tab = 'directions' | 'loop';
 
+/** How long the extra-time stepper waits for taps to stop before asking for routes. */
+const EXPLORE_WAIT_MS = 400;
+
 export default function Plan() {
   const here = useApproxLocation();
   const t = useTheme();
@@ -89,18 +92,27 @@ export default function Plan() {
     }
     setLoading(true);
     setError(null);
-    api
-      .request('api/routes/explore', { method: 'POST', body: { from: from.location, to: to.location, mode, budgetMin: budget }, schema: ExploreRouteResponseSchema })
-      .then((res) => {
-        if (ticket !== latest.current) return;
-        const all = [res.fastest, ...res.explore];
-        setRoutes(all);
-        setSelected(res.fastest.id);
-        setFastestNew(res.fastest.novelty.noveltyPct);
-        map.current?.fitTo(all.flatMap((r) => r.geometry), { top: 60, bottom: 60, left: 40, right: 40 });
-      })
-      .catch((e) => ticket === latest.current && setError(errorMessage(e)))
-      .finally(() => ticket === latest.current && setLoading(false));
+    // Taps on the extra-time stepper come quickly: ask once they pause, and drop a request a newer
+    // one replaces, so the server isn't working out routes nobody will see (as on the web).
+    const ctrl = new AbortController();
+    const wait = setTimeout(() => {
+      api
+        .request('api/routes/explore', { method: 'POST', body: { from: from.location, to: to.location, mode, budgetMin: budget }, schema: ExploreRouteResponseSchema, signal: ctrl.signal })
+        .then((res) => {
+          if (ticket !== latest.current) return;
+          const all = [res.fastest, ...res.explore];
+          setRoutes(all);
+          setSelected(res.fastest.id);
+          setFastestNew(res.fastest.novelty.noveltyPct);
+          map.current?.fitTo(all.flatMap((r) => r.geometry), { top: 60, bottom: 60, left: 40, right: 40 });
+        })
+        .catch((e) => ticket === latest.current && setError(errorMessage(e)))
+        .finally(() => ticket === latest.current && setLoading(false));
+    }, EXPLORE_WAIT_MS);
+    return () => {
+      clearTimeout(wait);
+      ctrl.abort();
+    };
   }, [tab, from, to, mode, budget]);
 
   // Loops made for another start or mode no longer match what the form shows.

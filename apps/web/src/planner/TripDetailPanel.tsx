@@ -48,7 +48,8 @@ export function TripDetailPanel() {
   useEffect(() => {
     if (!trip.data) return;
     const line = trip.data.points.map((p) => [p.lon, p.lat] as LngLat);
-    map.setTrack(line.length > 1 ? line : trip.data.geometry, line.slice(0, index + 1));
+    // The roads it took where they're known; the replay goes by the GPS as recorded.
+    map.setTrack(trip.data.matchedGeometry ?? (line.length > 1 ? line : trip.data.geometry), line.slice(0, index + 1), trip.data.newRoadLines ?? null);
     const here = points[index];
     map.setMarkers([
       ...(line[0] ? [{ id: 'start', lngLat: line[0], kind: 'start' as const }] : []),
@@ -117,6 +118,7 @@ export function TripDetailPanel() {
             </p>
           </div>
           {t.newRoads > 0 && <p><span className="badge badge-new">{t.newRoads} road{t.newRoads === 1 ? '' : 's'} you’d never travelled before</span></p>}
+          {t.newRoadLines?.length ? <p className="field-hint">New roads are picked out on the map.</p> : null}
 
           <div className="replay">
             <button type="button" className="icon-btn replay-play" aria-label={playing ? 'Pause replay' : 'Play replay'} onClick={() => {

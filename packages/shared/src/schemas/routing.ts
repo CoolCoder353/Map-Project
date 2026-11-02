@@ -136,6 +136,14 @@ export const POI_CATEGORIES = [
 export const PoiCategorySchema = z.enum(POI_CATEGORIES);
 export type PoiCategory = z.infer<typeof PoiCategorySchema>;
 
+/** One place of each kind, as a row says what it is: "Lookout", "Historic site". */
+export const POI_KIND: Record<PoiCategory, string> = {
+  viewpoint: 'Lookout', peak: 'Peak', waterfall: 'Waterfall', park: 'Park', beach: 'Beach', attraction: 'Attraction',
+  cafe: 'Café', historic: 'Historic site', trailhead: 'Trailhead', museum: 'Museum', picnic: 'Picnic spot',
+};
+/** What kind of place it is. A newer server may send a category an older app doesn't know. */
+export const poiKind = (category: string): string => POI_KIND[category as PoiCategory] ?? 'Place';
+
 export const DiscoverQuerySchema = z.object({
   lon: z.coerce.number().min(-180).max(180),
   lat: z.coerce.number().min(-90).max(90),

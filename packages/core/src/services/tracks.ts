@@ -388,8 +388,8 @@ export async function getTrip(db: DbClient, userId: string, tripId: string, incl
   // The owner's id comes from a URL too, on the admin routes.
   if (!isUuid(tripId) || !isUuid(userId)) throw notFound('Trip not found');
   const trip = (
-    await db.query<TripListRow & { geometry: LngLat[] }>(
-      `SELECT id, mode, source, started_at, ended_at, distance_m, new_roads, geometry FROM trips
+    await db.query<TripListRow & { geometry: LngLat[]; matched_geometry: LngLat[] | null }>(
+      `SELECT id, mode, source, started_at, ended_at, distance_m, new_roads, geometry, matched_geometry FROM trips
        WHERE id = $1 AND user_id = $2 AND ($3 OR deleted_at IS NULL)`,
       [tripId, userId, includeDeleted],
     )
@@ -401,7 +401,15 @@ export async function getTrip(db: DbClient, userId: string, tripId: string, incl
       [tripId],
     )
   ).rows.map((p) => ({ ts: p.ts.getTime(), lon: p.lon, lat: p.lat }));
-  return { ...toSummary(trip), geometry: trip.geometry, points };
+  // A road first travelled on this trip took the trip's start as its first visit (recordTravelledWays).
+  const fresh = (
+    await db.query<{ pieces: LngLat[][] }>(
+      `SELECT coalesce(pieces, jsonb_build_array(geometry)) AS pieces FROM visited_ways WHERE user_id = $1 AND first_visited_at = $2`,
+      [userId, trip.started_at],
+    )
+  ).rows.flatMap((r) => r.pieces.filter((p) => p.length > 1));
+  const matched = trip.matched_geometry && trip.matched_geometry.length > 1 ? trip.matched_geometry : null;
+  return { ...toSummary(trip), geometry: trip.geometry, points, ...(matched ? { matchedGeometry: matched } : {}), newRoadLines: fresh };
 }
 
 export async function updateTripMode(db: Db, queue: JobQueue, userId: string, tripId: string, mode: Mode) {

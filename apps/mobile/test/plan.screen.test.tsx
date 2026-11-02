@@ -75,6 +75,20 @@ it('re-plans for walking and a bigger budget', async () => {
   expect(screen.getByText('Up to 20 min extra')).toBeOnTheScreen();
 });
 
+it('asks for routes once quick taps on the extra time stop, not for each one', async () => {
+  await renderScreen(<Plan />);
+  await chooseDestination();
+  await screen.findByText('Explore 1');
+  const before = fake.api.callsTo('POST api/routes/explore').length;
+  for (let i = 0; i < 3; i++) await fireEvent.press(screen.getByRole('button', { name: '+' }));
+  expect(screen.getByText('Up to 30 min extra')).toBeOnTheScreen();
+  await waitFor(() => expect(fake.api.callsTo('POST api/routes/explore')).toHaveLength(before + 1));
+  expect(fake.api.callsTo('POST api/routes/explore').at(-1)!.body).toMatchObject({ budgetMin: 30 });
+  // And no more come once it has asked.
+  await new Promise((r) => setTimeout(r, 600));
+  expect(fake.api.callsTo('POST api/routes/explore')).toHaveLength(before + 1);
+});
+
 it('explains an empty explore list', async () => {
   fake.api.on({ 'POST api/routes/explore': () => ({ fastest: route(), explore: [] }) });
   await renderScreen(<Plan />);

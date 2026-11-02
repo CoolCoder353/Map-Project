@@ -47,15 +47,19 @@ const mockTicks: number[] = [];
 jest.mock('@wayfinder/nav', () => ({
   NavigationSession: class {
     mode: string;
+    currentRoute: unknown;
     constructor(r: { mode: string }) {
       this.mode = r.mode;
+      this.currentRoute = r;
     }
     update() {
       const next = mockResults.shift();
       if (next instanceof Error) throw next;
       return next ?? { state: { status: 'navigating' }, events: [] };
     }
-    replaceRoute() {}
+    replaceRoute(r: unknown) {
+      this.currentRoute = r;
+    }
     tick(now: number) {
       mockTicks.push(now);
       return mockTick ?? { status: 'navigating' };
@@ -343,6 +347,36 @@ it('asks for a new route that starts the way you are driving, not back the way y
   mockOnFix!({ timestamp: 2000, coords: { longitude: 153.199, latitude: -27.4, accuracy: 5, speed: 10, heading: 270 } });
   await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-new'));
   expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).toMatchObject({ heading: 270 });
+});
+
+it('keeps an explore trip an explore trip through a new route, detour and all', async () => {
+  fake.api.on({ 'POST api/routes/fastest': () => route({ id: 'r-new' }) });
+  navigation.start(route({ kind: 'explore' }));
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockOnFix!(fix(153.2, -27.4, 1000));
+  mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.199, -27.4], to: [153.1, -27.5], remainingVia: [[153.15, -27.45]] }] });
+  mockOnFix!(fix(153.199, -27.4, 2000));
+  await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-new'));
+  expect(navigation.getSnapshot().route?.kind).toBe('explore');
+  expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).toMatchObject({ via: [[153.15, -27.45]] });
+});
+
+it('skips an explore route’s detour for the fastest way from here', async () => {
+  fake.api.on({ 'POST api/routes/fastest': () => route({ id: 'r-direct' }) });
+  const explore = route({ kind: 'explore' });
+  // Before the first fix there's no "here" to go from.
+  navigation.start(explore);
+  navigation.skipDetour();
+  expect(fake.api.callsTo('POST api/routes/fastest')).toHaveLength(0);
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockOnFix!(fix(153.05, -27.45, 1000));
+  navigation.skipDetour();
+  await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-direct'));
+  expect(navigation.getSnapshot().route?.kind).toBe('fastest');
+  expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).toMatchObject({ from: [153.05, -27.45], to: explore.geometry.at(-1), via: [] });
+  // On the fastest route already, there's no detour to skip.
+  navigation.skipDetour();
+  expect(fake.api.callsTo('POST api/routes/fastest')).toHaveLength(1);
 });
 
 it('works out the direction from movement when the phone gives no heading', async () => {

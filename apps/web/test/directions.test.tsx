@@ -67,6 +67,8 @@ describe('Directions', () => {
     act(() => map.clickRoute('r-fast'));
     expect(screen.getByRole('button', { name: /Fastest/ })).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(screen.getByRole('button', { name: '2 steps' }));
+    // Each step drawn with the same arrows the phone and car use.
+    expect([...document.querySelectorAll('.steps [data-maneuver]')].map((e) => e.getAttribute('data-maneuver'))).toEqual(['straight', 'destination']);
     expect(screen.getByText('Head north on Queen Street')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Hide steps' }));
     expect(screen.queryByText('Head north on Queen Street')).not.toBeInTheDocument();

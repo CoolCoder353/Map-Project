@@ -16,7 +16,7 @@ function StartAt({ children }: { children: React.ReactNode }) {
   return (
     <>
       <button type="button" onClick={() => p.setLoopStart({ name: 'Home', description: '', location: [153, -27.5] })}>set start</button>
-      <p data-testid="planner">{JSON.stringify({ from: p.from?.name ?? null, to: p.to?.name ?? null })}</p>
+      <p data-testid="planner">{JSON.stringify({ from: p.from?.name ?? null, to: p.to?.name ?? null, toKind: p.to?.description ?? null })}</p>
       {children}
     </>
   );
@@ -79,7 +79,16 @@ describe('Discover', () => {
       {
         path: '/discover',
         routes: [{ path: '/directions', element: <StartAt>{null}</StartAt> }],
-        api: { 'GET /api/discover': () => ({ items: [discoverItem(), discoverItem({ id: 'd-2', name: 'Cafe Nine', category: 'cafe', areaUnexploredPct: 10, distanceM: 900 })] }) },
+        api: {
+          'GET /api/discover': () => ({
+            items: [
+              discoverItem(),
+              discoverItem({ id: 'd-2', name: 'Cafe Nine', category: 'cafe', areaUnexploredPct: 10, distanceM: 900 }),
+              discoverItem({ id: 'd-3', name: 'Kings Beach', category: 'beach', areaUnexploredPct: 10, distanceM: 900 }),
+              discoverItem({ id: 'd-4', name: 'Old Windmill', category: 'historic', areaUnexploredPct: 10, distanceM: 900 }),
+            ],
+          }),
+        },
       },
     );
     await userEvent.click(screen.getByRole('button', { name: /Lookouts/ }));
@@ -91,6 +100,9 @@ describe('Discover', () => {
     expect(lookout).toHaveTextContent('Lookout · 7.4 km away');
     expect(lookout).toHaveTextContent('80% unexplored area');
     expect(screen.getByRole('button', { name: /^Cafe Nine/ })).not.toHaveTextContent('unexplored');
+    // Each says what kind of place it is, as the phone does.
+    expect(screen.getByRole('button', { name: /^Kings Beach/ })).toHaveTextContent('Beach · 900 m away');
+    expect(screen.getByRole('button', { name: /^Old Windmill/ })).toHaveTextContent('Historic site · 900 m away');
     expect(Object.fromEntries(api.calls('GET /api/discover')[0]!.query)).toEqual({ lon: '153.02', lat: '-27.47', mode: 'car', maxMinutes: '30', categories: 'viewpoint', limit: '25' });
     expect(map.fitTo).toHaveBeenCalled();
     // Labels on the map while the list is short.
@@ -100,6 +112,7 @@ describe('Discover', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Directions to Mount Coot-tha Lookout' }));
     expect(where()).toBe('/directions');
     expect(screen.getByTestId('planner')).toHaveTextContent('"to":"Mount Coot-tha Lookout"');
+    expect(screen.getByTestId('planner')).toHaveTextContent('"toKind":"Lookout"');
   });
 
   it('says when nothing new is in reach, and shows errors', async () => {

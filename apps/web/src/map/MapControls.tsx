@@ -10,6 +10,15 @@ export function MapControls({ showCoverageToggle }: { showCoverageToggle: boolea
   const toast = useToast();
   const [locating, setLocating] = useState(false);
   return (
+    <>
+    {map.coverageEnabled && map.coverageError ? (
+      <div className="map-note" role="alert">
+        {map.coverageError}
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => map.retryCoverage()}>
+          Try again
+        </button>
+      </div>
+    ) : null}
     <div className="map-controls">
       {showCoverageToggle && (
         <button
@@ -51,5 +60,6 @@ export function MapControls({ showCoverageToggle }: { showCoverageToggle: boolea
         </button>
       </div>
     </div>
+    </>
   );
 }

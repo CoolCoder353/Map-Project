@@ -11,7 +11,7 @@ import { splitStyles, useLayout } from '../../src/lib/layout';
 import { useSession } from '../../src/lib/session';
 import { space, useTheme } from '../../src/lib/theme';
 import { MapCanvas, type MapCanvasHandle } from '../../src/map/MapCanvas';
-import { Body, Loading, NewBadge, Notice, Small } from '../../src/ui/kit';
+import { Body, Button, Loading, NewBadge, Notice, Small } from '../../src/ui/kit';
 
 export default function Coverage() {
   const t = useTheme();
@@ -24,6 +24,8 @@ export default function Coverage() {
   const split = splitStyles(useLayout().sideBySide, '48%');
   const view = useRef<{ b: [number, number, number, number]; zoom: number } | null>(null);
   const [pulled, setPulled] = useState(false);
+  // The roads in view couldn't be loaded: said, so an empty map isn't taken for having been nowhere.
+  const [roadsFailed, setRoadsFailed] = useState(false);
 
   const onRegion = useCallback((b: [number, number, number, number], zoom: number) => {
     view.current = { b, zoom };
@@ -36,8 +38,13 @@ export default function Coverage() {
         query: { bbox: [clamp(b[0], 180), clamp(b[1], 90), clamp(b[2], 180), clamp(b[3], 90)].join(','), zoom: Math.round(zoom * 2) / 2, format: 'geojson' },
         signal: ctrl.signal,
       })
-      .then(setGeo)
-      .catch(() => undefined);
+      .then((g) => {
+        setGeo(g);
+        setRoadsFailed(false);
+      })
+      .catch((e: unknown) => {
+        if ((e as Error).name !== 'AbortError') setRoadsFailed(true);
+      });
   }, []);
 
   // New trips land while you're elsewhere: coming back to this tab, or pulling down, fetches the
@@ -99,6 +106,12 @@ export default function Coverage() {
         {!user?.settings.trackingEnabled ? <Notice>{copy.trackingOffHint}</Notice> : null}
         {stats.isLoading ? <Loading /> : null}
         {stats.error ? <Notice tone="error">{errorMessage(stats.error)}</Notice> : null}
+        {roadsFailed ? (
+          <View style={{ gap: space[2] }}>
+            <Notice tone="error">Couldn’t load the roads you’ve travelled on the map.</Notice>
+            <Button label="Try again" kind="secondary" compact onPress={() => void refresh()} style={{ alignSelf: 'flex-start' }} />
+          </View>
+        ) : null}
         {s && s.roadsTravelled === 0 ? <Body muted>{copy.coverageEmpty}</Body> : null}
         {s && s.roadsTravelled > 0 ? (
           <>

@@ -6,6 +6,8 @@ import type { Route } from '@wayfinder/shared/schemas';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { type StyleProp, Text, View, type ViewStyle } from 'react-native';
 import * as Location from 'expo-location';
+import { LocateFixed } from 'lucide-react-native';
+import { Press } from '../ui/kit';
 import { isServerUrl } from '../lib/apiClient';
 import { getServerUrl } from '../lib/server';
 import { MapErrorBoundary } from './MapErrorBoundary';
@@ -88,6 +90,9 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   // null while loading, '' when no server is set yet (nothing to load a map from).
   const [styleUrl, setStyleUrl] = useState<string | null>(null);
   const [canShowUser, setCanShowUser] = useState(false);
+  // Following you until the map is dragged away; Re-centre picks it up again.
+  const [following, setFollowing] = useState(true);
+  const tracking = followUser && following;
 
   useEffect(() => {
     void getServerUrl()
@@ -176,7 +181,13 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         onRegionChange?.(bounds as [number, number, number, number], zoom);
       }}
     >
-      <Camera ref={camera} initialViewState={initialView} zoom={followUser ? FOLLOW_ZOOM : undefined} trackUserLocation={followUser ? 'course' : undefined} />
+      <Camera
+        ref={camera}
+        initialViewState={initialView}
+        zoom={tracking ? FOLLOW_ZOOM : undefined}
+        trackUserLocation={tracking ? 'course' : undefined}
+        onTrackUserLocationChange={followUser ? (e) => setFollowing(e.nativeEvent.trackUserLocation !== null) : undefined}
+      />
       {coverage ? (
         <GeoJSONSource id="coverage" data={coverage}>
           <Layer
@@ -221,6 +232,28 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       </GeoJSONSource>
       {showUser && canShowUser ? <UserLocation /> : null}
     </Map>
+    {followUser && !following ? (
+      <Press
+        accessibilityRole="button"
+        accessibilityLabel="Re-centre"
+        onPress={() => setFollowing(true)}
+        style={({ hovered }) => ({
+          position: 'absolute',
+          // Top right: the speed sign has the top left, and notices the bottom (Navigate).
+          right: 12,
+          top: 12,
+          minWidth: 48,
+          minHeight: 48,
+          borderRadius: 24,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: hovered ? t.surface2 : t.surface,
+          elevation: 3,
+        })}
+      >
+        <LocateFixed size={24} color={t.accent} />
+      </Press>
+    ) : null}
     </MapErrorBoundary>
   );
 });

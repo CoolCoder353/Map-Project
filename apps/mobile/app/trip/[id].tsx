@@ -21,7 +21,13 @@ export default function Trip() {
   const map = useRef<MapCanvasHandle>(null);
   const split = splitStyles(useLayout().sideBySide, '50%');
   const trip = useQuery({ queryKey: ['trip', id], queryFn: () => api.request(`api/trips/${id}`, { schema: TripDetailSchema }), enabled: !!id });
-  const line: LngLat[] = trip.data ? (trip.data.points.length > 1 ? trip.data.points.map((p) => [p.lon, p.lat] as LngLat) : trip.data.geometry) : [];
+  // The roads it took where they're known, else the GPS as recorded (off-road, or not matched yet).
+  const raw: LngLat[] = trip.data ? (trip.data.points.length > 1 ? trip.data.points.map((p) => [p.lon, p.lat] as LngLat) : trip.data.geometry) : [];
+  const line = trip.data?.matchedGeometry ?? raw;
+  // The roads this trip was first on, picked out as new roads are on the coverage map.
+  const newRoads: GeoJSON.FeatureCollection | null = trip.data?.newRoadLines?.length
+    ? { type: 'FeatureCollection', features: trip.data.newRoadLines.map((l) => ({ type: 'Feature', properties: { recent: true }, geometry: { type: 'LineString', coordinates: l } })) }
+    : null;
   useEffect(() => {
     if (line.length) map.current?.fitTo(line);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -55,7 +61,7 @@ export default function Trip() {
         <Button label="Trips" kind="ghost" icon={ArrowLeft} compact onPress={() => goBack('/trips')} style={{ alignSelf: 'flex-start' }} />
       </View>
       <View style={split.container}>
-      <MapCanvas ref={map} style={split.map} track={line} markers={line[0] ? [{ id: 's', lngLat: line[0], kind: 'start' }, { id: 'e', lngLat: line[line.length - 1]!, kind: 'end' }] : []} showUser={false} />
+      <MapCanvas ref={map} style={split.map} track={line} coverage={newRoads} markers={line[0] ? [{ id: 's', lngLat: line[0], kind: 'start' }, { id: 'e', lngLat: line[line.length - 1]!, kind: 'end' }] : []} showUser={false} />
       <ScrollView style={split.panel} contentContainerStyle={{ padding: space[4], gap: space[3], ...split.content }}>
         {trip.isLoading ? <Loading /> : null}
         {trip.error ? <Notice tone="error">{errorMessage(trip.error)}</Notice> : null}
@@ -66,6 +72,7 @@ export default function Trip() {
             <Body muted>{`${formatDateTime(trip.data.startedAt)} – ${formatClock(Date.parse(trip.data.endedAt))}`}</Body>
             <Body>{formatTripPace(trip.data)}</Body>
             {trip.data.newRoads > 0 ? <NewBadge text={`${trip.data.newRoads} road${trip.data.newRoads === 1 ? '' : 's'} you’d never travelled before`} /> : null}
+            {newRoads ? <Small>New roads are picked out on the map.</Small> : null}
             <View style={{ gap: space[2], marginTop: space[2] }}>
               <Segmented<Mode>
                 label="Recorded as"

@@ -43,6 +43,11 @@
       "development": "./src/light-timing.ts",
       "types": "./dist/light-timing.d.ts",
       "default": "./dist/light-timing.js"
+    },
+    "./maneuvers": {
+      "development": "./src/maneuvers.ts",
+      "types": "./dist/maneuvers.d.ts",
+      "default": "./dist/maneuvers.js"
     }
   },
   "scripts": {

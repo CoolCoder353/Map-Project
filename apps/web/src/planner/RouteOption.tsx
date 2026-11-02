@@ -1,22 +1,10 @@
 import { type Route, USUALLY_SLOW_TEXT } from '@wayfinder/shared';
-import { ArrowLeft, ArrowRight, ArrowUp, CornerUpLeft, CornerUpRight, Flag, MapPin, MoveUpLeft, MoveUpRight, RotateCcw, Send, Sparkles, Zap } from 'lucide-react';
+import { Send, Sparkles, Zap } from 'lucide-react';
 import { useState } from 'react';
+import { ManeuverIcon } from '../components/ManeuverIcon';
 import { formatDistanceShort, formatDuration } from '../lib/format';
 import { useAppConfig } from '../lib/config';
 
-const signIcon = (sign: number) => {
-  if (sign === 4) return Flag;
-  if (sign === 5) return MapPin;
-  if (sign === 6) return RotateCcw;
-  if (sign === -8 || sign === 8 || sign === -98) return RotateCcw;
-  if (sign === -1 || sign === -7) return MoveUpLeft;
-  if (sign === 1 || sign === 7) return MoveUpRight;
-  if (sign === -2) return ArrowLeft;
-  if (sign === 2) return ArrowRight;
-  if (sign === -3) return CornerUpLeft;
-  if (sign === 3) return CornerUpRight;
-  return ArrowUp;
-};
 
 interface Props {
   route: Route;
@@ -73,10 +61,9 @@ export function RouteOption({ route, title, selected, onSelect, onSend, sending,
           {showSteps && (
             <ol className="steps">
               {route.instructions.map((ins, i) => {
-                const Icon = signIcon(ins.sign);
                 return (
                   <li key={i}>
-                    <Icon aria-hidden />
+                    <ManeuverIcon sign={ins.sign} exitAngleDeg={ins.exitAngleDeg} />
                     <span>{ins.text}</span>
                     {ins.distanceM > 0 && <span className="num steps-dist">{formatDistanceShort(ins.distanceM)}</span>}
                   </li>

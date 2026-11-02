@@ -1,7 +1,8 @@
 import type { NavState } from '@wayfinder/nav';
 import type { Instruction, Route } from '@wayfinder/shared/schemas';
 import type { NavSnapshot } from '../nav/navigationService';
-import type { CarManeuver, CarNav, ManeuverType } from './protocol';
+import { maneuverTypeOf } from '@wayfinder/shared/maneuvers';
+import type { CarManeuver, CarNav } from './protocol';
 
 /** A manoeuvre this close after the next one is shown with it ("then turn right"). */
 export const THEN_WITHIN_M = 150;
@@ -20,28 +21,8 @@ export function thenAfter(route: Route, st: NavState | null): Instruction | null
 
 export const overLimit = (limitKmh: number | null, speedKmh: number | null) => limitKmh != null && speedKmh != null && speedKmh >= limitKmh + OVER_LIMIT_BY_KMH;
 
-/** GraphHopper's instruction signs (see InstructionSchema). */
-const BY_SIGN: Record<number, ManeuverType> = {
-  [-98]: 'uTurnRight', // direction unknown; Queensland drives on the left, so U-turns go right
-  [-8]: 'uTurnLeft',
-  [-7]: 'keepLeft',
-  [-6]: 'roundaboutExit',
-  [-3]: 'sharpLeft',
-  [-2]: 'left',
-  [-1]: 'slightLeft',
-  0: 'straight',
-  1: 'slightRight',
-  2: 'right',
-  3: 'sharpRight',
-  4: 'destination',
-  5: 'waypoint',
-  6: 'roundabout',
-  7: 'keepRight',
-  8: 'uTurnRight',
-};
-
 export function maneuverOf(ins: Pick<Instruction, 'sign' | 'exitNumber' | 'exitAngleDeg'>): CarManeuver {
-  const type = BY_SIGN[ins.sign] ?? 'straight';
+  const type = maneuverTypeOf(ins.sign);
   const roundabout = type === 'roundabout';
   return { type, exit: roundabout && ins.exitNumber ? ins.exitNumber : null, exitAngleDeg: roundabout ? (ins.exitAngleDeg ?? null) : null };
 }

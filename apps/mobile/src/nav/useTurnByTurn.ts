@@ -14,6 +14,8 @@ export interface TurnByTurn {
   error: string | null;
   muted: boolean;
   setMuted(m: boolean): void;
+  /** On an explore route: the fastest way from here instead (see NavigationService.skipDetour). */
+  skipDetour(): void;
   position: LngLat | null;
   /** Speed from the last fix, metres a second, or null where the phone didn't say. */
   speedMps: number | null;
@@ -66,6 +68,7 @@ export function useTurnByTurn(initial: Route | null): TurnByTurn {
     error: snap.error,
     muted: snap.muted,
     setMuted: navigation.setMuted,
+    skipDetour: navigation.skipDetour,
     position: snap.position,
     speedMps: snap.speedMps,
     travelled: snap.travelled,

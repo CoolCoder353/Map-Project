@@ -49,6 +49,10 @@ export const TripListResponseSchema = z.object({
 export const TripDetailSchema = TripSummarySchema.extend({
   geometry: z.array(LngLatSchema),
   points: z.array(z.object({ ts: z.number(), lon: z.number(), lat: z.number() })),
+  /** The trip snapped onto the roads it took, where it could be; absent off-road or before matching. */
+  matchedGeometry: z.array(LngLatSchema).optional(),
+  /** The roads this trip was the first to travel, each stretch a line. Absent from older servers. */
+  newRoadLines: z.array(z.array(LngLatSchema)).optional(),
 });
 export type TripDetail = z.infer<typeof TripDetailSchema>;
 

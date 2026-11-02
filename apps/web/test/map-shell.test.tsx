@@ -139,6 +139,13 @@ describe('Map controls', () => {
     await waitFor(() => expect(map.flyTo).toHaveBeenCalledWith([153.3, -27.3], 15));
   });
 
+  it('says when the roads travelled couldn’t load, with a way to try again', async () => {
+    const { map } = await renderShell('/directions', { map: { coverageEnabled: true, coverageError: 'Couldn’t load the roads you’ve travelled.' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('Couldn’t load the roads you’ve travelled.');
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(map.retryCoverage).toHaveBeenCalled();
+  });
+
   it('says why it can’t find you, and hides the roads toggle on Coverage', async () => {
     await renderShell('/coverage', { map: { coverageEnabled: true } });
     expect(screen.queryByRole('button', { name: /explored areas/ })).not.toBeInTheDocument();

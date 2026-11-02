@@ -15,6 +15,7 @@ const mockNav = {
   error: null as string | null,
   muted: false,
   setMuted: jest.fn(),
+  skipDetour: jest.fn(),
   position: null,
   speedMps: null as number | null,
   travelled: [] as unknown[],
@@ -29,8 +30,12 @@ jest.mock('../src/lib/plannedStore', () => {
   return { setRouteToNavigate: (x: unknown) => (r = x), takeRouteToNavigate: () => r };
 });
 
+type AlertButtons = Array<{ text?: string; onPress?: () => void }>;
+
 beforeEach(() => {
   resetFakes();
+  // Ending a trip asks first: say yes, unless a test says otherwise.
+  jest.spyOn(Alert, 'alert').mockImplementation((_title, _message, buttons) => (buttons as AlertButtons | undefined)?.find((b) => b.text === 'End trip')?.onPress?.());
   Object.assign(mockNav, { route: route(), state: null, rerouting: false, error: null, muted: false, speedMps: null, travelled: [], ended: false });
   setRouteToNavigate(route());
 });
@@ -247,6 +252,53 @@ it('closes by itself when the trip ends without it (arrived, or ended in the car
   await renderScreen(<Navigate />);
   expect(fake.router.back).toHaveBeenCalled();
   expect(mockNav.stop).not.toHaveBeenCalled();
+});
+
+it('asks before ending a trip that hasn’t arrived, and ends at once when it has', async () => {
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  mockNav.state = { status: 'navigating', nextInstruction: { sign: 0, text: 'Continue' }, distanceToNextManeuverM: 900, remainingDurationS: 600, remainingDistanceM: 5400, speedLimitKmh: null };
+  const view = await render(<Navigate />);
+  await fireEvent.press(screen.getByRole('button', { name: 'End' }));
+  expect(alert.mock.calls[0]![0]).toBe('End this trip?');
+  const buttons = alert.mock.calls[0]![2] as AlertButtons;
+  // Keep going: nothing stops.
+  expect(buttons[0]).toMatchObject({ text: 'Keep going', style: 'cancel' });
+  expect(mockNav.stop).not.toHaveBeenCalled();
+  await act(async () => buttons.find((b) => b.text === 'End trip')!.onPress!());
+  expect(mockNav.stop).toHaveBeenCalledTimes(1);
+  // Arrived, Done ends it without asking.
+  alert.mockClear();
+  mockNav.state = { ...(mockNav.state as object), status: 'arrived' };
+  await view.rerender(<Navigate />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+  expect(alert).not.toHaveBeenCalled();
+  expect(mockNav.stop).toHaveBeenCalledTimes(2);
+});
+
+it('draws the turn as the car does: keep left as keep left, a roundabout with its exit', async () => {
+  mockNav.state = { status: 'navigating', nextInstruction: { sign: -7, text: 'Keep left' }, distanceToNextManeuverM: 300, remainingDurationS: 600, remainingDistanceM: 5400, speedLimitKmh: null };
+  const view = await render(<Navigate />);
+  // The arrow is hidden from screen readers (the words say the turn), so looked for including hidden ones.
+  expect(screen.getByTestId('maneuver-keepLeft', { includeHiddenElements: true })).toBeOnTheScreen();
+  mockNav.state = { ...(mockNav.state as object), nextInstruction: { sign: 6, text: 'At roundabout, take exit 2', exitAngleDeg: 175 } };
+  await view.rerender(<Navigate />);
+  expect(screen.getByTestId('maneuver-roundabout', { includeHiddenElements: true })).toBeOnTheScreen();
+});
+
+it('offers to skip an explore route’s detour, and only there', async () => {
+  mockNav.route = route({ kind: 'explore' });
+  mockNav.state = { status: 'navigating', nextInstruction: { sign: 0, text: 'Continue' }, distanceToNextManeuverM: 900, remainingDurationS: 600, remainingDistanceM: 5400, speedLimitKmh: null };
+  const view = await render(<Navigate />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Skip the detour' }));
+  expect(mockNav.skipDetour).toHaveBeenCalled();
+  // Not while a new route is on its way, nor on the fastest route.
+  mockNav.rerouting = true;
+  await view.rerender(<Navigate />);
+  expect(screen.queryByRole('button', { name: 'Skip the detour' })).toBeNull();
+  mockNav.rerouting = false;
+  mockNav.route = route();
+  await view.rerender(<Navigate />);
+  expect(screen.queryByRole('button', { name: 'Skip the detour' })).toBeNull();
 });
 
 it('goes back once on End, though the trip then reads as ended', async () => {

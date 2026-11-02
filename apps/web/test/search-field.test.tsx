@@ -97,6 +97,15 @@ describe('SearchField', () => {
     expect(await screen.findByText('Location is not available in this browser')).toBeInTheDocument();
   });
 
+  it('says when no places match, once the search has been answered', async () => {
+    await renderApp(<Field />, { path: '/', api: { 'GET /api/search': () => ({ results: [] }) } });
+    await userEvent.type(screen.getByRole('combobox', { name: 'Destination' }), 'zzqx');
+    expect(await screen.findByText('No places match “zzqx”.')).toBeInTheDocument();
+    // Typing on, it waits for the new answer before saying so again.
+    await userEvent.type(screen.getByRole('combobox', { name: 'Destination' }), 'y');
+    expect(await screen.findByText('No places match “zzqxy”.')).toBeInTheDocument();
+  });
+
   it('shows search errors in the list', async () => {
     await renderApp(<Field />, { path: '/', api: { 'GET /api/search': () => apiError(503, 'unavailable', 'Search is warming up') } });
     await userEvent.type(screen.getByRole('combobox', { name: 'Destination' }), 'gum');

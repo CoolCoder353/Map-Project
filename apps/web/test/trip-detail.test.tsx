@@ -24,6 +24,7 @@ describe('Trip detail', () => {
     expect(map.setTrack).toHaveBeenLastCalledWith(
       [[153, -27.4], [153.05, -27.45], [153.1, -27.5]],
       [[153, -27.4], [153.05, -27.45], [153.1, -27.5]],
+      null,
     );
     expect(map.setMarkers).toHaveBeenLastCalledWith([
       { id: 'start', lngLat: [153, -27.4], kind: 'start' },
@@ -31,13 +32,22 @@ describe('Trip detail', () => {
     ]);
   });
 
+  it('draws the trip along the roads it took, with the roads it was first on picked out', async () => {
+    const matchedGeometry: Array<[number, number]> = [[153, -27.4], [153.1, -27.41], [153.1, -27.5]];
+    const newRoadLines: Array<Array<[number, number]>> = [[[153.1, -27.41], [153.1, -27.5]]];
+    const { map } = await open({ 'GET /api/trips/t-1': () => tripDetail({ matchedGeometry, newRoadLines }) });
+    expect(await screen.findByText('New roads are picked out on the map.')).toBeInTheDocument();
+    // The replay still goes by the GPS as recorded.
+    expect(map.setTrack).toHaveBeenLastCalledWith(matchedGeometry, [[153, -27.4], [153.05, -27.45], [153.1, -27.5]], newRoadLines);
+  });
+
   it('scrubs the replay', async () => {
     const { map } = await open();
     const slider = await screen.findByRole('slider', { name: 'Replay position' });
     fireEvent.change(slider, { target: { value: '500' } });
-    expect(map.setTrack).toHaveBeenLastCalledWith(expect.any(Array), [[153, -27.4], [153.05, -27.45]]);
+    expect(map.setTrack).toHaveBeenLastCalledWith(expect.any(Array), [[153, -27.4], [153.05, -27.45]], null);
     fireEvent.change(slider, { target: { value: '0' } });
-    expect(map.setTrack).toHaveBeenLastCalledWith(expect.any(Array), [[153, -27.4]]);
+    expect(map.setTrack).toHaveBeenLastCalledWith(expect.any(Array), [[153, -27.4]], null);
   });
 
   it('plays the replay from the start and pauses', async () => {

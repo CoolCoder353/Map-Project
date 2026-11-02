@@ -123,11 +123,12 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-async function mount(opts: { coverageUrl?: string; tiles?: boolean; savedView?: unknown } = {}) {
+async function mount(opts: { coverageUrl?: string; tiles?: boolean; savedView?: unknown; coverageFails?: () => boolean } = {}) {
   if (opts.savedView !== undefined) localStorage.setItem('wf.mapView', JSON.stringify(opts.savedView));
   const api = fakeApi({
     'GET /tiles/tiles.json': () => (opts.tiles === false ? new Response('', { status: 404 }) : { tiles: ['x'] }),
-    'GET /api/coverage': () => ({ roads: [{ wayId: 7, geometry: [[153, -27.5], [153.01, -27.5]], recent: true, modes: 1 }], truncated: false }),
+    'GET /api/coverage': () =>
+      opts.coverageFails?.() ? new Response('', { status: 503 }) : { roads: [{ wayId: 7, geometry: [[153, -27.5], [153.01, -27.5]], recent: true, modes: 1 }], truncated: false },
     'GET /api/admin/users/u-2/coverage': () => ({ roads: [], truncated: false }),
   });
   const { MapProvider, useMapApi } = await import('../src/map/MapProvider');
@@ -172,7 +173,7 @@ describe('MapProvider', () => {
     expect(ids).toEqual(expect.arrayContaining(['coverage-roads', 'track', 'travelled', 'routes-selected', 'routes-alt-explore', 'route-callouts', 'search-pin', 'markers', 'marker-labels']));
     expect(map.layers.find((l) => l.id === 'coverage-roads')!.before).toBe('place-label');
     expect(map.layers.find((l) => l.id === 'markers')!.before).toBeUndefined();
-    expect([...map.sources.keys()].sort()).toEqual(['coverage', 'markers', 'routeLabels', 'routeLights', 'routes', 'search', 'track', 'travelled']);
+    expect([...map.sources.keys()].sort()).toEqual(['coverage', 'markers', 'routeLabels', 'routeLights', 'routes', 'search', 'track', 'trackNew', 'travelled']);
   });
 
   it('skips text layers when the style has no fonts', async () => {
@@ -223,7 +224,7 @@ describe('MapProvider', () => {
     act(() => {
       handle.setMarkers([{ id: 'a', lngLat: [153, -27], kind: 'start', label: 'Home' }, { id: 'b', lngLat: [153.1, -27.1], kind: 'end' }]);
       handle.setSearchPin({ lngLat: [153.2, -27.2], label: 'School' });
-      handle.setTrack([[153, -27], [153.1, -27.1]], [[153, -27]]);
+      handle.setTrack([[153, -27], [153.1, -27.1]], [[153, -27]], [[[153, -27], [153.05, -27.05]], [[153.1, -27.1]]]);
     });
     expect((map.sources.get('markers')!.data as GeoJSON.FeatureCollection).features.map((f) => f.properties)).toEqual([
       { id: 'a', kind: 'start', label: 'Home' },
@@ -231,6 +232,8 @@ describe('MapProvider', () => {
     ]);
     expect((map.sources.get('search')!.data as GeoJSON.FeatureCollection).features[0]!.properties).toEqual({ kind: 'poi', label: 'School' });
     expect((map.sources.get('track')!.data as GeoJSON.FeatureCollection).features).toHaveLength(1);
+    // A trip's new roads, leaving out a stretch too short to draw.
+    expect((map.sources.get('trackNew')!.data as GeoJSON.FeatureCollection).features).toHaveLength(1);
     // A single travelled point isn't a line yet.
     expect((map.sources.get('travelled')!.data as GeoJSON.FeatureCollection).features).toHaveLength(0);
     act(() => {
@@ -239,6 +242,7 @@ describe('MapProvider', () => {
     });
     expect((map.sources.get('search')!.data as GeoJSON.FeatureCollection).features).toHaveLength(0);
     expect((map.sources.get('track')!.data as GeoJSON.FeatureCollection).features).toHaveLength(0);
+    expect((map.sources.get('trackNew')!.data as GeoJSON.FeatureCollection).features).toHaveLength(0);
   });
 
   it('loads travelled roads for the visible area while coverage is on, and clears them when off', async () => {
@@ -254,6 +258,23 @@ describe('MapProvider', () => {
     expect((map.sources.get('coverage')!.data as GeoJSON.FeatureCollection).features).toHaveLength(0);
     act(() => map.fire('moveend'));
     expect(api.calls('GET /api/coverage')).toHaveLength(2);
+  });
+
+  it('says when the roads travelled couldn’t be loaded, and loads them on Try again', async () => {
+    let fail = true;
+    const m = await mount({ coverageFails: () => fail });
+    act(() => m.handle.setCoverageEnabled(true));
+    await waitFor(() => expect(m.handle.coverageError).toBe('Couldn’t load the roads you’ve travelled.'));
+    fail = false;
+    act(() => m.handle.retryCoverage());
+    await waitFor(() => expect(m.handle.coverageError).toBeNull());
+    expect((m.map.sources.get('coverage')!.data as GeoJSON.FeatureCollection).features).toHaveLength(1);
+    // Turning coverage off clears a failure too.
+    fail = true;
+    act(() => m.map.fire('moveend'));
+    await waitFor(() => expect(m.handle.coverageError).not.toBeNull());
+    act(() => m.handle.setCoverageEnabled(false));
+    expect(m.handle.coverageError).toBeNull();
   });
 
   it('asks another endpoint for an admin viewing someone’s coverage', async () => {
