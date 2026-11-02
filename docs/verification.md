@@ -237,7 +237,7 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   and "Usually about … more" while stopped. Expect few or no fixed cycles: most lights here adjust
   to traffic. The pass detector's stop and queue rules are set from first principles, not yet
   tuned against real drives.
-- **The 2 November playtest (app 0.5.6), fixed 2026-11-02.** Four reports. The car's one-tap
+- **The 2 November playtest (app 0.5.6), fixed 2026-11-02 (server live, app 0.5.7 on internal testing; the reports marked done or won't fix with notes).** Four reports. The car's one-tap
   Report says the driver can explain from Settings → Send feedback, which couldn't attach anything
   to it: it now lists your reports from the car to add to. The car's position marker vanished while
   the map kept following: MapLibre reports a tile that fails to load (a weak signal) as the map
