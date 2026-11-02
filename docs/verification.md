@@ -237,7 +237,7 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   and "Usually about … more" while stopped. Expect few or no fixed cycles: most lights here adjust
   to traffic. The pass detector's stop and queue rules are set from first principles, not yet
   tuned against real drives.
-- **The 2026-11-03 to-do list (docs/todo.md), done 2026-11-03.** Checked by tests only. Trips
+- **The 2026-11-03 to-do list (docs/todo.md), done 2026-11-03 (server live, app 0.5.8 on internal testing).** Checked by tests, and read-only on the live server (trips' new-road stretches match their counts). Trips
   draw the roads they took and pick out their new roads (phone and web); the web's Discover says
   "Beach" and "Historic site" (one table with the phone's) and its search says when nothing
   matches; the phone waits 400 ms for extra-time taps to stop, and cancels a request a newer one
