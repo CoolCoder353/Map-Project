@@ -209,7 +209,8 @@ export const carHandlers: CarHandlers = {
    * "Report" in the car: one tap files a bug report with what the car was showing, where, and how
    * fast, for the driver to explain later. Typing or speaking a message can't be done while driving.
    */
-  async report() {
+  async report(params) {
+    const { screenshotJpeg } = CarParams.report.parse(params);
     // Sends are limited to five an hour, shared with the phone's own feedback form: one tap each
     // minute at most, so a driver tapping in frustration doesn't use them all up.
     if (Date.now() - lastReportAt < REPORT_COOLDOWN_MS) throw new Error(REPORT_JUST_SENT);
@@ -218,7 +219,7 @@ export const carHandlers: CarHandlers = {
     const previous = lastReportAt;
     lastReportAt = Date.now();
     try {
-      return await sendReport();
+      return await sendReport(screenshotJpeg);
     } catch (e) {
       lastReportAt = previous;
       throw e;
@@ -243,7 +244,7 @@ export const carHandlers: CarHandlers = {
 };
 
 /** Files the report for [carHandlers.report]; the minute's wait is kept by the caller. */
-async function sendReport(): Promise<Record<string, never>> {
+async function sendReport(screenshotJpeg?: string): Promise<Record<string, never>> {
   // Feedback is switched on and off by an admin; say so rather than show a failure.
   const enabled = await api.request('api/config', { schema: PublicConfigSchema }).then((c) => c.feedbackEnabled, () => true);
   if (!enabled) throw new Error(REPORT_OFF);
@@ -259,6 +260,7 @@ async function sendReport(): Promise<Record<string, never>> {
       device: `Android ${String(Platform.Version)}${Constants.deviceName ? ` · ${Constants.deviceName}` : ''}`.slice(0, 400),
       ...(position ? { mapView: { center: position, zoom: 17 } } : {}),
     },
+    ...(screenshotJpeg ? { screenshot: { mediaType: 'image/jpeg' as const, data: screenshotJpeg } } : {}),
   };
   try {
     await api.request('api/feedback', { method: 'POST', body });

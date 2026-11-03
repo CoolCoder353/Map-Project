@@ -365,6 +365,20 @@ describe('report', () => {
     expect(body.message).toContain('Heading: 88°.');
   });
 
+  it('sends the picture of the car’s map with the report, when there is one', async () => {
+    fake.api.on({ 'POST api/feedback': () => ({ id: 'f1' }) });
+    mockNavigation.getSnapshot.mockReturnValueOnce(navigating() as never);
+    await carHandlers.report!({ screenshotJpeg: 'AAAA' });
+    expect((fake.api.callsTo('POST api/feedback')[0]!.body as { screenshot: unknown }).screenshot).toEqual({ mediaType: 'image/jpeg', data: 'AAAA' });
+  });
+
+  it('sends none when the map couldn’t be captured', async () => {
+    fake.api.on({ 'POST api/feedback': () => ({ id: 'f1' }) });
+    mockNavigation.getSnapshot.mockReturnValueOnce(navigating() as never);
+    await carHandlers.report!({});
+    expect(fake.api.callsTo('POST api/feedback')[0]!.body).not.toHaveProperty('screenshot');
+  });
+
   it('says when the limit shown was an estimate', async () => {
     fake.api.on({ 'POST api/feedback': () => ({ id: 'f1' }) });
     const s = navigating();

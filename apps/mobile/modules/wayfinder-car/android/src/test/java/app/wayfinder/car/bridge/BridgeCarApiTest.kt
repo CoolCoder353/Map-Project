@@ -72,6 +72,13 @@ class BridgeCarApiTest {
     )
   }
 
+  @Test fun sendsTheMapPictureWithAReport() {
+    val sent = mutableListOf<String>()
+    val b = CarBridge(post = { it.run() }, postDelayed = { _, _ -> }).also { it.connect { _, method, params -> sent += "$method $params" } }
+    BridgeCarApi(b).report("AAAA") { }
+    assertEquals("""report {"screenshotJpeg":"AAAA"}""", sent.last())
+  }
+
   @Test fun readsPlacesAndRouteLinesFromTheAnswers() {
     var places: Result<List<CarPlace>>? = null
     var line: Result<List<LngLat>>? = null

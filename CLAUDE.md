@@ -41,6 +41,7 @@ routing engine, live checks).
 | Settings and env vars                                    | [docs/configuration.md](docs/configuration.md)                                         |
 | Operating a server, troubleshooting                      | [docs/operations.md](docs/operations.md)                                               |
 | Building, checking and sharing the Android APK           | [docs/build-android.md](docs/build-android.md)                                         |
+| What Android Auto can do with the phone locked           | [docs/android-auto-locked-phone.md](docs/android-auto-locked-phone.md)                 |
 | Getting onto Google Play and through Android Auto review | [docs/play-store-android-auto.md](docs/play-store-android-auto.md)                     |
 | What falls short of Google's Android quality guidelines  | [docs/quality-gaps.md](docs/quality-gaps.md)                                           |
 | The live server (`maps.coolcodertech.com`, Queensland)      | [docs/deploy-small-server.md](docs/deploy-small-server.md)                             |

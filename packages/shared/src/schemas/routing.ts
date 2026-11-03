@@ -93,6 +93,8 @@ export const FastestRouteRequestSchema = z.object({
    * for mid-trip, so it starts the way they are going instead of turning them round.
    */
   heading: z.number().min(0).max(360).optional(),
+  /** How fast they're going, metres a second, sent with [heading]: a turn too close to make at this speed is left out. */
+  speedMps: z.number().min(0).max(100).optional(),
 });
 export type FastestRouteRequest = z.input<typeof FastestRouteRequestSchema>;
 

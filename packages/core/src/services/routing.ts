@@ -259,13 +259,14 @@ async function tryRoutes(deps: RoutingDeps, requests: readonly RouteRequest[], l
 export async function fastestRoute(
   deps: RoutingDeps,
   userId: string,
-  req: { from: LngLat; to: LngLat; mode: Mode; via: LngLat[]; heading?: number | undefined },
+  req: { from: LngLat; to: LngLat; mode: Mode; via: LngLat[]; heading?: number | undefined; speedMps?: number | undefined },
 ): Promise<Route> {
   const points = [req.from, ...req.via, req.to];
-  const [path] = await deps.metrics.time('graphhopper.route', 'fastest', () =>
+  const [first] = await deps.metrics.time('graphhopper.route', 'fastest', () =>
     deps.graphhopper.route({ points, profile: profileFor(req.mode), ...(req.heading !== undefined ? { heading: req.heading } : {}) }),
   );
-  if (!path) throw new AppError(422, 'no_route', 'No route found');
+  if (!first) throw new AppError(422, 'no_route', 'No route found');
+  const path = (await routePastTurnTooClose(deps, req, first)) ?? first;
   const { set, ways } = await visitedSetFor(deps.db, userId, path.points.coordinates, 500);
   await recordRequest(deps.db, userId, 'fastest', req.mode);
   const make = (p: GhPath) => ({
@@ -277,6 +278,50 @@ export async function fastestRoute(
     route = await quickestOfAlternatives(deps, req.from, req.to, route!, make);
   }
   return req.heading !== undefined ? turnAroundWhenYouCan(route!) : route!;
+}
+
+/** Below this a car can still make a turn just ahead. */
+const TURN_NEEDS_SPEED_MPS = 5;
+/** A turn closer than this much driving can't be made: the answer has to arrive, be heard and be acted on. */
+const TURN_NEEDS_S = 6;
+/** GraphHopper's signs for leaving the road: slight, plain and sharp, left and right. */
+const LEAVES_THE_ROAD = new Set([-3, -2, -1, 1, 2, 3]);
+
+/**
+ * A car at speed that asks for a new route can be told to turn into a side street 10 m on, which it
+ * has passed by the time the answer comes, and so it's off route again. The heading only stops the
+ * route turning it round. So when the first turn is too close, ask again through a point further up
+ * the road. Null when there's no better answer: the point may have landed on another road.
+ */
+async function routePastTurnTooClose(
+  deps: RoutingDeps,
+  req: { from: LngLat; to: LngLat; mode: Mode; via: LngLat[]; heading?: number | undefined; speedMps?: number | undefined },
+  path: GhPath,
+): Promise<GhPath | null> {
+  const { heading, speedMps } = req;
+  if (heading === undefined || speedMps === undefined || speedMps < TURN_NEEDS_SPEED_MPS) return null;
+  const needM = speedMps * TURN_NEEDS_S;
+  const [on, next] = path.instructions;
+  if (on?.sign !== 0 || next === undefined || !LEAVES_THE_ROAD.has(next.sign) || on.distance >= needM) return null;
+  const ahead = destination(req.from, heading, needM);
+  const [further] = await deps.metrics
+    .time('graphhopper.route', 'fastest.ahead', () =>
+      deps.graphhopper.route({ points: [req.from, ahead, ...req.via, req.to], profile: profileFor(req.mode), heading, passThrough: true }),
+    )
+    .catch(() => []);
+  const instructions = further && withoutFirstWaypoint(further.instructions);
+  return instructions ? { ...further, instructions } : null;
+}
+
+/**
+ * The instructions without the stop at the point the route was sent through, the road either side
+ * of it being one instruction again. Null if the route turns off before it gets there.
+ */
+function withoutFirstWaypoint(instructions: readonly GhInstruction[]): GhInstruction[] | null {
+  const [on, stop, after, ...rest] = instructions;
+  if (on?.sign !== 0 || stop?.sign !== VIA_REACHED || !after) return null;
+  if (after.sign !== 0) return [on, after, ...rest];
+  return [{ ...on, interval: [on.interval[0], after.interval[1]], distance: on.distance + after.distance, time: on.time + after.time }, ...rest];
 }
 
 /**

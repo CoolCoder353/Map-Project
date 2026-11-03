@@ -28,7 +28,8 @@ export function PrivacyPage() {
         </li>
         <li>
           <strong>Feedback you send:</strong> your message, the screen you were on, the app version and your phone model, and a
-          screenshot only if you pick one yourself from your photo picker. We cannot see any other photos.
+          screenshot only if you pick one yourself from your photo picker. We cannot see any other photos. A report made from the
+          car also includes where you were and a picture of the map the car was showing.
         </li>
       </ul>
 

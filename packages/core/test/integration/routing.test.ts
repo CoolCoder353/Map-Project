@@ -95,6 +95,74 @@ describe('routing service (fake GraphHopper)', () => {
     expect(later.instructions.map((i) => i.text)).toEqual(['Turn left onto Mahogany Street', 'Make a U-turn onto Ironbark Street']);
   });
 
+  describe('a new route asked for at speed', () => {
+    const ins = (sign: number, text: string, interval: [number, number], distance: number, time = 1000) => ({ sign, text, interval, distance, time, street_name: '' });
+    const turnSoon = async (p: RouteParams) => {
+      calls.push(p);
+      const path = straightPath(p.points, SPEED);
+      const last = path.points.coordinates.length - 1;
+      // Gordon Street, 3 Nov: a side street 10 m on, at 55 km/h. Through a point further up the road there's no such turn.
+      path.instructions = !p.passThrough
+        ? [ins(0, 'Continue onto Gordon Street', [0, 1], 10), ins(-2, 'Turn left', [1, last], 54), ins(4, 'Arrive at destination', [last, last], 0, 0)]
+        : [ins(0, 'Continue onto Gordon Street', [0, 1], 75), ins(5, 'Waypoint 1', [1, 1], 0, 0), ins(0, 'Continue onto Gordon Street', [1, 2], 333), ins(-2, 'Turn left onto Bainbridge Street', [2, last], 231), ins(4, 'Arrive at destination', [last, last], 0, 0)];
+      return [path];
+    };
+    const gh = { ...fakeGh, route: turnSoon } as GraphHopperClient;
+    const moving = { from, to, mode: 'car' as const, via: [] as LngLat[], heading: 90, speedMps: 15 };
+
+    it('goes past a turn too close to make, up the road you are on', async () => {
+      const u = await makeUser(t.db, 'too-close@example.com');
+      const route = await routing.fastestRoute({ ...deps(), graphhopper: gh }, u.id, moving);
+      const asked = calls.at(-1)!;
+      expect(asked).toMatchObject({ heading: 90, passThrough: true });
+      expect(asked.points).toHaveLength(3);
+      // Far enough on to be past the turn, the way the car is going, at 6 s of driving.
+      expect(haversineM(from, asked.points[1]!)).toBeCloseTo(90, 0);
+      expect(bearingDeg(from, asked.points[1]!)).toBeCloseTo(90, 0);
+      // The point it went through is the engine's business, not a stop for the driver.
+      expect(route.instructions.map((i) => i.text)).toEqual(['Continue onto Gordon Street', 'Turn left onto Bainbridge Street', 'Arrive at destination']);
+      expect(route.instructions[0]).toMatchObject({ distanceM: 408, interval: [0, 2] });
+      expect(route.viaPoints).toEqual([]);
+    });
+
+    it('keeps the driver’s own detour points', async () => {
+      const u = await makeUser(t.db, 'too-close-via@example.com');
+      const via: LngLat[] = [destination(from, 90, 4000)];
+      const route = await routing.fastestRoute({ ...deps(), graphhopper: gh }, u.id, { ...moving, via });
+      expect(calls.at(-1)!.points).toHaveLength(4);
+      expect(calls.at(-1)!.points[2]).toEqual(via[0]);
+      expect(route.viaPoints).toEqual(via);
+    });
+
+    it('leaves a turn there is time for, and one at low speed or with no speed given', async () => {
+      const u = await makeUser(t.db, 'not-too-close@example.com');
+      for (const asked of [{ ...moving, speedMps: 1 }, { from, to, mode: 'car' as const, via: [], heading: 90 }]) {
+        const route = await routing.fastestRoute({ ...deps(), graphhopper: gh }, u.id, asked);
+        expect(route.instructions[1]!.text).toBe('Turn left');
+      }
+      const farTurn = { ...fakeGh, route: async (p: RouteParams) => [{ ...straightPath(p.points, SPEED), instructions: [ins(0, 'Continue', [0, 1], 200), ins(-2, 'Turn left', [1, 2], 54), ins(4, 'Arrive at destination', [2, 2], 0, 0)] }] } as GraphHopperClient;
+      expect((await routing.fastestRoute({ ...deps(), graphhopper: farTurn }, u.id, moving)).instructions[1]!.text).toBe('Turn left');
+    });
+
+    it('keeps the first answer when there is no better one up the road', async () => {
+      const u = await makeUser(t.db, 'no-better@example.com');
+      // The point up the road is off it, so the route still turns before reaching it.
+      const turnsAnyway = {
+        ...fakeGh,
+        route: async (p: RouteParams) => {
+          const path = await turnSoon(p);
+          if (p.passThrough) path[0]!.instructions = [ins(0, 'Continue', [0, 1], 5), ins(-2, 'Turn left', [1, 2], 50), ins(5, 'Waypoint 1', [2, 2], 0, 0), ins(4, 'Arrive at destination', [2, 2], 0, 0)];
+          return path;
+        },
+      } as GraphHopperClient;
+      const route = await routing.fastestRoute({ ...deps(), graphhopper: turnsAnyway }, u.id, moving);
+      expect(route.instructions.map((i) => i.text)).toEqual(['Continue onto Gordon Street', 'Turn left', 'Arrive at destination']);
+      // And a failed second ask is no failure at all.
+      const fails = { ...fakeGh, route: async (p: RouteParams) => { if (p.passThrough) throw new Error('down'); return turnSoon(p); } } as GraphHopperClient;
+      expect((await routing.fastestRoute({ ...deps(), graphhopper: fails }, u.id, moving)).instructions[1]!.text).toBe('Turn left');
+    });
+  });
+
   it('gives each roundabout exit its angle round the roundabout', async () => {
     const path = straightPath([from, to], SPEED);
     const ins = (sign: number, text: string, interval: [number, number], extra: object = {}) => ({ sign, text, interval, distance: 10, time: 1000, street_name: '', ...extra });

@@ -8,6 +8,7 @@ import androidx.car.app.navigation.NavigationManagerCallback
 import app.wayfinder.car.bridge.CarApi
 import app.wayfinder.car.bridge.CarNav
 import app.wayfinder.car.map.MapControls
+import app.wayfinder.car.map.MapPictures
 import app.wayfinder.car.map.MapScenes
 import app.wayfinder.car.map.TripTrail
 import app.wayfinder.car.screens.NavigationScreen
@@ -26,6 +27,8 @@ class NavigationCoordinator(
   private val controls: MapControls? = null,
   /** Makes sure the car map has its styles; a trip already running skips Home, which would fetch them. */
   private val ensureStyles: () -> Unit = {},
+  /** Pictures of the car map, for reports. */
+  private val pictures: MapPictures? = null,
 ) {
   /** The road this trip has driven, for the map: kept here as the driving screen can be left and come back to. */
   private val trail = TripTrail()
@@ -97,7 +100,7 @@ class NavigationCoordinator(
   /** Puts the driving screen on top during a trip, unless it already is. */
   fun showDrive() {
     if (api.navigation == null || driving()) return
-    screens.push(NavigationScreen(carContext, api, map, icons, trail, controls, ensureStyles))
+    screens.push(NavigationScreen(carContext, api, map, icons, trail, controls, ensureStyles, pictures))
   }
 
   /**

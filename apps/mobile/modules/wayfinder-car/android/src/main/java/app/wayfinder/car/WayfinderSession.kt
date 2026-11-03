@@ -38,7 +38,7 @@ class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared))
     // Asked for now, not only by Home: a trip already running puts the driving screen over Home first.
     val styles = MapStyles(api, map::setStyles)
     styles.ensure()
-    val coordinator = NavigationCoordinator(carContext, api, map, ManeuverIcons(carContext), map, styles::ensure)
+    val coordinator = NavigationCoordinator(carContext, api, map, ManeuverIcons(carContext), map, styles::ensure, map)
     openDirections = coordinator::openDirections
     // The car's own position, for when the phone's goes quiet (see CarLocation).
     val stopLocation = CarLocation(HardwareFixSource(carContext), api).start()

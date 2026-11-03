@@ -163,7 +163,7 @@ and adaptive quality gaps, in
 - [ ] Driving: + and − zoom the followed map; dragging (pan mode, or touch) stops it following and shows Re-centre, which brings it back
 - [ ] Off route and rerouted: the road driven before the reroute stays on the map, in purple
 - [ ] Roundabout icons show the exit taken (left, straight on, right) for a few real roundabouts
-- [ ] Report on the driving screen: a toast, and the report under Admin → Feedback with what the car showed and the place
+- [ ] Report on the driving screen: a toast, and the report under Admin → Feedback with what the car showed, the place and a picture of the map with the marker and speed in the right places
 - [ ] Before the first fix the driving screen says "Finding where you are…", not a spinner
 - [ ] Arriving: "You have arrived" said once; the trip ends by itself about 15 s later, on the car and the phone
 - [ ] Drive into a dead end mid-trip: "Route updated. Turn around when you can" once, and no new route every few seconds while you find somewhere to turn
@@ -248,6 +248,18 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   Re-centre after the map is dragged, and End asks first unless you've arrived. Still to see on a
   device: the arrows' look, and Re-centre with the real MapLibre camera. The device and head-unit
   checks stay on docs/todo.md: they need a phone with Play.
+- **The to-do list of 3 November, part two, 2026-11-03 (in code; not yet on the server or in an app build).**
+  A new route for a car at speed no longer starts with a turn too close to make (under 6 s of driving at
+  5 m/s or more): it's asked for again through a point further up the road. Checked by tests, and by
+  asking the live graph along the 3 November track: from Gordon Street at 12 to 15 m/s, a left turn 5 to
+  55 m on became carrying on to the Bainbridge Street roundabout. Needs the server and the app together; each
+  alone changes nothing. Reports from the car now include a picture of the map with the car's marker and speed
+  (not the turn card or buttons, which Android Auto draws and an app can't read), sent without one if
+  it isn't ready in 1.5 s. Checked by tests with a stand-in for the map: MapLibre's snapshot on the car's
+  virtual display hasn't been seen running. The privacy page now says so. The device checks stay on
+  docs/todo.md: no phone attached. Analysis of the phone being locked:
+  [android-auto-locked-phone.md](android-auto-locked-phone.md); from it, the Android Auto checklist's
+  "Cold start … the 'Navigating to …' notification appears" is expected to fail.
 - **The 3 November server check and drive (app 0.5.8), 2026-11-03 (fixed in code; not yet in an app build).**
   The server itself was healthy: all containers up, no stored errors or failed jobs in 30 days, the only
   5xx a 502 while the API restarted for the deploy, no reply over 3 s, no memory kills, disk 45%. The
@@ -264,7 +276,7 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   estimated) came with no details. The road data shows both as main roads with no signposted limit
   there, which show none or the same road's limit by design, so nothing was changed; they wait on
   what the driver saw. The two 2 November evening reports (0.5.7) also have no details and weren't
-  investigated. Asking for a screenshot of the car screen with each report is on docs/todo.md.
+  investigated. The tester's idea of a screenshot with each report is done above, as far as an app can.
 - **The 2 November playtest (app 0.5.6), fixed 2026-11-02 (server live, app 0.5.7 on internal testing; the reports marked done or won't fix with notes).** Four reports. The car's one-tap
   Report says the driver can explain from Settings → Send feedback, which couldn't attach anything
   to it: it now lists your reports from the car to add to. The car's position marker vanished while

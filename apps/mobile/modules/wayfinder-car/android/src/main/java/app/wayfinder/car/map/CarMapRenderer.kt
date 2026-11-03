@@ -1,6 +1,8 @@
 package app.wayfinder.car.map
 
 import android.app.Presentation
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Point as ScreenPoint
 import android.graphics.Rect
@@ -36,7 +38,7 @@ import kotlin.math.ln
  * driving, the car's position and the speed readout are views over the map (see CarOverlays.kt),
  * and the driver can zoom and drag it ([MapControls]).
  */
-class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapScenes, MapControls {
+class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapScenes, MapControls, MapPictures {
   private var display: VirtualDisplay? = null
   private var presentation: Presentation? = null
   private var mapView: MapView? = null
@@ -133,6 +135,27 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
     if (!follow.recentre()) return
     applyScene()
     pannedListeners.toList().forEach { it(false) }
+  }
+
+  /** The map with the car's marker and the speed readout on it, which are views over the map. */
+  override fun capture(done: (String?) -> Unit) {
+    val m = map ?: return done(null)
+    val overlays = listOfNotNull<View>(puck, speed).filter { it.visibility == View.VISIBLE }
+    m.snapshot { shot ->
+      done(
+        runCatching {
+          val picture = shot.copy(Bitmap.Config.ARGB_8888, true)
+          val canvas = Canvas(picture)
+          overlays.forEach { v ->
+            val saved = canvas.save()
+            canvas.translate(v.x, v.y)
+            v.draw(canvas)
+            canvas.restoreToCount(saved)
+          }
+          MapPicture.encode(picture)
+        }.getOrNull(),
+      )
+    }
   }
 
   override fun onPannedChanged(listener: (Boolean) -> Unit): () -> Unit {

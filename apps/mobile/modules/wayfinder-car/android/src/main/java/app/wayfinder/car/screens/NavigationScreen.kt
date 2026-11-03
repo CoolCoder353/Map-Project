@@ -1,5 +1,7 @@
 package app.wayfinder.car.screens
 
+import android.os.Handler
+import android.os.Looper
 import androidx.car.app.CarContext
 import androidx.car.app.CarToast
 import androidx.car.app.Screen
@@ -15,6 +17,7 @@ import app.wayfinder.car.bridge.CarApi
 import app.wayfinder.car.bridge.CarNav
 import app.wayfinder.car.bridge.LngLat
 import app.wayfinder.car.map.MapControls
+import app.wayfinder.car.map.MapPictures
 import app.wayfinder.car.map.MapScene
 import app.wayfinder.car.map.MapScenes
 import app.wayfinder.car.map.TripTrail
@@ -35,6 +38,7 @@ class NavigationScreen(
   private val trail: TripTrail = TripTrail(),
   private val controls: MapControls? = null,
   private val onShown: () -> Unit = {},
+  private val pictures: MapPictures? = null,
 ) : Screen(carContext) {
   private var nav: CarNav? = api.navigation
   private var line: List<LngLat> = emptyList()
@@ -91,11 +95,27 @@ class NavigationScreen(
     show(map, MapScene.Following(line, n?.position, n?.headingDeg, trail.points, n?.speedLimitKmh, n?.speedKmh, n?.speedLimitEstimated == true, n?.lights.orEmpty()))
   }
 
-  /** One tap: the phone files a report with what the car is showing; the driver explains later. */
+  /**
+   * One tap: the phone files a report with what the car is showing and a picture of the map; the
+   * driver explains later. The report goes without the picture if it isn't ready by [PICTURE_WAIT_MS].
+   */
   internal fun report() {
     if (reporting) return
     reporting = true
-    api.report { r ->
+    val source = pictures ?: return sendReport(null)
+    var sent = false
+    val once = { picture: String? ->
+      if (!sent) {
+        sent = true
+        sendReport(picture)
+      }
+    }
+    Handler(Looper.getMainLooper()).postDelayed({ once(null) }, PICTURE_WAIT_MS)
+    source.capture(once)
+  }
+
+  private fun sendReport(picture: String?) {
+    api.report(picture) { r ->
       reporting = false
       val said = r.fold({ "Reported. When it’s safe, add what went wrong from Wayfinder on your phone." }, { it.message ?: "Couldn’t send the report. Try again." })
       CarToast.makeText(carContext, said, CarToast.LENGTH_LONG).show()
@@ -117,4 +137,8 @@ class NavigationScreen(
       onReport = ::report,
       map = mapButtons(),
     )
+
+  companion object {
+    const val PICTURE_WAIT_MS = 1_500L
+  }
 }

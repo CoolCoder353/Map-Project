@@ -229,7 +229,7 @@ export function createNavigationService(): NavigationService {
     const stale = () => session !== current || attempt !== rerouteAttempt;
     try {
       // On foot, turning round is no trouble; in a car it can mean a long way back.
-      const heading = current.mode === 'car' && travelHeading !== null ? { heading: travelHeading } : {};
+      const heading = current.mode === 'car' && travelHeading !== null ? { heading: travelHeading, ...(snap.speedMps !== null ? { speedMps: snap.speedMps } : {}) } : {};
       const fresh = await api.request('api/routes/fastest', { method: 'POST', body: { from, to, via, mode: current.mode, ...heading }, schema: RouteSchema });
       if (stale()) return;
       const next: Route = { ...fresh, kind: kind ?? current.currentRoute.kind };

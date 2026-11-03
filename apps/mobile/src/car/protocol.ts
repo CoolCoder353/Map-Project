@@ -4,7 +4,7 @@
  * suites parse the fixtures in modules/wayfinder-car/android/src/test/resources/fixtures, so a
  * change here that Kotlin doesn't know about fails a test. Coordinates are [lon, lat].
  */
-import { LngLatSchema } from '@wayfinder/shared/schemas';
+import { FeedbackScreenshotSchema, LngLatSchema } from '@wayfinder/shared/schemas';
 import { z } from 'zod';
 
 export const CarStatusSchema = z.object({
@@ -90,6 +90,8 @@ export const CarParams = {
   routeLine: z.object({ routeId: z.string() }),
   start: z.object({ routeId: z.string(), destinationName: z.string().max(200) }),
   mute: z.object({ muted: z.boolean() }),
+  /** A picture of the car's map as a base64 JPEG, where it could be taken. */
+  report: z.object({ screenshotJpeg: FeedbackScreenshotSchema.shape.data.optional() }),
   /** The car's own location (its GNSS), sent by the car app on every fix. */
   location: z.object({
     lon: z.number().min(-180).max(180),

@@ -625,6 +625,18 @@ it('told to turn around but driven on well past it, asks again without waiting o
   }
 });
 
+it('asks for a new route with the speed as well as the heading, so it can leave out a turn too close to make', async () => {
+  fake.api.on({ 'POST api/routes/fastest': () => route({ id: 'r-new' }) });
+  navigation.start(route());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockResults.push({ state: { status: 'navigating' }, events: [] });
+  mockOnFix!({ timestamp: 500, coords: { longitude: 153.2195, latitude: -27.56, speed: 15, heading: 90, accuracy: 5 } });
+  mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2196, -27.56], to: [153.25, -27.56], remainingVia: [] }] });
+  mockOnFix!({ timestamp: 1000, coords: { longitude: 153.2196, latitude: -27.56, speed: 15, heading: 90, accuracy: 5 } });
+  await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-new'));
+  expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).toMatchObject({ heading: 90, speedMps: 15 });
+});
+
 it('driven on up a long dead end, updates the route without saying to turn around again', async () => {
   const turnaround = route({ id: 'r-back', instructions: [{ sign: -98, text: 'Turn around when you can', streetName: 'Ironbark Street', distanceM: 300, durationS: 30, interval: [0, 1] }] });
   fake.api.on({ 'POST api/routes/fastest': () => turnaround });

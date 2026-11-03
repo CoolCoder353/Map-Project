@@ -122,6 +122,34 @@ class NavigationCoordinatorTest {
     assertEquals("asked again after each answer", 3, api.calls.count { it == "report" })
   }
 
+  private fun reportingWith(pictures: app.wayfinder.car.map.MapPictures): NavigationScreen {
+    val coordinator = NavigationCoordinator(carContext, api, RecordingScenes(), ManeuverIcons(carContext), pictures = pictures)
+    coordinator.attach()
+    api.pushNav(Samples.nav())
+    return screens.screensPushed.last { it is NavigationScreen } as NavigationScreen
+  }
+
+  @Test fun aReportCarriesThePictureOfTheMap() {
+    reportingWith { done -> done("AAAA") }.report()
+    assertEquals(listOf<String?>("AAAA"), api.reportShots)
+  }
+
+  @Test fun noPictureToBeHadStillSendsTheReport() {
+    reportingWith { done -> done(null) }.report()
+    assertEquals(listOf<String?>(null), api.reportShots)
+  }
+
+  @Test fun aPictureThatNeverComesDoesntHoldUpTheReport() {
+    var late: ((String?) -> Unit)? = null
+    val screen = reportingWith { done -> late = done }
+    screen.report()
+    assertTrue("waiting for the picture", api.reportShots.isEmpty())
+    shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(NavigationScreen.PICTURE_WAIT_MS))
+    assertEquals(listOf<String?>(null), api.reportShots)
+    late!!("AAAA")
+    assertEquals("sent once", 1, api.reportShots.size)
+  }
+
   @Test fun picksUpATripAlreadyRunningWhenTheCarConnects() {
     api.navigation = Samples.nav()
     coordinator.attach()

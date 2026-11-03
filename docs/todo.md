@@ -1,27 +1,28 @@
 # To do
 
-Improvements users would notice, picked from a survey of the project on 2026-11-03; the other seven
-picked then were done the same day (see verification.md). Each has what users see today, where in
+Improvements users would notice, from a survey of the project and the drives on 2026-11-03; the others
+picked then are done (see verification.md). Each has what users see today, where in
 the code, and a rough size. Line numbers are as of that date. Take an item
 off this list when it ships, and record it in [verification.md](verification.md).
 
-## A new route can ask for a turn the car has already reached
+## Android Auto with the phone locked
 
-- **Today:** on the 3 November drive, replaying the requests shows a new route from a car doing 55
-  km/h on Gordon Street can start "Continue 10 m, turn left", too close to make, so it goes off route
-  again seconds later (requests 8 s apart). The answer also flips between routes from one second to
-  the next (1,008 m, then a 612 m one with a U-turn).
-- **Where:** `fastestRoute` in `packages/core/src/services/routing.ts`, `reroute` in
-  `apps/mobile/src/nav/navigationService.ts`. The replay used where the trip ended, not its real
-  destination, so check it against a drive first.
+- **Today:** a trip started from the car with the phone locked has no location service or phone GPS,
+  and JavaScript timers stop whenever no app screen is showing, so uploads wait for the end of the
+  trip, server calls don't time out and test drive doesn't move. Full analysis, with what each finding
+  rests on: [android-auto-locked-phone.md](android-auto-locked-phone.md).
+- **Where:** `apps/mobile/src/nav/navigationLocation.ts`, `apps/mobile/src/nav/navigationService.ts`,
+  `apps/mobile/src/lib/apiClient.ts`, `apps/mobile/src/car/simulation.ts`.
+- **Size:** small to add the location listener, medium for the timers. Whether a location service can
+  start from the car needs a device. Car, phone.
+
+## A new route can still flip between answers
+
+- **Today:** replaying the 3 November drive, the answer changes from one second to the next (1,008 m,
+  then a 612 m one with a U-turn). Turns too close to make are now left out; this isn't.
+- **Where:** `fastestRoute` in `packages/core/src/services/routing.ts`. The replay used where the trip
+  ended, not its real destination, so check it against a drive first.
 - **Size:** medium. Car, phone.
-
-## Screenshot of the car screen with a report
-
-- **Today:** a one-tap report from the car has words only (a tester's idea, 3 November). Whether the
-  car app can capture its own screen hasn't been looked into; the map it draws may be all it can get.
-- **Where:** `apps/mobile/src/car/handlers.ts` (the report), `apps/mobile/modules/wayfinder-car`.
-- **Size:** unknown until that's checked. Car, server.
 
 ## Checks on a device and the head unit that have never been run
 

@@ -309,10 +309,16 @@ turn card is the route line's blue (`NavTemplates.TURN_CARD`, darker at night).
 
 **Report.** The driving screen's Report sends a bug report from the phone with one tap
 (`report` in `src/car/handlers.ts`): what the car showed, the speed limit and speed, the heading and
-where, as a feedback report with the map position. Typing or speaking can't be done while driving;
+where, as a feedback report with the map position and a picture of the car's map (`MapPictures.kt`: only what the app draws; Android Auto draws the rest, and an app can't read it). The report waits at most 1.5 s for the picture. Typing or speaking can't be done while driving;
 the driver adds details later from the phone. It sends one a minute at most (the hour's five are
 shared with the phone's own form) and says so when an admin has feedback switched off or the hour's
 limit is used up.
+
+**A new route at speed.** The phone sends its speed with the heading. If the route's first turn is under
+6 s of driving away (at 5 m/s or more), the server asks again through a point that far up the road, then
+removes that stop from the instructions (`routePastTurnTooClose`). If the route still turns before
+reaching it, the point has landed off the road, and the first answer stands. What the phone can do while
+locked, and what stops: [android-auto-locked-phone.md](android-auto-locked-phone.md).
 
 **A new route that starts by turning round.** Only a route asked for with the car's heading says
 "Turn around when you can"; the phone then waits a minute before asking again, until the driver is
