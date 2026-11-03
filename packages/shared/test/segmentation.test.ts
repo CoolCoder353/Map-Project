@@ -34,6 +34,34 @@ describe('filterPoints', () => {
     const out = filterPoints(pts);
     expect(out.map((p) => p.ts)).toEqual([T0, T0 + 10_000, T0 + 30_000]);
   });
+
+  it('drops a stale first fix rather than the whole track after it', () => {
+    // Android often hands out the last known location first: here 20 km away.
+    const stale: TrackPoint = { ts: T0, lon: 149.32, lat: -35.28, accuracyM: 20 };
+    const drive = track(T0 + 15_000, 20, 10, 15);
+    const out = filterPoints([stale, ...drive]);
+    expect(out).toEqual(drive);
+  });
+
+  it('carries on from where the device really went after a jump (a flight)', () => {
+    const before = track(T0, 20, 10);
+    // Landed 1,000 km away two hours later: far too fast to drive.
+    const after = track(T0 + 2 * 3600_000, 20, 10, 5, [153.02, -27.47]);
+    const out = filterPoints([...before, ...after]);
+    expect(out).toEqual([...before, ...after]);
+    // And the trip splits there.
+    expect(segmentTrips(out)).toHaveLength(2);
+  });
+
+  it('still drops two stray fixes in a row', () => {
+    const drive = track(T0, 10, 10);
+    const strays: TrackPoint[] = [
+      { ts: T0 + 50_000, lon: 150.5, lat: -35.28, accuracyM: 5 },
+      { ts: T0 + 51_000, lon: 150.5, lat: -35.28, accuracyM: 5 },
+    ];
+    const out = filterPoints([...drive, ...strays]);
+    expect(out).toEqual(drive);
+  });
 });
 
 describe('segmentTrips', () => {

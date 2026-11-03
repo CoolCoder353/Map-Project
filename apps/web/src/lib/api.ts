@@ -47,7 +47,9 @@ export function refreshSession(): Promise<AuthResponse | null> {
     try {
       const res = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include', headers: { 'content-type': 'application/json' }, body: '{}' });
       if (!res.ok) {
-        setSession(null);
+        // Only the server saying the session is over ends it. A server restarting (502), busy
+        // (429) or failing says nothing about the session: stay signed in and try again later.
+        if (res.status === 401 || res.status === 403) setSession(null);
         return null;
       }
       const auth = (await res.json()) as AuthResponse;

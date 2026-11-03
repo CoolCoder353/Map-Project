@@ -47,7 +47,8 @@ export async function listUsers(
   const where: string[] = [];
   const params: unknown[] = [];
   if (q.q) {
-    params.push(`%${q.q}%`);
+    // Typed text, not a pattern: "%" or "_" in a search mean those characters.
+    params.push(`%${q.q.replace(/[%_\\]/g, (m) => `\\${m}`)}%`);
     where.push(`u.email ILIKE $${params.length}`);
   }
   if (q.status === 'active') where.push('u.disabled_at IS NULL AND u.deleted_at IS NULL');

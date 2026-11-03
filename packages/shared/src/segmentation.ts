@@ -21,10 +21,22 @@ export interface FilterOptions {
   maxSpeedMps?: number;
 }
 
-/** Sort, de-duplicate, and drop inaccurate points and implausible jumps. */
+/** Fixes in a row that agree with each other but not with the track before them: the device really is there. */
+const RELOCATION_FIXES = 3;
+
+/**
+ * Sort, de-duplicate, and drop inaccurate points and implausible jumps.
+ *
+ * A jump is blamed on the new fix, unless the fixes after it agree with it: then the device really
+ * did move (a flight, a stretch with location off) and the track carries on from there. If the
+ * track so far is a single fix, that one was the stray (a stale fix Android hands out first) and
+ * is dropped. Without this, every fix after a real jump was thrown away until enough time had
+ * passed for the jump to look like driving.
+ */
 export function filterPoints<T extends TrackPoint>(points: readonly T[], opts: FilterOptions = {}): T[] {
   const maxAcc = opts.maxAccuracyM ?? 50;
   const maxSpeed = opts.maxSpeedMps ?? 70;
+  const plausible = (a: T, b: T) => b.ts > a.ts && haversineM(toLngLat(a), toLngLat(b)) / ((b.ts - a.ts) / 1000) <= maxSpeed;
   const sorted = points
     .filter(
       (p) =>
@@ -36,14 +48,28 @@ export function filterPoints<T extends TrackPoint>(points: readonly T[], opts: F
     )
     .sort((a, b) => a.ts - b.ts);
   const out: T[] = [];
+  // Fixes since the last kept one that jumped away from it, and agree with each other.
+  let jumped: T[] = [];
   for (const p of sorted) {
     const last = out[out.length - 1];
-    if (last) {
-      if (p.ts === last.ts) continue;
-      const dt = (p.ts - last.ts) / 1000;
-      if (haversineM(toLngLat(last), toLngLat(p)) / dt > maxSpeed) continue;
+    if (!last) {
+      out.push(p);
+      continue;
     }
-    out.push(p);
+    if (p.ts === last.ts) continue;
+    if (plausible(last, p)) {
+      out.push(p);
+      jumped = [];
+      continue;
+    }
+    const prev = jumped[jumped.length - 1];
+    if (prev && p.ts === prev.ts) continue;
+    jumped = prev && plausible(prev, p) ? [...jumped, p] : [p];
+    if (jumped.length >= RELOCATION_FIXES) {
+      if (out.length === 1) out.length = 0;
+      out.push(...jumped);
+      jumped = [];
+    }
   }
   return out;
 }
