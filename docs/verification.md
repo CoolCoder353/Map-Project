@@ -139,13 +139,14 @@ and adaptive quality gaps, in
 - [ ] Phone locked and the phone app closed, open Wayfinder from the car: Planned routes and Go work (the car's own location is used), and directions follow the car, not "Still finding where you are"
 - [ ] Roundabout icons turn clockwise (both kinds of roundabout)
 - [ ] Music dips for each spoken direction and comes back after; the speaker button silences them and shows struck through until tapped again
-- [ ] Phone locked for the whole drive: directions keep coming
+- [ ] Test drive with the phone locked, and with the phone on its home screen: the car moves along the route
+- [ ] Phone locked for the whole drive: directions keep coming, and the trip uploads every minute rather than all at the end
 - [ ] Android 16 phone, trip started on the phone or the car, then the phone locked: the car's directions and map keep moving straight away, not only once it is unlocked (feedback 2026-11-01 on 0.5.4; fixed in 0.5.5)
 - [ ] Trip started on the phone appears in the car; trip started in the car shows the phone banner, with its padding clear of the status bar and gesture bar
 - [ ] End in the car, End on the phone, and the car's own "End navigation" each end the trip everywhere
 - [ ] Night mode switches the map to the dark style; OSM attribution visible
 - [ ] Cold start from the car: force-stop the phone app, open Wayfinder from the car, and Home appears without opening the phone
-- [ ] Cold start from the car with the phone app never opened since the phone started and the phone locked, then start a trip: the "Navigating to …" notification appears and directions keep coming (Android 12+ limits on starting foreground services from the background; Android 14's "while using the app" location rules)
+- [ ] Cold start from the car with the phone app never opened since the phone started and the phone locked, then start a trip: directions keep coming (phone GPS with location allowed all the time, else the car's position); the "Navigating to …" notification appears once the app is next on screen, as Android and expo-location refuse the service before that (docs/android-auto-locked-phone.md) (Android 12+ limits on starting foreground services from the background; Android 14's "while using the app" location rules)
 - [ ] Swipe the app away mid-trip, then open it again: no "Navigating" notification left over, and GPS isn't left running
 - [ ] "Navigate to Mt Coot-tha Lookout" by voice (Assistant) opens its route preview, with the phone app closed and with it open; `adb shell am start -a androidx.car.app.action.NAVIGATE -d "geo:-27.47,153.03"` (or the DHU's equivalent) does the same for a point
 - [ ] A navigate request while signed out on the phone asks to sign in, and Try again continues to the place
@@ -248,7 +249,13 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   Re-centre after the map is dragged, and End asks first unless you've arrived. Still to see on a
   device: the arrows' look, and Re-centre with the real MapLibre camera. The device and head-unit
   checks stay on docs/todo.md: they need a phone with Play.
-- **The to-do list of 3 November, part two, 2026-11-03 (in code; not yet on the server or in an app build).**
+- **The phone locked, fixed 2026-11-03 (app 0.5.9).** JavaScript timers now run for a trip and while the car
+  app is open, and the phone's location listener starts even when the location service is refused; the
+  service is tried again when the app next shows. Timers checked on the Android 16 emulator with the screen off
+  and the activity stopped: uploads every 60 s, where the 2 November drive went 12 minutes without one.
+  Not run: a car session, test drive, or the listener working without the service, as the emulator has no
+  Android Auto. See [android-auto-locked-phone.md](android-auto-locked-phone.md).
+- **The to-do list of 3 November, part two, 2026-11-03 (app 0.5.9).**
   A new route for a car at speed no longer starts with a turn too close to make (under 6 s of driving at
   5 m/s or more): it's asked for again through a point further up the road. Checked by tests, and by
   asking the live graph along the 3 November track: from Gordon Street at 12 to 15 m/s, a left turn 5 to

@@ -31,22 +31,28 @@ let phoneFixes: { remove(): void } | null = null;
  * fixes are dropped by navigation as already followed.
  */
 export async function startNavigationLocation(destinationName: string | null, phone: PhoneFixNative | null = native) {
-  await Location.startLocationUpdatesAsync(NAVIGATION_TASK, {
-    accuracy: Location.Accuracy.BestForNavigation,
-    timeInterval: 1000,
-    distanceInterval: 5,
-    deferredUpdatesInterval: 0,
-    pausesUpdatesAutomatically: false,
-    foregroundService: {
-      notificationTitle: destinationName ? `Navigating to ${destinationName}` : 'Navigating',
-      notificationBody: 'Directions keep going with the screen off.',
-      notificationColor: '#1765cc',
-      killServiceOnDestroy: true,
-    },
-  });
-  if (!phone || phoneFixes) return;
-  phoneFixes = phone.addListener('onPhoneFix', (loc) => onFixes?.([loc]));
-  if (!phone.watchPhoneLocation()) stopPhoneFixes(phone);
+  try {
+    await Location.startLocationUpdatesAsync(NAVIGATION_TASK, {
+      accuracy: Location.Accuracy.BestForNavigation,
+      timeInterval: 1000,
+      distanceInterval: 5,
+      deferredUpdatesInterval: 0,
+      pausesUpdatesAutomatically: false,
+      foregroundService: {
+        notificationTitle: destinationName ? `Navigating to ${destinationName}` : 'Navigating',
+        notificationBody: 'Directions keep going with the screen off.',
+        notificationColor: '#1765cc',
+        killServiceOnDestroy: true,
+      },
+    });
+  } finally {
+    // The service is refused with no app screen showing (a trip started from the car, phone locked).
+    // Someone who allowed location all the time still gets positions from the module without it.
+    if (phone && !phoneFixes) {
+      phoneFixes = phone.addListener('onPhoneFix', (loc) => onFixes?.([loc]));
+      if (!phone.watchPhoneLocation()) stopPhoneFixes(phone);
+    }
+  }
 }
 
 function stopPhoneFixes(phone: PhoneFixNative | null) {

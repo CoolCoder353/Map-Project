@@ -42,8 +42,12 @@ class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared))
     openDirections = coordinator::openDirections
     // The car's own position, for when the phone's goes quiet (see CarLocation).
     val stopLocation = CarLocation(HardwareFixSource(carContext), api).start()
+    api.carSession(true)
     lifecycle.addObserver(object : DefaultLifecycleObserver {
-      override fun onDestroy(owner: LifecycleOwner) = stopLocation()
+      override fun onDestroy(owner: LifecycleOwner) {
+        stopLocation()
+        api.carSession(false)
+      }
     })
     // After Home is on the stack, so a trip already running goes on top of it.
     Handler(Looper.getMainLooper()).post {

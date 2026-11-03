@@ -1,4 +1,5 @@
 /// <reference types="jest" />
+import { timerHold } from '../src/lib/keepTimers';
 import { waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
 import { formatDistanceShort } from '@wayfinder/nav';
@@ -329,6 +330,15 @@ describe('the edges', () => {
     await carHandlers.start!({ routeId: 'r30', destinationName: 'x' });
     expect(mockNavigation.start).toHaveBeenCalledTimes(1);
   });
+});
+
+it('keeps JavaScript’s timers running while the car app is open', async () => {
+  const hold = jest.spyOn(timerHold, 'hold');
+  const release = jest.spyOn(timerHold, 'release');
+  expect(await carHandlers.carSession!({ active: true })).toEqual({});
+  expect(hold).toHaveBeenCalledWith('car');
+  expect(await carHandlers.carSession!({ active: false })).toEqual({});
+  expect(release).toHaveBeenCalledWith('car');
 });
 
 describe('report', () => {

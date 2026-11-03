@@ -5,7 +5,9 @@ import * as Crypto from 'expo-crypto';
 import * as Location from 'expo-location';
 import * as SecureStore from 'expo-secure-store';
 import { speak as say, stopSpeaking } from './voice';
+import { AppState } from 'react-native';
 import { api } from '../lib/api';
+import { timerHold } from '../lib/keepTimers';
 import { askForNotifications } from '../lib/notifications';
 import { setNavigationRecording } from '../tracking/navigationRecording';
 import { sqliteQueueStore } from '../tracking/sqliteStore';
@@ -98,6 +100,7 @@ export interface NavigationService {
   subscribe(listener: () => void): () => void;
 }
 
+const TIMERS_FOR_TRIP = 'trip';
 const REROUTE_FAILED = 'Couldn’t get a new route. Keep heading to the destination; trying again shortly.';
 /** Where the voice being muted is kept, so it stays as it was left trip to trip and across restarts. */
 const MUTED_KEY = 'wf.voiceMuted';
@@ -182,6 +185,9 @@ export function createNavigationService(): NavigationService {
   let turnaroundSince: number | null = null;
   /** Where that route was given; cleared when asking again, so a failed attempt waits to retry. */
   let turnaroundFrom: LngLat | null = null;
+  /** The location service is up. It's refused with no app screen showing, so it's tried again when one shows. */
+  let locationService = false;
+  let appState: { remove(): void } | null = null;
   let travelledStepM = TRAVELLED_STEP_M;
   let timers: ReturnType<typeof setTimeout>[] = [];
 
@@ -403,6 +409,10 @@ export function createNavigationService(): NavigationService {
     const wasSimulated = simulated;
     simulated = false;
     generation++;
+    timerHold.release(TIMERS_FOR_TRIP);
+    appState?.remove();
+    appState = null;
+    locationService = false;
     watch?.remove();
     watch = null;
     if (wasActive && !wasSimulated) void inTurn(stopNavigationLocation).catch(() => undefined);
@@ -447,6 +457,7 @@ export function createNavigationService(): NavigationService {
     travelledStepM = TRAVELLED_STEP_M;
     const gen = generation;
     set({ ...idle(), active: true, route, destinationName: opts.destinationName ?? null });
+    timerHold.hold(TIMERS_FOR_TRIP);
     // A test drive is fed its fixes by the caller and saves nothing.
     if (simulated) return;
     // Standing still, the phone sends no fixes (one a second or every 5 m): a wait at the lights still
@@ -476,13 +487,19 @@ export function createNavigationService(): NavigationService {
           if (gen !== generation) return;
         }
         // Failing to start it only matters with the phone locked; the watch below still navigates.
-        void inTurn(async () => {
-          if (gen !== generation) return; // this trip ended before its turn came
-          await startNavigationLocation(opts.destinationName ?? null);
-          // No trip left by the time it started: the foreground service mustn't outlive it. (A
-          // newer trip's service is left alone; its own stop comes after this in turn.)
-          if (session === null) await stopNavigationLocation();
-        }).catch(() => undefined);
+        const startService = () =>
+          void inTurn(async () => {
+            if (gen !== generation) return; // this trip ended before its turn came
+            await startNavigationLocation(opts.destinationName ?? null);
+            if (gen === generation) locationService = true;
+            // No trip left by the time it started: the foreground service mustn't outlive it. (A
+            // newer trip's service is left alone; its own stop comes after this in turn.)
+            if (session === null) await stopNavigationLocation();
+          }).catch(() => undefined);
+        startService();
+        appState = AppState.addEventListener('change', (state) => {
+          if (state === 'active' && !locationService && gen === generation) startService();
+        });
         const sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.BestForNavigation, distanceInterval: 5, timeInterval: 1000 }, (loc) => handleFix(loc));
         // Ended while the phone was asking or starting GPS: stop it straight away.
         if (gen !== generation) sub.remove();

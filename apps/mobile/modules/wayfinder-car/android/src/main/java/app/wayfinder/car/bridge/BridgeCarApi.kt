@@ -23,6 +23,7 @@ class BridgeCarApi(private val bridge: CarBridge) : CarApi {
   ) { }
   override fun stop() = bridge.call("stop", JSONObject()) { }
   override fun setMuted(muted: Boolean) = bridge.call("mute", JSONObject().put("muted", muted)) { }
+  override fun carSession(active: Boolean) = bridge.call("carSession", JSONObject().put("active", active)) { }
   override fun simulate(done: (Result<Unit>) -> Unit) = ask("simulate", JSONObject(), { }, done)
   override fun report(screenshotJpeg: String?, done: (Result<Unit>) -> Unit) =
     ask("report", JSONObject().apply { screenshotJpeg?.let { put("screenshotJpeg", it) } }, { }, done)

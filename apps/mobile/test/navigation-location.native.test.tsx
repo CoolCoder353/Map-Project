@@ -33,6 +33,21 @@ it('hands each batch of locations to navigation', async () => {
   setNavigationFixHandler(null);
 });
 
+it('with the service refused (no app screen showing), still listens for the phone’s positions and says it was refused', async () => {
+  jest.mocked(Location.startLocationUpdatesAsync).mockRejectedValueOnce(new Error('not allowed from the background'));
+  const phone = fakePhone();
+  const got: unknown[][] = [];
+  setNavigationFixHandler((locs) => got.push(locs));
+  await expect(startNavigationLocation(null, phone)).rejects.toThrow('not allowed from the background');
+  expect(phone.watchPhoneLocation).toHaveBeenCalled();
+  phone.fix({ a: 1 });
+  expect(got).toEqual([[{ a: 1 }]]);
+  setNavigationFixHandler(null);
+  await stopNavigationLocation(phone);
+  expect(phone.listening()).toBe(false);
+  jest.mocked(Location.stopLocationUpdatesAsync).mockClear();
+});
+
 it('stops only a service that is running', async () => {
   jest.mocked(Location.hasStartedLocationUpdatesAsync).mockResolvedValueOnce(false);
   await stopNavigationLocation();
@@ -91,9 +106,3 @@ it('stops listening when the module can’t give positions', async () => {
   await stopNavigationLocation(phone);
 });
 
-it('leaves the module alone when the location service doesn’t start', async () => {
-  const phone = fakePhone();
-  jest.mocked(Location.startLocationUpdatesAsync).mockRejectedValueOnce(new Error('not allowed from the background'));
-  await expect(startNavigationLocation(null, phone)).rejects.toThrow();
-  expect(phone.watchPhoneLocation).not.toHaveBeenCalled();
-});

@@ -72,6 +72,14 @@ class BridgeCarApiTest {
     )
   }
 
+  @Test fun saysWhenTheCarAppOpensAndCloses() {
+    val sent = mutableListOf<String>()
+    val b = CarBridge(post = { it.run() }, postDelayed = { _, _ -> }).also { it.connect { _, method, params -> sent += "$method $params" } }
+    BridgeCarApi(b).carSession(true)
+    BridgeCarApi(b).carSession(false)
+    assertEquals(listOf("""carSession {"active":true}""", """carSession {"active":false}"""), sent)
+  }
+
   @Test fun sendsTheMapPictureWithAReport() {
     val sent = mutableListOf<String>()
     val b = CarBridge(post = { it.run() }, postDelayed = { _, _ -> }).also { it.connect { _, method, params -> sent += "$method $params" } }

@@ -1,9 +1,26 @@
 # Android Auto with the phone locked
 
-What Wayfinder can and can't do in the car while the phone is locked, as of 2026-11-03 (app 0.5.8
-plus the changes in the same commit as this page). **None of this has been run on a phone with
-Android Auto and the phone locked on purpose:** no device was attached. Each finding says what it
-rests on.
+What Wayfinder can and can't do in the car while the phone is locked. Written 2026-11-03 about app
+0.5.8; **Fixed since** says what later changes altered, and the rest of the page describes 0.5.8
+unless it says otherwise. **None of this has been run on a phone with Android Auto and the phone
+locked on purpose:** no such device was attached. Each finding says what it rests on.
+
+## Fixed since (app 0.5.9)
+
+- **The phone's GPS listener now starts even when the location service is refused,** so someone who
+  allowed location all the time should get phone positions on a trip started from the car. The service
+  is tried again when an app screen next shows, which also brings the "Navigating to …" notification.
+- **JavaScript timers now keep running** for the length of a trip (test drives too) and while the car
+  app is open, through a headless task that does nothing and ends when its promise resolves
+  (`src/lib/keepTimers.ts`, `ReactBoot.keepTimersRunning`). That covers every row of the timer table
+  below. The cost is a timer check on each frame while it runs, so a little more battery with the
+  screen off. **Checked on the Android 16 emulator, 2026-11-03,** on a test build with simulated GPS:
+  a trip with the screen turned off at 04:17:04 and the app's activity stopped (the log shows
+  `wm_on_stop_called`) uploaded at 04:17:29, 04:18:29, 04:19:29 and 04:20:29, every 60 s. The emulator
+  has no Android Auto, so the car-session case and test drive haven't been run.
+- **Still open:** with location allowed only while using the app, a trip started from the car while
+  locked has no phone GPS and relies on the car's position, and whether a location service can start
+  from the car at all still needs a phone in a car.
 
 ## The short version
 
@@ -102,19 +119,6 @@ as fixes arrive.
   been locked for over an hour, and to unlock it before connecting by USB. An app can't change this.
 - **A driver can't fix anything from the car:** signing in and granting location or notifications need
   the unlocked phone. The car's messages already say "When it's safe".
-
-## What to do about it
-
-Fixes are listed in [todo.md](todo.md). In order:
-
-1. **Add the phone's location listener even when the service is refused** (small). With "allow all the
-   time" this may bring phone GPS back to car-started trips. Test on a device.
-2. **Keep JavaScript timers running during a car session or trip** (medium). React Native's own route
-   is a headless JS task, which `JavaTimerManager` already treats as a reason to run timers. This fixes
-   every row of the timer table at once, including test drive.
-3. **Find out whether a location service can start from the car** (needs a device). If it can't, say on
-   the phone's trip and in the docs that car-started trips use the car's position.
-4. **Correct the checklist** once 1 to 3 are settled.
 
 ## Checking it on a phone
 

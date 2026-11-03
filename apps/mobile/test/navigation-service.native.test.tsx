@@ -1,4 +1,7 @@
 /// <reference types="jest" />
+import { AppState } from 'react-native';
+import { timerHold } from '../src/lib/keepTimers';
+import { startNavigationLocation } from '../src/nav/navigationLocation';
 import { waitFor } from '@testing-library/react-native';
 import * as Speech from 'expo-speech';
 import { ARRIVED_END_MS, FIRST_FIX_WAIT_MS, navigation, REROUTE_RETRY_MS, REROUTE_TIMEOUT_MS, TRAVELLED_MAX_POINTS, TURNAROUND_GRACE_MS } from '../src/nav/navigationService';
@@ -635,6 +638,46 @@ it('asks for a new route with the speed as well as the heading, so it can leave 
   mockOnFix!({ timestamp: 1000, coords: { longitude: 153.2196, latitude: -27.56, speed: 15, heading: 90, accuracy: 5 } });
   await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-new'));
   expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).toMatchObject({ heading: 90, speedMps: 15 });
+});
+
+it('keeps JavaScript’s timers running for the length of a trip, test drives too', async () => {
+  const hold = jest.spyOn(timerHold, 'hold');
+  const release = jest.spyOn(timerHold, 'release');
+  navigation.start(route(), { simulated: true });
+  expect(hold).toHaveBeenLastCalledWith('trip');
+  release.mockClear();
+  navigation.stop();
+  expect(release).toHaveBeenCalledWith('trip');
+});
+
+it('a location service refused with no screen showing is tried again when the app comes on screen', async () => {
+  const changes: Array<(s: string) => void> = [];
+  const removed = jest.fn();
+  const listen = jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, fn) => {
+    changes.push(fn as (s: string) => void);
+    return { remove: removed } as never;
+  });
+  const start = jest.mocked(startNavigationLocation);
+  start.mockClear();
+  start.mockRejectedValueOnce(new Error('not allowed from the background'));
+  try {
+    navigation.start(route());
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(changes).toHaveLength(1));
+    changes[0]!('background');
+    expect(start).toHaveBeenCalledTimes(1);
+    changes[0]!('active');
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(2));
+    // Up now: coming on screen again doesn't start it again.
+    await new Promise((r) => setImmediate(r));
+    changes[0]!('active');
+    await new Promise((r) => setImmediate(r));
+    expect(start).toHaveBeenCalledTimes(2);
+    navigation.stop();
+    expect(removed).toHaveBeenCalled();
+  } finally {
+    listen.mockRestore();
+  }
 });
 
 it('driven on up a long dead end, updates the route without saying to turn around again', async () => {

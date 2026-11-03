@@ -221,13 +221,13 @@ request `BridgeCarApi.kt` sends has a handler in `src/car/handlers.ts`.
 
 Navigation is one session for the whole app (`src/nav/navigationService.ts`), followed by the
 phone's Navigate screen and the car alike; a trip started on either shows on both. While it runs,
-a location foreground service keeps directions coming with the phone locked. With the phone locked, expo-location
+a location foreground service keeps directions coming with the phone locked. It's refused with no app screen showing (a trip started from the car, phone locked), so it's tried again when one next shows; the module's listener below starts either way. With the phone locked, expo-location
 stops its watch and passes the service's fixes on through one background job each, which Android 16
 holds back under its job quota, so the module's own listener (`PhoneLocation.kt`, events `onPhoneFix`)
 sends each fix to navigation directly for the length of the trip (`src/nav/navigationLocation.ts`); its starts and stops
 run one at a time, and one left over from a trip the app never ended (swiped away mid-trip) is
 stopped when the app starts. A request for a new route that hasn't answered within 20 s is given up
-on as the next fix arrives (timers don't run with the phone locked) and asked again later. A new
+on as the next fix arrives and asked again later. JavaScript timers only run with an app screen showing or a headless task running, so one runs for the length of a trip and while the car app is open (`src/lib/keepTimers.ts`); the checks made as fixes arrive stay in case it can't start. A new
 route that starts by turning around (the car is in a dead end) is said once, "Route updated. Turn
 around when you can", and not asked for again for a minute while the driver finds somewhere to
 turn, unless the car gets 150 m from where it was told (it has carried on, or taken another road);

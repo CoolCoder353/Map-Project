@@ -5,16 +5,14 @@ picked then are done (see verification.md). Each has what users see today, where
 the code, and a rough size. Line numbers are as of that date. Take an item
 off this list when it ships, and record it in [verification.md](verification.md).
 
-## Android Auto with the phone locked
+## Android Auto with the phone locked: what's left
 
-- **Today:** a trip started from the car with the phone locked has no location service or phone GPS,
-  and JavaScript timers stop whenever no app screen is showing, so uploads wait for the end of the
-  trip, server calls don't time out and test drive doesn't move. Full analysis, with what each finding
-  rests on: [android-auto-locked-phone.md](android-auto-locked-phone.md).
-- **Where:** `apps/mobile/src/nav/navigationLocation.ts`, `apps/mobile/src/nav/navigationService.ts`,
-  `apps/mobile/src/lib/apiClient.ts`, `apps/mobile/src/car/simulation.ts`.
-- **Size:** small to add the location listener, medium for the timers. Whether a location service can
-  start from the car needs a device. Car, phone.
+- **Today:** with location allowed only while using the app, a trip started from the car while locked
+  has no phone GPS and relies on the car's position, and it has no "Navigating to …" notification until
+  the app next shows. Whether Android lets a location service start from the car at all is unknown.
+  What's fixed and what isn't: [android-auto-locked-phone.md](android-auto-locked-phone.md).
+- **Where:** `apps/mobile/src/nav/navigationLocation.ts`.
+- **Needs:** a phone in a car, or with the head unit. Car, phone.
 
 ## A new route can still flip between answers
 

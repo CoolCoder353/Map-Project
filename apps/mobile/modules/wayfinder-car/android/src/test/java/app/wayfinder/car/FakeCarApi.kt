@@ -39,6 +39,7 @@ class FakeCarApi : CarApi {
   override fun stop() { calls += "stop" }
   override fun location(fix: CarFix) { fixes += fix }
   override fun setMuted(muted: Boolean) { calls += "mute $muted" }
+  override fun carSession(active: Boolean) { calls += "carSession $active" }
   override fun simulate(done: (Result<Unit>) -> Unit) = hold("simulate", done)
   override fun report(screenshotJpeg: String?, done: (Result<Unit>) -> Unit) {
     reportShots += screenshotJpeg

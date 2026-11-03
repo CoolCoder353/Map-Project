@@ -1,6 +1,7 @@
 package app.wayfinder.car
 
 import app.wayfinder.car.bridge.CarBridge
+import app.wayfinder.car.bridge.ReactBoot
 import app.wayfinder.car.voice.NavVoice
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -33,6 +34,9 @@ class WayfinderCarModule : Module() {
     // (see PhoneLocation). False when they can't start.
     Function("watchPhoneLocation") { appContext.reactContext != null && phoneLocation.value.start() }
     Function("stopPhoneLocation") { if (phoneLocation.isInitialized()) phoneLocation.value.stop() }
+
+    // See src/lib/keepTimers.ts.
+    Function("keepTimersRunning") { appContext.reactContext?.let(ReactBoot::keepTimersRunning) }
 
     OnDestroy {
       if (phoneLocation.isInitialized()) phoneLocation.value.stop()

@@ -90,6 +90,8 @@ export const CarParams = {
   routeLine: z.object({ routeId: z.string() }),
   start: z.object({ routeId: z.string(), destinationName: z.string().max(200) }),
   mute: z.object({ muted: z.boolean() }),
+  /** The car app opened or closed: its requests need JavaScript's timers, with or without a phone screen. */
+  carSession: z.object({ active: z.boolean() }),
   /** A picture of the car's map as a base64 JPEG, where it could be taken. */
   report: z.object({ screenshotJpeg: FeedbackScreenshotSchema.shape.data.optional() }),
   /** The car's own location (its GNSS), sent by the car app on every fix. */

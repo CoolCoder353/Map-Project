@@ -20,6 +20,8 @@ declare class WayfinderCarModule extends NativeModule<Events> {
   /** Starts onPhoneFix events, which keep coming with the phone locked; false if they can't. */
   watchPhoneLocation(): boolean;
   stopPhoneLocation(): void;
+  /** Starts the task that keeps JavaScript timers running with no app screen (src/lib/keepTimers.ts). */
+  keepTimersRunning(): void;
 }
 
 export type CarNative = Pick<WayfinderCarModule, 'ready' | 'resolve' | 'reject' | 'setNavigation' | 'speak' | 'stopSpeaking' | 'addListener'>;
@@ -27,4 +29,4 @@ export type CarNative = Pick<WayfinderCarModule, 'ready' | 'resolve' | 'reject' 
 export type PhoneFixNative = Pick<WayfinderCarModule, 'watchPhoneLocation' | 'stopPhoneLocation' | 'addListener'>;
 
 /** The car app's native side, or null where it isn't built in (Expo Go, Jest). */
-export const native: (CarNative & PhoneFixNative) | null = requireOptionalNativeModule<WayfinderCarModule>('WayfinderCar');
+export const native: (CarNative & PhoneFixNative & Pick<WayfinderCarModule, 'keepTimersRunning'>) | null = requireOptionalNativeModule<WayfinderCarModule>('WayfinderCar');

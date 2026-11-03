@@ -13,6 +13,8 @@ interface CarApi {
   fun location(fix: CarFix)
   fun stop()
   fun setMuted(muted: Boolean)
+  /** The car app opened or closed: it needs the phone's JavaScript timers while open. Nothing comes back. */
+  fun carSession(active: Boolean)
   /** "Report" while driving: files a bug report with what the car is showing, and a picture of its map if there is one (see src/car/handlers.ts). */
   fun report(screenshotJpeg: String? = null, done: (Result<Unit>) -> Unit)
   /** The car's "auto drive": a test drive that records nothing (see src/car/simulation.ts). */

@@ -8,6 +8,7 @@ import { Platform } from 'react-native';
 import { api, hasSavedSession } from '../lib/api';
 import { ApiError, isServerUrl } from '../lib/apiClient';
 import { kindOf } from '../lib/categories';
+import { timerHold } from '../lib/keepTimers';
 import { getServerUrl } from '../lib/server';
 import { navigation, type NavSnapshot } from '../nav/navigationService';
 import type { CarHandlers } from './controller';
@@ -77,6 +78,7 @@ export const MAX_ROWS = 6;
 // Shown in the car: anything that sends the driver to the phone says to wait until it's safe (VI-1).
 const NO_LOCATION = 'Can’t tell where you are. When it’s safe, check that location is on for Wayfinder on your phone.';
 
+const TIMERS_FOR_CAR = 'car';
 export const REPORT_COOLDOWN_MS = 60_000;
 export const REPORT_JUST_SENT = 'Already reported. Wait a minute before reporting again.';
 export const REPORT_LIMIT = 'Too many reports this hour. When it’s safe, use Send feedback on your phone later.';
@@ -234,6 +236,12 @@ export const carHandlers: CarHandlers = {
       { coords: { longitude: f.lon, latitude: f.lat, accuracy: f.accuracyM, speed: f.speedMps, heading: f.headingDeg, altitude: null, altitudeAccuracy: null }, timestamp: f.timeMs },
       'car',
     );
+    return {};
+  },
+
+  async carSession(params) {
+    if (CarParams.carSession.parse(params).active) timerHold.hold(TIMERS_FOR_CAR);
+    else timerHold.release(TIMERS_FOR_CAR);
     return {};
   },
 
