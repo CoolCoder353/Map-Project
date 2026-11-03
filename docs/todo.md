@@ -5,6 +5,24 @@ picked then were done the same day (see verification.md). Each has what users se
 the code, and a rough size. Line numbers are as of that date. Take an item
 off this list when it ships, and record it in [verification.md](verification.md).
 
+## A new route can ask for a turn the car has already reached
+
+- **Today:** on the 3 November drive, replaying the requests shows a new route from a car doing 55
+  km/h on Gordon Street can start "Continue 10 m, turn left", too close to make, so it goes off route
+  again seconds later (requests 8 s apart). The answer also flips between routes from one second to
+  the next (1,008 m, then a 612 m one with a U-turn).
+- **Where:** `fastestRoute` in `packages/core/src/services/routing.ts`, `reroute` in
+  `apps/mobile/src/nav/navigationService.ts`. The replay used where the trip ended, not its real
+  destination, so check it against a drive first.
+- **Size:** medium. Car, phone.
+
+## Screenshot of the car screen with a report
+
+- **Today:** a one-tap report from the car has words only (a tester's idea, 3 November). Whether the
+  car app can capture its own screen hasn't been looked into; the map it draws may be all it can get.
+- **Where:** `apps/mobile/src/car/handlers.ts` (the report), `apps/mobile/modules/wayfinder-car`.
+- **Size:** unknown until that's checked. Car, server.
+
 ## Checks on a device and the head unit that have never been run
 
 - **Today:** the whole Android Auto head-unit checklist is unticked, and several car fixes were made

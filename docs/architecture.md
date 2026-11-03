@@ -230,7 +230,8 @@ stopped when the app starts. A request for a new route that hasn't answered with
 on as the next fix arrives (timers don't run with the phone locked) and asked again later. A new
 route that starts by turning around (the car is in a dead end) is said once, "Route updated. Turn
 around when you can", and not asked for again for a minute while the driver finds somewhere to
-turn; asking sooner only gave the same answer every few seconds. Arriving is said once, and the trip
+turn, unless the car gets 150 m from where it was told (it has carried on, or taken another road);
+asking sooner only gave the same answer every few seconds. Arriving is said once, and the trip
 ends by itself 15 s later (on a timer, or the next fix with the phone locked); the phone's Navigate
 screen then closes. The session also keeps the road driven and the speed, for the maps. A muted
 voice stays muted from trip to trip and across restarts (kept in secure storage, as the contacts
@@ -315,7 +316,8 @@ limit is used up.
 
 **A new route that starts by turning round.** Only a route asked for with the car's heading says
 "Turn around when you can"; the phone then waits a minute before asking again, until the driver is
-50 m along the new route or back on it. A U-turn on a route asked for without a heading is just the
+50 m along the new route or back on it, or 150 m from where they were told. Asked again within the
+minute and told the same, it updates the route without saying so again. A U-turn on a route asked for without a heading is just the
 best way from there, so it isn't waited on. The road driven is kept to 1,500 points: past that it
 is drawn more coarsely further back, rather than growing for the whole trip.
 

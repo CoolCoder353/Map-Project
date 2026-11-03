@@ -248,6 +248,23 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   Re-centre after the map is dragged, and End asks first unless you've arrived. Still to see on a
   device: the arrows' look, and Re-centre with the real MapLibre camera. The device and head-unit
   checks stay on docs/todo.md: they need a phone with Play.
+- **The 3 November server check and drive (app 0.5.8), 2026-11-03 (fixed in code; not yet in an app build).**
+  The server itself was healthy: all containers up, no stored errors or failed jobs in 30 days, the only
+  5xx a 502 while the API restarted for the deploy, no reply over 3 s, no memory kills, disk 45%. The
+  issues were the reports from the morning drive. *"Couldn't reroute"* (6:56 am, Cleveland): every
+  reroute request answered 200 in under 20 ms, so the failure was in the app. Replayed read-only
+  against the live graph along the recorded track, to the place the trip ended (the trip's real
+  destination and any detour points aren't stored): a new route on Gordon Street heading north began
+  with a U-turn (177 m, then "Continue", which is the "Continue in 180 m" in the report). The driver
+  carried on and turned onto Bainbridge Street, but the app waits a minute after a turn-around route
+  before asking again (requests at 6:55:44 and 6:56:45), so it showed the old route, off route, with
+  no new one. It now asks again once the car is 150 m from where it was told to turn, and doesn't
+  repeat the turn-around if the answer is the same. Checked by tests and the replay; not yet driven.
+  Two one-tap reports (6:46 am Russell Street, no limit shown; 6:50 am Shore Street North, 60
+  estimated) came with no details. The road data shows both as main roads with no signposted limit
+  there, which show none or the same road's limit by design, so nothing was changed; they wait on
+  what the driver saw. The two 2 November evening reports (0.5.7) also have no details and weren't
+  investigated. Asking for a screenshot of the car screen with each report is on docs/todo.md.
 - **The 2 November playtest (app 0.5.6), fixed 2026-11-02 (server live, app 0.5.7 on internal testing; the reports marked done or won't fix with notes).** Four reports. The car's one-tap
   Report says the driver can explain from Settings → Send feedback, which couldn't attach anything
   to it: it now lists your reports from the car to add to. The car's position marker vanished while

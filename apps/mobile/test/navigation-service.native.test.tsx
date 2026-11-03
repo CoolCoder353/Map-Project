@@ -593,6 +593,66 @@ it('in a dead end, says to turn around once and lets you find somewhere to do it
   }
 });
 
+it('told to turn around but driven on well past it, asks again without waiting out the minute', async () => {
+  // Gordon Street, 3 Nov: told to go back, the driver carried on and turned onto the next road, and
+  // the car showed the old route, off route, with no new one for a minute.
+  const turnaround = route({ id: 'r-back', instructions: [{ sign: -98, text: 'Turn around when you can', streetName: 'Gordon Street', distanceM: 177, durationS: 20, interval: [0, 1] }] });
+  const onward = route({ id: 'r-onward' });
+  const answers = [turnaround, onward];
+  fake.api.on({ 'POST api/routes/fastest': () => answers.shift()! });
+  const realNow = Date.now.bind(Date);
+  let ahead = 0;
+  const now = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + ahead);
+  try {
+    navigation.start(route());
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2196, -27.56], to: [153.25, -27.56], remainingVia: [] }] });
+    mockOnFix!(fix(153.2196, -27.56, 1000));
+    await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-back'));
+    ahead = 5_000;
+    mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2197, -27.56], to: [153.25, -27.56], remainingVia: [] }] });
+    mockOnFix!(fix(153.2197, -27.56, 6000));
+    expect(fake.api.callsTo('POST api/routes/fastest')).toHaveLength(1);
+    // About 200 m on and only ten seconds later: this is no longer looking for a place to turn.
+    ahead = 10_000;
+    mockResults.push({ state: { status: 'offRoute' }, events: [] });
+    mockOnFix!(fix(153.2216, -27.56, 11000));
+    await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-onward'));
+    expect(fake.api.callsTo('POST api/routes/fastest')[1]!.body).toMatchObject({ from: [153.2216, -27.56] });
+    expect(Speech.speak).toHaveBeenLastCalledWith('Route updated', expect.anything());
+  } finally {
+    now.mockRestore();
+  }
+});
+
+it('driven on up a long dead end, updates the route without saying to turn around again', async () => {
+  const turnaround = route({ id: 'r-back', instructions: [{ sign: -98, text: 'Turn around when you can', streetName: 'Ironbark Street', distanceM: 300, durationS: 30, interval: [0, 1] }] });
+  fake.api.on({ 'POST api/routes/fastest': () => turnaround });
+  const realNow = Date.now.bind(Date);
+  let ahead = 0;
+  const now = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + ahead);
+  try {
+    navigation.start(route());
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2196, -27.56], to: [153.25, -27.56], remainingVia: [] }] });
+    mockOnFix!(fix(153.2196, -27.56, 1000));
+    await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-back'));
+    await waitFor(() => expect(navigation.getSnapshot().rerouting).toBe(false));
+    const spoken = (Speech.speak as jest.Mock).mock.calls.length;
+    ahead = 5_000;
+    mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2197, -27.56], to: [153.25, -27.56], remainingVia: [] }] });
+    mockOnFix!(fix(153.2197, -27.56, 6000));
+    ahead = 20_000;
+    mockResults.push({ state: { status: 'offRoute' }, events: [] });
+    mockOnFix!(fix(153.2216, -27.56, 21000));
+    await waitFor(() => expect(fake.api.callsTo('POST api/routes/fastest')).toHaveLength(2));
+    await waitFor(() => expect(navigation.getSnapshot().rerouting).toBe(false));
+    expect((Speech.speak as jest.Mock).mock.calls.length).toBe(spoken);
+  } finally {
+    now.mockRestore();
+  }
+});
+
 it('once turned round and back on the route, goes off it again and is rerouted straight away', async () => {
   const turnaround = route({ id: 'r-back', instructions: [{ sign: -98, text: 'Turn around when you can', streetName: '', distanceM: 98, durationS: 9, interval: [0, 1] }] });
   fake.api.on({ 'POST api/routes/fastest': () => turnaround });

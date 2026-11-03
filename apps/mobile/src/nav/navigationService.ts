@@ -28,6 +28,11 @@ export const ARRIVED_END_MS = 15_000;
  * driver heard "Route updated" every few seconds while looking for a place to turn.
  */
 export const TURNAROUND_GRACE_MS = 60_000;
+/**
+ * Driven this far from where that route was given, the driver isn't looking for a place to turn any
+ * more (they've carried on, or taken another road), so the wait is over: the old route is no use.
+ */
+export const TURNAROUND_MOVED_M = 150;
 /** How long to wait for the first fix before saying the phone can't find where it is. */
 export const FIRST_FIX_WAIT_MS = 30_000;
 /** The car's location is followed once the phone's has been silent this long. */
@@ -175,6 +180,8 @@ export function createNavigationService(): NavigationService {
   let arrivedAt: number | null = null;
   /** When a new route that starts by turning around was given (see [TURNAROUND_GRACE_MS]). */
   let turnaroundSince: number | null = null;
+  /** Where that route was given; cleared when asking again, so a failed attempt waits to retry. */
+  let turnaroundFrom: LngLat | null = null;
   let travelledStepM = TRAVELLED_STEP_M;
   let timers: ReturnType<typeof setTimeout>[] = [];
 
@@ -213,6 +220,7 @@ export function createNavigationService(): NavigationService {
     const current = session;
     if (!current || reroutingNow) return;
     const attempt = ++rerouteAttempt;
+    turnaroundFrom = null;
     reroutingNow = true;
     reroutingSince = Date.now();
     pendingReroute = { to, via, at: reroutingSince, ...(kind ? { kind } : {}) };
@@ -232,8 +240,11 @@ export function createNavigationService(): NavigationService {
       // Only a route asked for with the car's heading says "turn around when you can"; without one a
       // U-turn is just the best way from here, and the driver may do it at once.
       const turnaround = 'heading' in heading && isTurnaround(first?.sign);
-      turnaroundSince = turnaround ? Date.now() : null;
-      speak(turnaround ? `Route updated. ${first!.text}` : 'Route updated');
+      // Driven on up the street and told the same again within the minute: once is enough.
+      const alreadyTold = turnaround && turnaroundSince !== null && Date.now() - turnaroundSince < TURNAROUND_GRACE_MS;
+      if (!alreadyTold) turnaroundSince = turnaround ? Date.now() : null;
+      turnaroundFrom = turnaround ? from : null;
+      if (!alreadyTold) speak(turnaround ? `Route updated. ${first!.text}` : 'Route updated');
     } catch {
       if (!stale()) set({ error: REROUTE_FAILED });
     } finally {
@@ -273,6 +284,7 @@ export function createNavigationService(): NavigationService {
       if (e.type === 'backOnRoute') {
         pendingReroute = null;
         turnaroundSince = null;
+        turnaroundFrom = null;
         set({ error: null });
       }
       if (e.type === 'offRoute') {
@@ -330,12 +342,16 @@ export function createNavigationService(): NavigationService {
       return; // one odd fix; the next one carries on
     }
     set({ position: here, headingDeg: fix.headingDeg ?? snap.headingDeg, speedMps, travelled: withTravelled(snap.travelled, here), state: result.state, ...firstFix });
-    if (turnaroundSince !== null && result.state.status === 'navigating' && result.state.progressM >= TURNAROUND_DONE_M) turnaroundSince = null;
+    if (turnaroundSince !== null && result.state.status === 'navigating' && result.state.progressM >= TURNAROUND_DONE_M) {
+      turnaroundSince = null;
+      turnaroundFrom = null;
+    }
     handleEvents(result.events);
     if (reroutingNow && Date.now() - reroutingSince >= REROUTE_TIMEOUT_MS) abandonReroute();
     // Still off route after a failed attempt: ask again from here, now and then.
     const pending = pendingReroute;
-    if (result.state.status === 'offRoute' && pending && !reroutingNow && Date.now() - pending.at >= REROUTE_RETRY_MS) {
+    const drivenOn = turnaroundFrom !== null && haversineM(turnaroundFrom, here) >= TURNAROUND_MOVED_M;
+    if (result.state.status === 'offRoute' && pending && !reroutingNow && (drivenOn || Date.now() - pending.at >= REROUTE_RETRY_MS)) {
       void reroute([lon, lat], pending.to, pending.via, pending.kind);
     }
     if (simulated) return;
@@ -399,6 +415,7 @@ export function createNavigationService(): NavigationService {
     reroutingNow = false;
     arrivedAt = null;
     turnaroundSince = null;
+    turnaroundFrom = null;
     timers.forEach(clearTimeout);
     timers = [];
     rerouteAttempt++; // an answer for the trip that ended is ignored
