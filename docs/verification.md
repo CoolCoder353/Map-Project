@@ -249,13 +249,13 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   Re-centre after the map is dragged, and End asks first unless you've arrived. Still to see on a
   device: the arrows' look, and Re-centre with the real MapLibre camera. The device and head-unit
   checks stay on docs/todo.md: they need a phone with Play.
-- **The phone locked, fixed 2026-11-03 (app 0.5.9).** JavaScript timers now run for a trip and while the car
+- **The phone locked, fixed 2026-11-03 (server live, app 0.5.9 on internal testing).** JavaScript timers now run for a trip and while the car
   app is open, and the phone's location listener starts even when the location service is refused; the
   service is tried again when the app next shows. Timers checked on the Android 16 emulator with the screen off
   and the activity stopped: uploads every 60 s, where the 2 November drive went 12 minutes without one.
   Not run: a car session, test drive, or the listener working without the service, as the emulator has no
   Android Auto. See [android-auto-locked-phone.md](android-auto-locked-phone.md).
-- **The to-do list of 3 November, part two, 2026-11-03 (app 0.5.9).**
+- **The to-do list of 3 November, part two, 2026-11-03 (server live, app 0.5.9 on internal testing).**
   A new route for a car at speed no longer starts with a turn too close to make (under 6 s of driving at
   5 m/s or more): it's asked for again through a point further up the road. Checked by tests, and by
   asking the live graph along the 3 November track: from Gordon Street at 12 to 15 m/s, a left turn 5 to
