@@ -65,6 +65,18 @@ describe('api()', () => {
     expect(server.calls('POST /api/auth/refresh')).toHaveLength(1);
   });
 
+  it('stays signed in when renewal fails for a reason other than the session ending', async () => {
+    for (const failure of [() => new Response('<html>', { status: 502 }), () => apiError(429, 'rate_limited', 'Slow down')]) {
+      fakeApi({ 'POST /api/auth/refresh': failure });
+      setSession(auth());
+      const seen = vi.fn();
+      const off = onAuthChange(seen);
+      await expect(refreshSession()).resolves.toBeNull();
+      off();
+      expect(seen).not.toHaveBeenCalled();
+    }
+  });
+
   it('returns null from refresh when the network is down', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch'); }));
     await expect(refreshSession()).resolves.toBeNull();

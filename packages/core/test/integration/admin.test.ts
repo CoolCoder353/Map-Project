@@ -79,6 +79,9 @@ describe('admin service guardrails', () => {
     const search = await admin.listUsers(t.db, { q: 'boss', status: 'all', limit: 50, offset: 0 });
     expect(search.items).toHaveLength(1);
     expect(search.items[0]!.tripCount).toBe(0);
+    // Wildcards in the search box are taken literally.
+    expect((await admin.listUsers(t.db, { q: '%', status: 'all', limit: 50, offset: 0 })).items).toHaveLength(0);
+    expect((await admin.listUsers(t.db, { q: 'b_ss', status: 'all', limit: 50, offset: 0 })).items).toHaveLength(0);
   });
 
   it('aggregates metrics and usage', async () => {

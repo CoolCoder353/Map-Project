@@ -82,8 +82,17 @@ export async function login(
 }
 
 /**
+ * A token rotated this recently can still be used once more. Two browser tabs (which share the
+ * cookie) renewing at the same moment, or a phone whose connection dropped before the answer to
+ * its renewal arrived, both present a token that was just rotated; without this they looked like
+ * a stolen token and were signed out everywhere.
+ */
+export const REFRESH_REUSE_GRACE_MS = 15_000;
+
+/**
  * Rotate a refresh token. Reusing an already-rotated token revokes its whole family
- * (a sign the token was stolen).
+ * (a sign the token was stolen), unless it was rotated within REFRESH_REUSE_GRACE_MS and the
+ * family is still signed in.
  */
 export async function refresh(
   db: Db,
@@ -93,19 +102,27 @@ export async function refresh(
 ): Promise<{ response: AuthResponse; tokens: IssuedTokens }> {
   const result = await withTransaction(db, async (tx) => {
     const row = (
-      await tx.query<{ id: string; user_id: string; family_id: string; expires_at: Date; revoked_at: Date | null }>(
+      await tx.query<{ id: string; user_id: string; family_id: string; expires_at: Date; revoked_at: Date | null; replaced_by: string | null }>(
         'SELECT * FROM refresh_tokens WHERE token_hash = $1 FOR UPDATE',
         [hashToken(refreshToken)],
       )
     ).rows[0];
     if (!row) throw unauthorized('Session expired');
-    // Reuse of a rotated token: handled after this transaction so the revocation commits.
-    if (row.revoked_at) return { reusedFamily: row.family_id } as const;
+    if (row.revoked_at) {
+      const justRotated = row.replaced_by !== null && Date.now() - row.revoked_at.getTime() < REFRESH_REUSE_GRACE_MS;
+      const familyLive =
+        justRotated &&
+        (await tx.query('SELECT 1 FROM refresh_tokens WHERE family_id = $1 AND revoked_at IS NULL AND expires_at > now() LIMIT 1', [row.family_id]))
+          .rows.length > 0;
+      // Reuse of a rotated token: handled after this transaction so the revocation commits.
+      if (!familyLive) return { reusedFamily: row.family_id } as const;
+    }
     if (row.expires_at < new Date()) throw unauthorized('Session expired');
     const user = await findUserById(tx, row.user_id);
     if (!user || !isActive(user)) throw unauthorized('Session expired');
     const issued = await issueTokens(tx, tokens, user, row.family_id, userAgent);
-    await tx.query('UPDATE refresh_tokens SET revoked_at = now(), replaced_by = $2 WHERE id = $1', [
+    // A token used again within the grace keeps the time it was first rotated, so the grace can't be stretched.
+    await tx.query('UPDATE refresh_tokens SET revoked_at = coalesce(revoked_at, now()), replaced_by = $2 WHERE id = $1', [
       row.id,
       issued.refreshId,
     ]);

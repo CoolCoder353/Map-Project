@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as auth from '../../src/services/auth.js';
 import * as invites from '../../src/services/invites.js';
-import { TokenService } from '../../src/lib/tokens.js';
+import { TokenService, hashToken } from '../../src/lib/tokens.js';
 import { hashPassword } from '../../src/lib/passwords.js';
 import { type TestDb, createTestDb } from '../helpers/db.js';
 
@@ -58,9 +58,29 @@ describe('auth service', () => {
     const first = login.tokens.refreshToken;
     const rotated = await auth.refresh(t.db, tokens, first, null);
     expect(rotated.tokens.refreshToken).not.toBe(first);
-    // Reusing the old token: rejected, and the newer token in the same family is revoked too.
+    // Reusing the old token after the grace: rejected, and the newer token in the same family is revoked too.
+    await t.db.query("UPDATE refresh_tokens SET revoked_at = now() - interval '1 minute' WHERE token_hash = $1", [hashToken(first)]);
     await expect(auth.refresh(t.db, tokens, first, null)).rejects.toMatchObject({ statusCode: 401 });
     await expect(auth.refresh(t.db, tokens, rotated.tokens.refreshToken, null)).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('lets a just-rotated token renew once more (two tabs at once), without signing out', async () => {
+    const login = await auth.login(t.db, tokens, 'dev@example.com', 'long enough pw', null);
+    const first = login.tokens.refreshToken;
+    const [a, b] = [await auth.refresh(t.db, tokens, first, null), await auth.refresh(t.db, tokens, first, null)];
+    // Both tabs keep working.
+    await expect(auth.refresh(t.db, tokens, a.tokens.refreshToken, null)).resolves.toBeTruthy();
+    await expect(auth.refresh(t.db, tokens, b.tokens.refreshToken, null)).resolves.toBeTruthy();
+    // The grace runs from the first rotation, not the latest use.
+    const row = (await t.db.query('SELECT revoked_at FROM refresh_tokens WHERE token_hash = $1', [hashToken(first)])).rows[0];
+    expect(Date.now() - row.revoked_at.getTime()).toBeLessThan(auth.REFRESH_REUSE_GRACE_MS);
+  });
+
+  it('gives no grace to a token from a family that has signed out', async () => {
+    const login = await auth.login(t.db, tokens, 'dev@example.com', 'long enough pw', null);
+    const rotated = await auth.refresh(t.db, tokens, login.tokens.refreshToken, null);
+    await auth.logout(t.db, rotated.tokens.refreshToken);
+    await expect(auth.refresh(t.db, tokens, login.tokens.refreshToken, null)).rejects.toMatchObject({ statusCode: 401 });
   });
 
   it('rejects bad passwords, disabled and deleted accounts', async () => {

@@ -33,7 +33,7 @@ exactly what each field is.
 |---|---|---|
 | POST | `/register` | `{ inviteCode, email, password }` → `AuthResponse` |
 | POST | `/login` | `{ email, password }` → `AuthResponse` |
-| POST | `/refresh` | Rotates the refresh token (a reused one revokes its whole family) |
+| POST | `/refresh` | Rotates the refresh token (a reused one revokes its whole family, unless it was rotated within the last 15 s and that sign-in is still live: two tabs renewing at once) |
 | POST | `/logout` | |
 | POST | `/reset-password` | `{ token, password }` with a token from an admin-made reset link |
 
