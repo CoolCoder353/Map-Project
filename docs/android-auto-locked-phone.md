@@ -22,7 +22,7 @@ locked on purpose:** no such device was attached. Each finding says what it rest
   locked has no phone GPS and relies on the car's position, and whether a location service can start
   from the car at all still needs a phone in a car.
 
-## Since 0.5.9 (in the code, not yet released)
+## Since 0.6.0
 
 - **Home with no trip** follows the car on the car's own GNSS, which needs nothing from the locked
   phone, with the speed and the road's limit; the phone's GPS is only a fallback for a car that gives
