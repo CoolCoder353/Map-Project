@@ -19,6 +19,9 @@ self-hosted routing, tiles and search. pnpm monorepo, TypeScript throughout. Thi
   that has run.
 - **An APK's server address is baked in at build time.** Build with the real address; the build
   script refuses example ones.
+- **Play releases go to internal testing only.** `pnpm play upload` to the internal track is
+  fine; closed testing, open testing, production, or promoting a build onto any other track
+  (`--track closed`, `pnpm play promote`) needs the user's permission first, every time.
 
 ## Layout
 
