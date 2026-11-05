@@ -284,6 +284,13 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   there, which show none or the same road's limit by design, so nothing was changed; they wait on
   what the driver saw. The two 2 November evening reports (0.5.7) also have no details and weren't
   investigated. The tester's idea of a screenshot with each report is done above, as far as an app can.
+- **Android Auto Home with no trip, 2026-11-05 (in the code, not released; the server endpoint not yet deployed).**
+  Home now offers Home as a row of its own, one tap from its routes, and the other saved places behind
+  one "Saved places" row; it stays at six rows. With no trip its map follows the car, pointing the way
+  it's driving, with the speed and the road's limit from the new `GET /api/roads/speed-limit`, on the
+  car's GNSS so it works with the phone locked. Checked by tests at each layer (server, phone
+  JavaScript, Kotlin); no phone with Android Auto was attached, so nothing has been seen on a car
+  screen, and the limit lookup hasn't been run against the live graph.
 - **The open feedback, worked through 2026-11-05 (app fixes in the code, not yet in a release; the reports updated with notes on the server).** Three fixes, each with a test.
   The password field capitalised its first letter on Android: password fields now turn off
   capitalising and autocorrect. Discover "silently failed" when it found nothing: the server log

@@ -4,6 +4,7 @@ import {
   ExploreRouteRequestSchema,
   FastestRouteRequestSchema,
   RoundTripRequestSchema,
+  SpeedLimitQuerySchema,
 } from '@wayfinder/shared';
 import { parse, routingService } from '@wayfinder/core';
 import type { AppDeps } from '../deps.js';
@@ -35,6 +36,12 @@ export const routingRoutes =
         routingService.roundTrips(r, currentUser(req).id, body),
       );
       return { routes };
+    });
+
+    // The limit on the road a car is on, for its map with no trip.
+    app.get('/roads/speed-limit', async (req) => {
+      const q = parse(SpeedLimitQuerySchema, req.query);
+      return deps.ctx.metrics.time('route', 'speedLimit', () => routingService.speedLimitAt(r, { at: [q.lon, q.lat], heading: q.heading }));
     });
 
     app.get('/discover', async (req) => {

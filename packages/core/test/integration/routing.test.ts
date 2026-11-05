@@ -496,3 +496,45 @@ describe('routing service (fake GraphHopper)', () => {
     });
   });
 });
+
+describe('the speed limit where a car is, with no route', () => {
+  const at: LngLat = [153.25, -27.56];
+  const ghWith = (details: GhPath['details'], snapTo?: LngLat) =>
+    ({
+      ...fakeGh,
+      async route(p: RouteParams) {
+        calls.push(p);
+        const path = straightPath(snapTo ? [snapTo, ...p.points.slice(1)] : p.points, SPEED);
+        path.details = details;
+        return [path];
+      },
+    }) as unknown as GraphHopperClient;
+  const limitDeps = (gh: GraphHopperClient) => ({ db: t.db, graphhopper: gh, metrics: new MetricsAggregator(async () => undefined) });
+
+  it('reads the signposted limit at the start of a short route ahead, the way the car is going', async () => {
+    const r = await routing.speedLimitAt(limitDeps(ghWith({ max_speed: [[0, 1, 60], [1, 4, 80]] })), { at, heading: 90 });
+    expect(r).toEqual({ kmh: 60, estimated: false, road: 'Test Road' });
+    const asked = calls.at(-1)!;
+    expect(asked).toMatchObject({ profile: 'car', heading: 90 });
+    expect(asked.points[0]).toEqual(at);
+    // The second point is ahead of the car, east.
+    expect(bearingDeg(at, asked.points[1]!)).toBeCloseTo(90, 0);
+  });
+
+  it('says when the limit is only the legal default for the road', async () => {
+    const r = await routing.speedLimitAt(limitDeps(ghWith({ max_speed: [[0, 4, 50]], max_speed_estimated: [[0, 4, true]] })), { at, heading: 90 });
+    expect(r).toMatchObject({ kmh: 50, estimated: true });
+  });
+
+  it('knows no limit where none is mapped, and none off the road', async () => {
+    expect(await routing.speedLimitAt(limitDeps(ghWith({ max_speed: [[0, 4, null]] })), { at })).toEqual({ kmh: null, estimated: false, road: 'Test Road' });
+    // A car park 200 m from the nearest road: GraphHopper snaps the start onto that road.
+    const far = destination(at, 0, 200);
+    expect(await routing.speedLimitAt(limitDeps(ghWith({ max_speed: [[0, 4, 60]] }, far)), { at })).toEqual({ kmh: null, estimated: false, road: null });
+  });
+
+  it('knows nothing when there is no route from the point', async () => {
+    const none = { ...fakeGh, route: async () => [] } as unknown as GraphHopperClient;
+    expect(await routing.speedLimitAt(limitDeps(none), { at })).toEqual({ kmh: null, estimated: false, road: null });
+  });
+});

@@ -8,6 +8,7 @@ import androidx.car.app.model.MessageTemplate
 import androidx.car.app.model.Template
 import androidx.car.app.navigation.model.PlaceListNavigationTemplate
 import app.wayfinder.car.bridge.CarApi
+import app.wayfinder.car.bridge.CarPlace
 import app.wayfinder.car.map.MapScene
 import app.wayfinder.car.map.MapScenes
 
@@ -75,6 +76,15 @@ object PickScreens {
   fun discover(carContext: CarContext, api: CarApi, map: MapScenes) = PickScreen(
     carContext, map, "Discover nearby", "Nothing new within half an hour’s drive.",
     load = api::discover,
+    describe = { it.name to it.detail },
+    scene = { MapScene.Places(it) },
+    pick = { RoutePreviewScreen.forPlace(carContext, api, map, it) },
+  )
+
+  /** The saved places Home already had: no need to ask the phone again. */
+  fun saved(carContext: CarContext, api: CarApi, map: MapScenes, places: List<CarPlace>) = PickScreen(
+    carContext, map, "Saved places", "No saved places. Save one on your phone or the website.",
+    load = { done -> done(Result.success(places)) },
     describe = { it.name to it.detail },
     scene = { MapScene.Places(it) },
     pick = { RoutePreviewScreen.forPlace(carContext, api, map, it) },

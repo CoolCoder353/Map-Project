@@ -22,6 +22,14 @@ locked on purpose:** no such device was attached. Each finding says what it rest
   locked has no phone GPS and relies on the car's position, and whether a location service can start
   from the car at all still needs a phone in a car.
 
+## Since 0.5.9 (in the code, not yet released)
+
+- **Home with no trip** follows the car on the car's own GNSS, which needs nothing from the locked
+  phone, with the speed and the road's limit; the phone's GPS is only a fallback for a car that gives
+  no position, and with location allowed only while using the app it likely gives none while locked.
+  The limit and the saved places (Home first) come through the phone's JavaScript and its connection,
+  as everything else on the car does. Checked by tests only; not yet seen in a car.
+
 ## The short version
 
 - **A trip started on the phone, then locked, works.** Directions and GPS keep going. Uploads and

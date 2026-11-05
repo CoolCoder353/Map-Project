@@ -118,7 +118,35 @@ describe('status', () => {
       styleUrl: { light: 'https://maps.example.test/map/style.json?theme=light', dark: 'https://maps.example.test/map/style.json?theme=dark' },
       searchHint: 'Search places and addresses',
       here: [153.02, -27.47],
+      saved: [],
     });
+  });
+
+  it('brings your saved places, Home first, then the nearest, each a tap away from its routes', async () => {
+    const savedPlace = (name: string, location: [number, number], description = '') => ({ id: `s-${name}`, name, description, location, createdAt: '2026-10-01T00:00:00Z' });
+    fake.api.on({
+      'GET api/saved-places': () => ({
+        items: [
+          savedPlace('Gym', [153.1, -27.5], 'Fitness First, Carindale'),
+          savedPlace('home', [153.2526, -27.5624], '12 Moselle Drive, Thornlands'),
+          savedPlace('Work', [153.03, -27.47]),
+        ],
+      }),
+    });
+    const { saved } = (await carHandlers.status!({})) as { saved: Array<{ id: string; name: string; detail: string; distanceM: number }> };
+    expect(saved.map((p) => p.name)).toEqual(['home', 'Work', 'Gym']);
+    expect(saved[0]).toMatchObject({ id: 's-home', location: [153.2526, -27.5624] });
+    expect(saved[0]!.detail).toBe(`12 Moselle Drive, Thornlands · ${formatDistanceShort(saved[0]!.distanceM)} away`);
+    expect(saved[1]!.detail).toBe(`${formatDistanceShort(saved[1]!.distanceM)} away`);
+  });
+
+  it('has no saved places when they can’t be fetched, or nobody is signed in', async () => {
+    fake.api.on({ 'GET api/saved-places': () => { throw new Error('offline'); } });
+    expect(await carHandlers.status!({})).toMatchObject({ account: 'signedIn', saved: [] });
+    fake.api.signedIn = false;
+    fake.api.savedSession = false;
+    expect(await carHandlers.status!({})).toMatchObject({ account: 'signedOut', saved: [] });
+    expect(fake.api.callsTo('GET api/saved-places')).toHaveLength(1);
   });
 
   it('is offline when a sign-in is saved but the server can’t be reached', async () => {
@@ -480,5 +508,23 @@ describe('carReportMessage', () => {
     expect(msg).toContain('Trip: fastest route, waiting for the first position, finding a new route.');
     expect(msg).toContain('Speed limit shown: none. Speed: unknown.');
     expect(msg).toContain('Message shown: Still finding where you are.');
+  });
+});
+
+describe('the speed limit with no trip', () => {
+  it('asks the server for the limit where the car is, the way it is going', async () => {
+    fake.api.on({ 'GET api/roads/speed-limit': () => ({ kmh: 60, estimated: false, road: 'Panorama Drive' }) });
+    expect(await carHandlers.speedLimit!({ lon: 153.25, lat: -27.56, headingDeg: 182 })).toEqual({ kmh: 60, estimated: false, road: 'Panorama Drive' });
+    expect(fake.api.callsTo('GET api/roads/speed-limit')[0]!.query).toEqual({ lon: 153.25, lat: -27.56, heading: 182 });
+  });
+
+  it('leaves the heading out when the car doesn’t know it', async () => {
+    fake.api.on({ 'GET api/roads/speed-limit': () => ({ kmh: null, estimated: false, road: null }) });
+    expect(await carHandlers.speedLimit!({ lon: 153.25, lat: -27.56, headingDeg: null })).toEqual({ kmh: null, estimated: false, road: null });
+    expect(fake.api.callsTo('GET api/roads/speed-limit')[0]!.query).toEqual({ lon: 153.25, lat: -27.56, heading: undefined });
+  });
+
+  it('refuses a position that isn’t one', async () => {
+    await expect(carHandlers.speedLimit!({ lon: 'east', lat: -27.56 })).rejects.toThrow();
   });
 });

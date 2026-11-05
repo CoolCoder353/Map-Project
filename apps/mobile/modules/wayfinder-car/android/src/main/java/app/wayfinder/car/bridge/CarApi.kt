@@ -9,6 +9,8 @@ interface CarApi {
   fun planned(done: (Result<List<PlannedItem>>) -> Unit)
   fun routeLine(routeId: String, done: (Result<List<LngLat>>) -> Unit)
   fun start(routeId: String, destinationName: String, done: (Result<Unit>) -> Unit)
+  /** The limit on the road at [at], going [headingDeg], for the map with no trip. */
+  fun speedLimit(at: LngLat, headingDeg: Double?, done: (Result<CarSpeedLimit>) -> Unit)
   /** The car's own position, from its GNSS: for when the phone can't say where it is. Nothing comes back. */
   fun location(fix: CarFix)
   fun stop()

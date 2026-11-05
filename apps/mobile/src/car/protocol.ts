@@ -7,15 +7,6 @@
 import { FeedbackScreenshotSchema, LngLatSchema } from '@wayfinder/shared/schemas';
 import { z } from 'zod';
 
-export const CarStatusSchema = z.object({
-  /** "offline": signed in on the phone, but the server couldn't be reached to confirm it. */
-  account: z.enum(['signedIn', 'signedOut', 'offline']),
-  styleUrl: z.object({ light: z.string(), dark: z.string() }).nullable(),
-  searchHint: z.string(),
-  /** The phone's last known position, for the first view of the map. */
-  here: LngLatSchema.nullable(),
-});
-
 export const CarPlaceSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -24,6 +15,20 @@ export const CarPlaceSchema = z.object({
   location: LngLatSchema,
   distanceM: z.number().nullable(),
 });
+
+export const CarStatusSchema = z.object({
+  /** "offline": signed in on the phone, but the server couldn't be reached to confirm it. */
+  account: z.enum(['signedIn', 'signedOut', 'offline']),
+  styleUrl: z.object({ light: z.string(), dark: z.string() }).nullable(),
+  searchHint: z.string(),
+  /** The phone's last known position, for the first view of the map. */
+  here: LngLatSchema.nullable(),
+  /** Your saved places, Home first then the nearest, for one tap from the car's home screen. */
+  saved: z.array(CarPlaceSchema),
+});
+
+/** The limit where the car is, with no trip: `kmh` null where none is known. */
+export const CarSpeedLimitSchema = z.object({ kmh: z.number().nullable(), estimated: z.boolean(), road: z.string().nullable() });
 export const CarPlacesSchema = z.object({ places: z.array(CarPlaceSchema) });
 
 export const CarRouteOptionSchema = z.object({
@@ -94,6 +99,12 @@ export const CarParams = {
   carSession: z.object({ active: z.boolean() }),
   /** A picture of the car's map as a base64 JPEG, where it could be taken. */
   report: z.object({ screenshotJpeg: FeedbackScreenshotSchema.shape.data.optional() }),
+  /** Where the car is and which way it's going, for the limit on its map with no trip. */
+  speedLimit: z.object({
+    lon: z.number().min(-180).max(180),
+    lat: z.number().min(-90).max(90),
+    headingDeg: z.number().min(0).max(360).nullable().optional(),
+  }),
   /** The car's own location (its GNSS), sent by the car app on every fix. */
   location: z.object({
     lon: z.number().min(-180).max(180),
@@ -107,6 +118,7 @@ export const CarParams = {
 
 export type CarStatus = z.infer<typeof CarStatusSchema>;
 export type CarPlace = z.infer<typeof CarPlaceSchema>;
+export type CarSpeedLimit = z.infer<typeof CarSpeedLimitSchema>;
 export type CarRouteOption = z.infer<typeof CarRouteOptionSchema>;
 export type ManeuverType = z.infer<typeof ManeuverTypeSchema>;
 export type CarManeuver = z.infer<typeof CarManeuverSchema>;

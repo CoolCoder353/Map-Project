@@ -36,6 +36,7 @@ class FakeCarApi : CarApi {
   override fun planned(done: (Result<List<PlannedItem>>) -> Unit) = hold("planned", done)
   override fun routeLine(routeId: String, done: (Result<List<LngLat>>) -> Unit) = hold("routeLine $routeId", done)
   override fun start(routeId: String, destinationName: String, done: (Result<Unit>) -> Unit) = hold("start $routeId $destinationName", done)
+  override fun speedLimit(at: LngLat, headingDeg: Double?, done: (Result<CarSpeedLimit>) -> Unit) = hold("speedLimit ${at.lon},${at.lat} $headingDeg", done)
   override fun stop() { calls += "stop" }
   override fun location(fix: CarFix) { fixes += fix }
   override fun setMuted(muted: Boolean) { calls += "mute $muted" }

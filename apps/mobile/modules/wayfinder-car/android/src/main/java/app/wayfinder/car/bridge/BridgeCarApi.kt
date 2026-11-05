@@ -15,6 +15,8 @@ class BridgeCarApi(private val bridge: CarBridge) : CarApi {
     ask("routeLine", JSONObject().put("routeId", routeId), { Protocol.line(it.getJSONArray("geometry")) }, done)
   override fun start(routeId: String, destinationName: String, done: (Result<Unit>) -> Unit) =
     ask("start", JSONObject().put("routeId", routeId).put("destinationName", destinationName), { }, done)
+  override fun speedLimit(at: LngLat, headingDeg: Double?, done: (Result<CarSpeedLimit>) -> Unit) =
+    ask("speedLimit", JSONObject().put("lon", at.lon).put("lat", at.lat).put("headingDeg", headingDeg ?: JSONObject.NULL), Protocol::speedLimit, done)
   override fun location(fix: CarFix) = bridge.call(
     "location",
     JSONObject().put("lon", fix.lon).put("lat", fix.lat)

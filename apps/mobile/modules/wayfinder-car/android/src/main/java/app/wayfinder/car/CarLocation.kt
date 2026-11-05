@@ -22,8 +22,16 @@ interface CarFixSource {
  * leaves things as they were.
  */
 class CarLocation(private val source: CarFixSource, private val api: CarApi) {
-  fun start(): () -> Unit =
-    runCatching { source.listen { fix -> if (usable(fix)) api.location(fix) } }.getOrDefault({})
+  /** Starts listening; each usable position also goes to [also] (the map with no trip). */
+  fun start(also: (CarFix) -> Unit = {}): () -> Unit =
+    runCatching {
+      source.listen { fix ->
+        if (usable(fix)) {
+          api.location(fix)
+          also(fix)
+        }
+      }
+    }.getOrDefault({})
 
   private fun usable(f: CarFix) =
     f.lon.isFinite() && f.lat.isFinite() && f.lon in -180.0..180.0 && f.lat in -90.0..90.0 &&

@@ -21,6 +21,19 @@ class ProtocolTest {
     assertEquals(Account.SIGNED_IN, s.account)
     assertEquals("https://maps.example.test/map/style.json?theme=dark", s.styleDark)
     assertEquals(LngLat(153.0251, -27.4698), s.here)
+    assertEquals(listOf("Home", "Work"), s.saved.map { it.name })
+    assertEquals(24800.0, s.saved[0].distanceM!!, 0.0)
+    assertNull(s.saved[1].distanceM)
+  }
+
+  @Test fun statusFromAnOlderPhoneAppHasNoSavedPlaces() {
+    val o = fixture("status.json").apply { remove("saved") }
+    assertTrue(Protocol.status(o).saved.isEmpty())
+  }
+
+  @Test fun speedLimit() {
+    assertEquals(CarSpeedLimit(60, false, "Panorama Drive"), Protocol.speedLimit(fixture("speed-limit.json")))
+    assertEquals(CarSpeedLimit(null, false, null), Protocol.speedLimit(JSONObject("{\"kmh\":null,\"estimated\":false,\"road\":null}")))
   }
 
   @Test fun places() {

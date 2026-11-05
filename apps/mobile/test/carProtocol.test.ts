@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import type { ZodType } from 'zod';
-import { CarNavSchema, CarPlacesSchema, CarPlannedSchema, CarPlanSchema, CarRouteLineSchema, CarStatusSchema } from '../src/car/protocol';
+import { CarNavSchema, CarPlacesSchema, CarPlannedSchema, CarPlanSchema, CarRouteLineSchema, CarSpeedLimitSchema, CarStatusSchema } from '../src/car/protocol';
 
 const dir = join(__dirname, '../modules/wayfinder-car/android/src/test/resources/fixtures');
 const schemaFor: Record<string, ZodType> = {
@@ -11,6 +11,7 @@ const schemaFor: Record<string, ZodType> = {
   'plan.json': CarPlanSchema,
   'planned.json': CarPlannedSchema,
   'route-line.json': CarRouteLineSchema,
+  'speed-limit.json': CarSpeedLimitSchema,
   'nav-navigating.json': CarNavSchema,
   'nav-arrived.json': CarNavSchema,
 };

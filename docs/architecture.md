@@ -204,9 +204,20 @@ the car's surface through a virtual display, using the server's `/map/style.json
 a scene on the car map only while it is on top (`Screen.show` in `screens/ScreenKit.kt`), so a
 late answer never repaints the map under the screen that took over.
 
+Home offers Home (a saved place of that name) as a row of its own, one tap from its routes, and the
+other saved places behind one "Saved places" row, then Search, Planned routes, Discover nearby and
+Test drive: six rows at most, Android Auto's limit while driving. With no trip, while Home is on top,
+its map follows the car (`IdleDrive.kt`) with the driving camera, the car's arrow, its speed and the
+road's limit. Positions are the car's GNSS, which works with the phone locked, else the phone's GPS
+when the car has said nothing for 5 s (`IdleFixes.kt`, listening to the phone only while Home wants
+positions). The limit is asked of the server (`GET /api/roads/speed-limit`) one request at a time,
+after 150 m of driving or 30 m over 20 s, never while parked, and isn't shown once the car is 300 m
+from where it was looked up.
+
 The car screens hold no data of their own. They ask the JavaScript side through a small bridge
-(`CarBridge` in Kotlin, `src/car/controller.ts` in JS): `status`, `search`, `discover`, `plan`,
-`planned`, `routeLine`, `start`, `stop` and `mute`, and JS pushes every navigation change back
+(`CarBridge` in Kotlin, `src/car/controller.ts` in JS): `status` (with the saved places, Home first
+then the nearest), `search`, `discover`, `plan`, `planned`, `routeLine`, `start`, `stop`, `mute` and
+`speedLimit`, and JS pushes every navigation change back
 (`src/car/navModel.ts`). The car also sends its own position once a second (`location`, from the car's
 GNSS via `CarLocation.kt`): the phone's navigation follows it only when the phone's own fixes have
 been silent for 5 s (a locked phone with the app started from the car). Planning and Discover use the

@@ -8,6 +8,7 @@ import androidx.car.app.testing.TestScreenManager
 import androidx.lifecycle.Lifecycle
 import app.wayfinder.car.*
 import app.wayfinder.car.bridge.Account
+import app.wayfinder.car.bridge.CarFix
 import app.wayfinder.car.map.MapScene
 import org.junit.Assert.*
 import org.junit.Test
@@ -139,5 +140,87 @@ class HomeScreenTest {
     val after = (screen.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.items.map { (it as Row).image!!.icon!!.resId }
     assertEquals(R.drawable.wf_car, after.last())
     assertEquals("one icon each", after.size, after.toSet().size)
+  }
+
+  @Test fun homeIsOneTapAwayWithTheOtherSavedPlacesBehindOneRow() {
+    open()
+    api.answer("status", Samples.status(saved = listOf(Samples.saved("Home"), Samples.saved("Work"))))
+    val t = screen.onGetTemplate() as PlaceListNavigationTemplate
+    assertEquals(listOf("Home", "Saved places", "Search", "Planned routes", "Discover nearby", "Test drive"), titles(t))
+    val home = t.itemList!!.items[0] as Row
+    assertEquals("12 Moselle Drive, Thornlands · 25 km away", home.texts.single().text())
+    assertEquals(R.drawable.wf_home, home.image!!.icon!!.resId)
+    home.click()
+    val pushed = carContext.getCarService(TestScreenManager::class.java).screensPushed.last()
+    assertTrue(pushed is RoutePreviewScreen)
+    ScreenController(pushed).moveToState(Lifecycle.State.STARTED)
+    assertEquals("plans the way there", "plan s-Home", api.calls.last())
+  }
+
+  @Test fun savedPlacesOpenAsAListToPickFrom() {
+    open()
+    api.answer("status", Samples.status(saved = listOf(Samples.saved("Gym"), Samples.saved("Work"))))
+    assertEquals("no Home saved: no Home row", listOf("Saved places", "Search", "Planned routes", "Discover nearby", "Test drive"), titles(screen.onGetTemplate()))
+    ((screen.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.items[0] as Row).click()
+    val list = carContext.getCarService(TestScreenManager::class.java).screensPushed.last()
+    ScreenController(list).moveToState(Lifecycle.State.STARTED)
+    assertEquals(listOf("Gym", "Work"), titles(list.onGetTemplate()))
+  }
+
+  @Test fun onlyHomeSavedNeedsNoSavedPlacesRow() {
+    open()
+    api.answer("status", Samples.status(saved = listOf(Samples.saved("home"))))
+    assertEquals(listOf("home", "Search", "Planned routes", "Discover nearby", "Test drive"), titles(screen.onGetTemplate()))
+  }
+
+  @Test fun neverMoreThanSixRowsDuringATrip() {
+    api.navigation = Samples.nav()
+    open()
+    api.answer("status", Samples.status(saved = listOf(Samples.saved("Home"), Samples.saved("Work"))))
+    assertEquals(listOf("Back to directions", "Home", "Saved places", "Search", "Planned routes", "Discover nearby"), titles(screen.onGetTemplate()))
+  }
+
+  private class Feed {
+    val listeners = mutableListOf<(CarFix) -> Unit>()
+    fun listen(l: (CarFix) -> Unit): () -> Unit { listeners += l; return { listeners -= l } }
+    fun send(f: CarFix) = listeners.toList().forEach { it(f) }
+  }
+  private val fix = CarFix(153.25, -27.56, 5.0, 16.7, 182.0, 1L)
+
+  @Test fun withNoTripTheMapFollowsTheCarWhileHomeIsShowing() {
+    val feed = Feed()
+    val home = HomeScreen(carContext, api, scenes, fixes = feed::listen) { }
+    val controller = ScreenController(home).also { it.moveToState(Lifecycle.State.STARTED) }
+    api.answer("status", Samples.status())
+    assertEquals(1, feed.listeners.size)
+    feed.send(fix)
+    val s = scenes.shown.last() as MapScene.Following
+    assertEquals(182.0, s.headingDeg!!, 0.0)
+    assertEquals(60, s.speedKmh)
+    assertTrue(api.calls.last().startsWith("speedLimit"))
+    controller.moveToState(Lifecycle.State.CREATED) // Search on top
+    assertTrue("stops listening under another screen", feed.listeners.isEmpty())
+    controller.moveToState(Lifecycle.State.STARTED)
+    api.answer("status", Samples.status())
+    assertEquals(1, feed.listeners.size)
+  }
+
+  @Test fun theMapIsLeftToTheTripDuringOne() {
+    val feed = Feed()
+    api.navigation = Samples.nav()
+    val home = HomeScreen(carContext, api, scenes, fixes = feed::listen) { }
+    ScreenController(home).moveToState(Lifecycle.State.STARTED)
+    api.answer("status", Samples.status())
+    feed.send(fix)
+    assertFalse(scenes.shown.any { it is MapScene.Following })
+  }
+
+  @Test fun signedOutTheMapStaysStill() {
+    val feed = Feed()
+    val home = HomeScreen(carContext, api, scenes, fixes = feed::listen) { }
+    ScreenController(home).moveToState(Lifecycle.State.STARTED)
+    api.answer("status", Samples.status(Account.SIGNED_OUT))
+    feed.send(fix)
+    assertFalse(scenes.shown.any { it is MapScene.Following })
   }
 }

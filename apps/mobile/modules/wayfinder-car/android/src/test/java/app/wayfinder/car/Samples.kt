@@ -3,8 +3,10 @@ package app.wayfinder.car
 import app.wayfinder.car.bridge.*
 
 object Samples {
-  fun status(account: Account = Account.SIGNED_IN) =
-    CarStatus(account, "https://maps.example.test/map/style.json?theme=light", "https://maps.example.test/map/style.json?theme=dark", "Search places and addresses", LngLat(153.0, -27.4))
+  fun status(account: Account = Account.SIGNED_IN, saved: List<CarPlace> = emptyList()) =
+    CarStatus(account, "https://maps.example.test/map/style.json?theme=light", "https://maps.example.test/map/style.json?theme=dark", "Search places and addresses", LngLat(153.0, -27.4), saved)
+
+  fun saved(name: String, id: String = "s-$name") = CarPlace(id, name, "12 Moselle Drive, Thornlands · 25 km away", LngLat(153.2526, -27.5624), 24800.0)
 
   fun place(id: String = "p1", name: String = "Mt Coot-tha Lookout") =
     CarPlace(id, name, "Lookout · 6.2 km away", LngLat(152.957, -27.4846), 6200.0)

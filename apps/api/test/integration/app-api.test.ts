@@ -75,6 +75,14 @@ describe('app API', () => {
     expect(del.statusCode).toBe(200);
   });
 
+  it('answers the speed limit where a car is, and needs a sign-in and a position', async () => {
+    const res = await ta.app.inject({ method: 'GET', url: '/api/roads/speed-limit?lon=149.1&lat=-35.3&heading=90', headers: auth });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ kmh: expect.toBeOneOf([null, expect.any(Number)]), estimated: expect.any(Boolean), road: expect.toBeOneOf([null, expect.any(String)]) });
+    expect((await ta.app.inject({ method: 'GET', url: '/api/roads/speed-limit?lon=149.1&lat=-35.3' })).statusCode).toBe(401);
+    expect((await ta.app.inject({ method: 'GET', url: '/api/roads/speed-limit?lon=149.1', headers: auth })).statusCode).toBe(400);
+  });
+
   it('records metrics per route template and error events for unexpected failures', async () => {
     ta.ghDown.value = true;
     const res = await ta.app.inject({ method: 'POST', url: '/api/routes/fastest', headers: auth, payload: { from: [149.1, -35.3], to: [149.2, -35.3], mode: 'car' } });

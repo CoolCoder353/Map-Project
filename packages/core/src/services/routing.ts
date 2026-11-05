@@ -280,6 +280,37 @@ export async function fastestRoute(
   return req.heading !== undefined ? turnAroundWhenYouCan(route!) : route!;
 }
 
+/** How far ahead the lookup routes: enough for the same road's signs to stand in for an unsigned stretch. */
+const LIMIT_LOOKAHEAD_M = 400;
+/** Further than this from the nearest road, the car isn't on one (a car park, a driveway). */
+const ON_ROAD_M = 40;
+const NO_LIMIT = { kmh: null, estimated: false, road: null } as const;
+
+/**
+ * The limit on the road where a car is, for its map with no trip. GraphHopper has no lookup for one
+ * point, so this asks for a short route ahead the way the car is going and finishes it as any route
+ * is (signs, school zones in force, electronic signs, main-road estimates), then reads the start.
+ */
+export async function speedLimitAt(
+  deps: RoutingDeps,
+  q: { at: LngLat; heading?: number | undefined },
+): Promise<{ kmh: number | null; estimated: boolean; road: string | null }> {
+  const ahead = destination(q.at, q.heading ?? 0, LIMIT_LOOKAHEAD_M);
+  const [path] = await deps.metrics
+    .time('graphhopper.route', 'speedLimit', () =>
+      deps.graphhopper.route({ points: [q.at, ahead], profile: profileFor('car'), ...(q.heading !== undefined ? { heading: q.heading } : {}) }),
+    )
+    .catch(() => []);
+  const start = path?.points.coordinates[0];
+  if (!path || !start || haversineM(q.at, [start[0], start[1]]) > ON_ROAD_M) return NO_LIMIT;
+  const novelty = { totalKm: 0, newKm: 0, noveltyPct: 0 } as RouteNovelty;
+  const [route] = await finishRoutes(deps.db, [{ route: toRoute(path, { kind: 'fastest', mode: 'car', novelty, extraDurationS: 0, viaPoints: [] }), path }]);
+  const at0 = (runs: Route['speedLimits']) => runs?.find((r) => r.from === 0 && r.to > 0);
+  const signed = at0(route!.speedLimits);
+  const guessed = signed ? undefined : at0(route!.estimatedSpeedLimits);
+  return { kmh: signed?.kmh ?? guessed?.kmh ?? null, estimated: !signed && !!guessed, road: path.instructions[0]?.street_name || null };
+}
+
 /** Below this a car can still make a turn just ahead. */
 const TURN_NEEDS_SPEED_MPS = 5;
 /** A turn closer than this much driving can't be made: the answer has to arrive, be heard and be acted on. */

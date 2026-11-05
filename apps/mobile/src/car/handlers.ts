@@ -1,7 +1,7 @@
 import { type CopyCatalog, copyFor } from '@wayfinder/shared/copy';
-import type { LngLat } from '@wayfinder/shared/geo';
+import { haversineM, type LngLat } from '@wayfinder/shared/geo';
 import { formatDistanceShort, formatDuration } from '@wayfinder/nav';
-import { DiscoverResponseSchema, ExploreRouteResponseSchema, type FeedbackCreate, type Place, PlannedRouteListSchema, PublicConfigSchema, type Route, SearchResponseSchema } from '@wayfinder/shared/schemas';
+import { DiscoverResponseSchema, ExploreRouteResponseSchema, type FeedbackCreate, type Place, PlannedRouteListSchema, PublicConfigSchema, type Route, SavedPlaceListSchema, SearchResponseSchema, SpeedLimitResponseSchema } from '@wayfinder/shared/schemas';
 import Constants from 'expo-constants';
 import * as Location from 'expo-location';
 import { Platform } from 'react-native';
@@ -13,7 +13,7 @@ import { getServerUrl } from '../lib/server';
 import { navigation, type NavSnapshot } from '../nav/navigationService';
 import type { CarHandlers } from './controller';
 import { DEMO_DESTINATION_NAME, demoRoute, startTestDrive } from './simulation';
-import { type CarPlace, CarParams, type CarRouteOption, type CarStatus } from './protocol';
+import { type CarPlace, CarParams, type CarRouteOption, type CarSpeedLimit, type CarStatus } from './protocol';
 
 let copyCache: CopyCatalog | null = null;
 
@@ -120,17 +120,45 @@ export function resetCarHandlers() {
   resetReportCooldown();
 }
 
+/**
+ * Your saved places for the car's home screen: Home first (it's where most drives end), then the
+ * nearest. None when they can't be fetched: the rest of the screen still works.
+ */
+async function savedPlaces(near: LngLat | null): Promise<CarPlace[]> {
+  const res = await api.request('api/saved-places', { schema: SavedPlaceListSchema }).catch(() => null);
+  if (!res) return [];
+  const isHome = (name: string) => name.trim().toLowerCase() === 'home';
+  return res.items
+    .map((p) => ({ p, distanceM: near ? haversineM(near, p.location) : null }))
+    .sort((a, b) => Number(isHome(b.p.name)) - Number(isHome(a.p.name)) || (a.distanceM ?? 0) - (b.distanceM ?? 0) || a.p.name.localeCompare(b.p.name))
+    .slice(0, MAX_ROWS)
+    .map(({ p, distanceM }) => ({
+      id: p.id,
+      name: p.name,
+      detail: [p.description || null, distanceM != null ? `${formatDistanceShort(distanceM)} away` : null].filter(Boolean).join(' · '),
+      location: p.location,
+      distanceM,
+    }));
+}
+
 export const carHandlers: CarHandlers = {
   async status(): Promise<CarStatus> {
     const signedIn = api.hasAccessToken || !!(await api.refresh());
     const account = signedIn ? 'signedIn' : (await hasSavedSession()) ? 'offline' : 'signedOut';
     const base = await getServerUrl();
+    const where = await here();
     return {
       account,
       styleUrl: isServerUrl(base) ? { light: `${base}/map/style.json?theme=light`, dark: `${base}/map/style.json?theme=dark` } : null,
       searchHint: (await copy()).searchPlaceholder,
-      here: await here(),
+      here: where,
+      saved: signedIn ? await savedPlaces(where) : [],
     };
+  },
+  /** The limit where the car is, for its map with no trip. */
+  async speedLimit(params): Promise<CarSpeedLimit> {
+    const { lon, lat, headingDeg } = CarParams.speedLimit.parse(params);
+    return api.request('api/roads/speed-limit', { query: { lon, lat, heading: headingDeg ?? undefined }, schema: SpeedLimitResponseSchema });
   },
   async search(params) {
     const { q } = CarParams.search.parse(params);

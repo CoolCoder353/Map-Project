@@ -2,12 +2,16 @@ package app.wayfinder.car.bridge
 
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.math.roundToInt
 
 /** [lon, lat], as everywhere in Wayfinder; turned into LatLng only at the map. */
 data class LngLat(val lon: Double, val lat: Double)
 
 enum class Account { SIGNED_IN, SIGNED_OUT, OFFLINE }
-data class CarStatus(val account: Account, val styleLight: String?, val styleDark: String?, val searchHint: String, val here: LngLat?)
+/** [saved]: the driver's saved places, Home first then the nearest (none from an older phone app). */
+data class CarStatus(val account: Account, val styleLight: String?, val styleDark: String?, val searchHint: String, val here: LngLat?, val saved: List<CarPlace> = emptyList())
+/** The limit where the car is, with no trip: [kmh] null where none is known; [estimated] the road's legal default, not a sign. */
+data class CarSpeedLimit(val kmh: Int?, val estimated: Boolean, val road: String?)
 data class CarPlace(val id: String, val name: String, val detail: String, val location: LngLat, val distanceM: Double?)
 data class RouteOption(
   val routeId: String, val title: String, val detail: String,
@@ -66,8 +70,15 @@ object Protocol {
       styleDark = style?.getString("dark"),
       searchHint = o.getString("searchHint"),
       here = if (o.isNull("here")) null else lngLat(o.getJSONArray("here")),
+      saved = o.optJSONArray("saved")?.objects()?.map(::place).orEmpty(),
     )
   }
+
+  fun speedLimit(o: JSONObject) = CarSpeedLimit(
+    kmh = if (o.isNull("kmh")) null else o.getDouble("kmh").roundToInt(),
+    estimated = o.getBoolean("estimated"),
+    road = if (o.isNull("road")) null else o.getString("road"),
+  )
 
   fun places(o: JSONObject): List<CarPlace> = o.getJSONArray("places").objects().map(::place)
 

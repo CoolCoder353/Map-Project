@@ -220,3 +220,22 @@ export const PlannedRouteSchema = z.object({
 });
 export type PlannedRoute = z.infer<typeof PlannedRouteSchema>;
 export const PlannedRouteListSchema = z.object({ items: z.array(PlannedRouteSchema) });
+
+/** The limit on the road at a point, for driving with no trip (the car's map with no route). */
+export const SpeedLimitQuerySchema = z.object({
+  lon: z.coerce.number().min(-180).max(180),
+  lat: z.coerce.number().min(-90).max(90),
+  /** Which way the car is going, degrees clockwise from north: picks the road and its side. */
+  heading: z.coerce.number().min(0).max(360).optional(),
+});
+export type SpeedLimitQuery = z.input<typeof SpeedLimitQuerySchema>;
+
+export const SpeedLimitResponseSchema = z.object({
+  /** Null where no limit is known, or the point isn't on a road. */
+  kmh: z.number().positive().nullable(),
+  /** The legal default for the road, not a sign in the map data. */
+  estimated: z.boolean(),
+  /** The road's name, or null. */
+  road: z.string().nullable(),
+});
+export type SpeedLimitResponse = z.infer<typeof SpeedLimitResponseSchema>;
