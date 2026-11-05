@@ -66,3 +66,10 @@ it('ignores the keyboard’s Go key until the form is filled, and while signing 
   finish();
   await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/plan'));
 });
+
+it('does not capitalise or autocorrect the password as it is typed', async () => {
+  await render(<SignIn />);
+  const field = await screen.findByLabelText('Password');
+  expect(field.props.autoCapitalize).toBe('none');
+  expect(field.props.autoCorrect).toBe(false);
+});

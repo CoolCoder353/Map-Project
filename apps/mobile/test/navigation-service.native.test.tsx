@@ -775,3 +775,14 @@ it('keeps the road driven to a bounded number of points on a long drive, coarser
   // A new trip starts fine-grained again (about 20 m apart is kept).
   expect(navigation.getSnapshot().travelled).toHaveLength(2);
 });
+
+// Stopped at lights, Android reports a heading of 0 (it has no bearing): that isn't "facing north",
+// and the car's arrow and map kept pointing the way the car was driving.
+it('keeps the way the car was going while it is stopped, not the 0 the phone reports', async () => {
+  navigation.start(route({ id: 'r1' }), { destinationName: 'Home' });
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockOnFix!({ timestamp: 1000, coords: { longitude: 153.2527, latitude: -27.56, accuracy: 5, speed: 12, heading: 182 } });
+  expect(navigation.getSnapshot().headingDeg).toBe(182);
+  mockOnFix!({ timestamp: 2000, coords: { longitude: 153.2527, latitude: -27.5601, accuracy: 5, speed: 0, heading: 0 } });
+  expect(navigation.getSnapshot().headingDeg).toBe(182);
+});

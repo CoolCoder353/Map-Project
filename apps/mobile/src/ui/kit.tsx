@@ -132,6 +132,8 @@ export function Field({ label, error, hint, style, onFocus, onBlur, ...props }: 
         accessibilityLabel={label}
         placeholderTextColor={t.text3}
         selectionColor={t.accent}
+        // Android's keyboard capitalises a password's first letter unless told not to.
+        {...(props.secureTextEntry ? { autoCapitalize: 'none' as const, autoCorrect: false } : null)}
         {...props}
         onFocus={(e) => {
           setFocused(true);

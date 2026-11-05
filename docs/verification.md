@@ -284,6 +284,18 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   there, which show none or the same road's limit by design, so nothing was changed; they wait on
   what the driver saw. The two 2 November evening reports (0.5.7) also have no details and weren't
   investigated. The tester's idea of a screenshot with each report is done above, as far as an app can.
+- **The open feedback, worked through 2026-11-05 (app fixes in the code, not yet in a release; the reports updated with notes on the server).** Three fixes, each with a test.
+  The password field capitalised its first letter on Android: password fields now turn off
+  capitalising and autocorrect. Discover "silently failed" when it found nothing: the server log
+  shows the 4 November searches all answered, and on a phone the "nothing new" line sits below the
+  category buttons with the map unchanged, so the panel now scrolls to the message or error. The
+  5 November car report at the Ziegenfusz Road lights showed the car's arrow pointing north while it
+  was heading south: stopped, Android reports a heading of 0, which was taken as north; a stopped
+  car now keeps the way it was going (not driven yet). The two lights reports are marked done, as
+  0.5.6 brought lights into routes; the 22 September start-up crash is closed, as the same phone has
+  reported from 0.5.9. Two 2 November one-tap reports still have no details. Lane guidance is an
+  idea waiting on a decision. That idea's web screenshot shows the map with red and blue swapped;
+  the capture, not the map, and not yet looked into.
 - **The 2 November playtest (app 0.5.6), fixed 2026-11-02 (server live, app 0.5.7 on internal testing; the reports marked done or won't fix with notes).** Four reports. The car's one-tap
   Report says the driver can explain from Settings → Send feedback, which couldn't attach anything
   to it: it now lists your reports from the car to add to. The car's position marker vanished while

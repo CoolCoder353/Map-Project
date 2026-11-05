@@ -27,6 +27,7 @@ export default function Discover() {
   const { user } = useSession();
   const { copy } = useAppConfig();
   const map = useRef<MapCanvasHandle>(null);
+  const panel = useRef<ScrollView>(null);
   const split = splitStyles(useLayout().sideBySide, '34%');
   const [origin, setOrigin] = useState<ChosenPlace | null>(null);
   // Start where you are, once a position is known, as Plan does; only the first time, so
@@ -80,6 +81,12 @@ export default function Discover() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on a change of filter; `search` reads them as they are now.
   }, [filters]);
 
+  // Nothing found, or the search failed: the map has nothing new to show, and on a phone the
+  // message is below the filters, out of sight, so bring it into view.
+  useEffect(() => {
+    if (error || items?.length === 0) panel.current?.scrollToEnd({ animated: true });
+  }, [items, error]);
+
   /** A place found is somewhere to go: Plan works out the trip there, from the same start. */
   const planTrip = (i: DiscoverItem) => {
     setTripToPlan({ from: origin, to: { name: i.name, description: kindOf(i.category), location: i.location }, mode });
@@ -112,7 +119,7 @@ export default function Discover() {
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: t.bg }}>
       <View style={split.container}>
       <MapCanvas ref={map} style={split.map} markers={[...(origin ? [{ id: 'o', lngLat: origin.location, kind: 'start' as const }] : []), ...(items ?? []).map((i) => ({ id: i.id, lngLat: i.location, kind: 'poi' as const }))]} />
-      <ScrollView style={[split.panel, { backgroundColor: t.surface }]} contentContainerStyle={{ padding: space[4], gap: space[3], ...split.content }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={panel} style={[split.panel, { backgroundColor: t.surface }]} contentContainerStyle={{ padding: space[4], gap: space[3], ...split.content }} keyboardShouldPersistTaps="handled">
         <Body muted>{copy.discoverIntro}</Body>
         <PlaceSearch label="Search from" placeholder="Where are you starting?" tone="start" value={origin} onChange={chooseOrigin} allowCurrentLocation near={here} />
         <Segmented<Mode> label="Travel mode" value={mode} onChange={setMode} options={[{ value: 'car', label: 'Drive', icon: Car }, { value: 'foot', label: 'Walk', icon: Footprints }]} />

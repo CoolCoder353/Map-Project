@@ -347,7 +347,9 @@ export function createNavigationService(): NavigationService {
       set({ position: here, speedMps, ...firstFix });
       return; // one odd fix; the next one carries on
     }
-    set({ position: here, headingDeg: fix.headingDeg ?? snap.headingDeg, speedMps, travelled: withTravelled(snap.travelled, here), state: result.state, ...firstFix });
+    // The way the car is going, not the fix's own heading: stopped, Android reports 0 (no
+    // bearing), which would turn the car's arrow and map to face north at every red light.
+    set({ position: here, headingDeg: travelHeading ?? snap.headingDeg, speedMps, travelled: withTravelled(snap.travelled, here), state: result.state, ...firstFix });
     if (turnaroundSince !== null && result.state.status === 'navigating' && result.state.progressM >= TURNAROUND_DONE_M) {
       turnaroundSince = null;
       turnaroundFrom = null;

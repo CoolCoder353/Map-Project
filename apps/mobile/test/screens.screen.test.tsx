@@ -1,6 +1,6 @@
 /// <reference types="jest" />
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, ScrollView } from 'react-native';
 import Coverage from '../app/(tabs)/coverage';
 import Discover, { REFILTER_PAUSE_MS } from '../app/(tabs)/discover';
 import TabsLayout from '../app/(tabs)/_layout';
@@ -152,11 +152,17 @@ describe('Discover', () => {
     await fireEvent(from, 'focus');
     await fireEvent.changeText(from, 'gumdale');
     await fireEvent.press(await screen.findByText('Gumdale State School'));
+    // On a phone the answer is below the filters, out of sight: the panel scrolls to it.
+    const scrollToEnd = ScrollView.prototype.scrollToEnd as jest.Mock;
+    scrollToEnd.mockClear();
     await fireEvent.press(screen.getByRole('button', { name: 'Find places' }));
     expect(await screen.findByText(/Nothing new within reach/)).toBeOnTheScreen();
+    expect(scrollToEnd).toHaveBeenCalled();
+    scrollToEnd.mockClear();
     fail = true;
     await fireEvent.press(screen.getByRole('button', { name: 'Find places' }));
     expect(await screen.findByText('Routing is down')).toBeOnTheScreen();
+    expect(scrollToEnd).toHaveBeenCalled();
   });
 
   it('lists a kind of place this version doesn’t know yet instead of crashing', async () => {
