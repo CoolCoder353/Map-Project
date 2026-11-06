@@ -44,10 +44,13 @@ class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared))
     // With no trip, the home screen's map follows the car on these, else on the phone's GPS.
     val idleFixes = IdleFixes(LocationManagerFixSource(carContext))
     val stopLocation = CarLocation(HardwareFixSource(carContext), api).start(idleFixes::car)
+    // A trip also takes the phone's position when the car gives none.
+    val stopTripFixes = TripFixes(api, idleFixes).attach()
     api.carSession(true)
     lifecycle.addObserver(object : DefaultLifecycleObserver {
       override fun onDestroy(owner: LifecycleOwner) {
         stopLocation()
+        stopTripFixes()
         api.carSession(false)
       }
     })

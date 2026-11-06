@@ -209,7 +209,7 @@ other saved places behind one "Saved places" row, then Search, Planned routes, D
 Test drive: six rows at most, Android Auto's limit while driving. With no trip, while Home is on top,
 its map follows the car (`IdleDrive.kt`) with the driving camera, the car's arrow, its speed and the
 road's limit. Positions are the car's GNSS, which works with the phone locked, else the phone's GPS
-when the car has said nothing for 5 s (`IdleFixes.kt`, listening to the phone only while Home wants
+when the car has said nothing for 5 s (`IdleFixes.kt`, listening to the phone only while Home or a trip wants
 positions). The limit is asked of the server (`GET /api/roads/speed-limit`) one request at a time,
 after 150 m of driving or 30 m over 20 s, never while parked, and isn't shown once the car is 300 m
 from where it was looked up.

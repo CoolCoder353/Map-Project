@@ -29,6 +29,13 @@ locked on purpose:** no such device was attached. Each finding says what it rest
   no position, and with location allowed only while using the app it likely gives none while locked.
   The limit and the saved places (Home first) come through the phone's JavaScript and its connection,
   as everything else on the car does. Checked by tests only; not yet seen in a car.
+- **A trip keeps listening to the phone's location in the car app** (feedback 2026-11-06, two reports from
+  0.6.0: "Still finding where you are" with Home following the car fine). Home's map had the phone's GPS
+  as a fallback for a car that gives no position, but it stopped listening when the trip took over the
+  screen, so a car without GNSS left the trip with no position source once the phone's own GPS wasn't
+  running. The fallback now runs for the length of a trip too (`TripFixes` in `IdleFixes.kt`), sending
+  the phone's fixes only while the car is silent. Checked by tests only; with location allowed only
+  while using the app and the phone locked, Android may still give the car app nothing.
 
 ## The short version
 
