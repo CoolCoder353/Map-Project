@@ -133,7 +133,7 @@ export class MemoryQueueStore implements QueueStore {
     const pending = mine.find((r) => r.batchId !== null);
     if (pending) {
       const id = pending.batchId!;
-      return { batchId: id, points: mine.filter((r) => r.batchId === id).map(strip) };
+      return { batchId: id, points: mine.filter((r) => r.batchId === id && (r.accountId === accountId || r.accountId === null)).map(strip) };
     }
     const free = mine.filter((r) => r.batchId === null);
     const first = free[0];
@@ -146,7 +146,10 @@ export class MemoryQueueStore implements QueueStore {
       picked.push(r);
       if (picked.length >= limit) break;
     }
-    picked.forEach((r) => (r.batchId = id));
+    for (const r of picked) {
+      r.batchId = id;
+      r.accountId = accountId; // an older point with no account becomes this one's
+    }
     return { batchId: id, points: picked.map(strip) };
   }
 

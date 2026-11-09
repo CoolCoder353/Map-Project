@@ -76,7 +76,7 @@ export const sqliteQueueStore: QueueStore = {
     const d = await db();
     const pending = await d.getFirstAsync<{ batch_id: string }>(`SELECT batch_id FROM queued_points WHERE batch_id IS NOT NULL AND ${MINE} LIMIT 1`, accountId);
     if (pending) {
-      const rows = await d.getAllAsync<Row>('SELECT * FROM queued_points WHERE batch_id = ? ORDER BY id', pending.batch_id);
+      const rows = await d.getAllAsync<Row>(`SELECT * FROM queued_points WHERE batch_id = ? AND ${MINE} ORDER BY id`, pending.batch_id, accountId);
       return { batchId: pending.batch_id, points: rows.map(toPoint) };
     }
     const rows = await d.getAllAsync<Row>(`SELECT * FROM queued_points WHERE batch_id IS NULL AND ${MINE} ORDER BY id LIMIT ?`, accountId, limit);
@@ -89,8 +89,9 @@ export const sqliteQueueStore: QueueStore = {
     }
     const id = newBatchId();
     const last = picked[picked.length - 1]!.id;
-    // Another account's points may sit between these ids; they stay unclaimed.
-    await d.runAsync(`UPDATE queued_points SET batch_id = ? WHERE id >= ? AND id <= ? AND batch_id IS NULL AND ${MINE}`, id, picked[0]!.id, last, accountId);
+    // Another account's points may sit between these ids; they stay unclaimed. Older points with no
+    // account become this one's as they're claimed, so a batch never mixes accounts.
+    await d.runAsync(`UPDATE queued_points SET batch_id = ?, account_id = ? WHERE id >= ? AND id <= ? AND batch_id IS NULL AND ${MINE}`, id, accountId, picked[0]!.id, last, accountId);
     return { batchId: id, points: picked.map(toPoint) };
   },
   async complete(batchId) {

@@ -132,6 +132,14 @@ describe('tracking queue', () => {
     expect(forB!.points[0]!.lon).toBe(pt(1).lon);
   });
 
+  it('never hands one account a batch holding another’s points, old ones included', async () => {
+    const store = new MemoryQueueStore();
+    await store.appendUnowned([pt(0)]);
+    await store.append([pt(1)], 'b');
+    expect((await store.claim(10, ids, 'b'))!.points).toHaveLength(2);
+    expect(await store.claim(10, ids, 'a')).toBeNull();
+  });
+
   it('sends points queued before accounts were kept as the signed-in account’s', async () => {
     const store = new MemoryQueueStore();
     await store.appendUnowned([pt(0)]);

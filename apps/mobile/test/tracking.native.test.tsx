@@ -22,8 +22,13 @@ const mockDb: {
       const [ts, lon, lat, accuracy_m, speed_mps, heading_deg, source, mode, session_id, account_id] = args;
       mockDb.rows.push({ id: mockDb.nextId++, ts, lon, lat, accuracy_m, speed_mps, heading_deg, source, mode, session_id, account_id, batch_id: null });
     } else if (sql.startsWith('UPDATE')) {
-      const [id, from, to, account] = args as [string, number, number, string];
-      for (const r of mockDb.rows) if ((r.id as number) >= from && (r.id as number) <= to && r.batch_id === null && mine(r, account)) r.batch_id = id;
+      const [id, owner, from, to, account] = args as [string, string, number, number, string];
+      for (const r of mockDb.rows) {
+        if ((r.id as number) >= from && (r.id as number) <= to && r.batch_id === null && mine(r, account)) {
+          r.batch_id = id;
+          r.account_id = owner;
+        }
+      }
     } else if (sql.startsWith('DELETE')) {
       mockDb.rows = mockDb.rows.filter((r: MockRow) => r.batch_id !== args[0]);
     }
@@ -36,7 +41,7 @@ const mockDb: {
   }),
   getAllAsync: jest.fn(async (sql: string, ...args: unknown[]) =>
     sql.includes('WHERE batch_id = ?')
-      ? mockDb.rows.filter((r: MockRow) => r.batch_id === args[0])
+      ? mockDb.rows.filter((r: MockRow) => r.batch_id === args[0] && mine(r, args[1]))
       : mockDb.rows.filter((r: MockRow) => r.batch_id === null && mine(r, args[0])).slice(0, args[1] as number),
   ),
 };
@@ -117,6 +122,15 @@ describe('the on-phone queue', () => {
     await sqliteQueueStore.complete('b-owner');
     expect(await sqliteQueueStore.claim(10, () => 'b-none', 'owner')).toBeNull();
     expect((await sqliteQueueStore.claim(10, () => 'b-test', 'test-account'))!.points).toHaveLength(1);
+  });
+
+  it('never hands one account a batch holding another’s points', async () => {
+    // An older point with no account, then one of B's, claimed together by B but not yet sent.
+    mockDb.rows.push({ id: mockDb.nextId++, ts: 1, lon: 153, lat: -27, accuracy_m: null, speed_mps: null, heading_deg: null, source: 'background', mode: null, session_id: null, account_id: null, batch_id: null });
+    await sqliteQueueStore.append([point(2)], 'b');
+    expect((await sqliteQueueStore.claim(10, () => 'b-batch', 'b'))!.points).toHaveLength(2);
+    // A signs in: B's half-sent batch, old point included, isn't A's to send.
+    expect(await sqliteQueueStore.claim(10, () => 'a-batch', 'a')).toBeNull();
   });
 
   it('records nothing from the background, and sends nothing, while nobody is signed in', async () => {
