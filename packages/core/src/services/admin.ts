@@ -30,6 +30,7 @@ const toAdminUser = (r: AdminUserRow): AdminUser => ({
   lastSeenAt: iso(r.last_seen_at),
   disabledAt: iso(r.disabled_at),
   deletedAt: iso(r.deleted_at),
+  testAccount: r.test_account,
   tripCount: Number(r.trip_count),
   roadCount: Number(r.road_count),
   settings: { ...DEFAULT_SETTINGS, ...r.settings },
@@ -110,7 +111,7 @@ export async function updateUserAsAdmin(
   db: Db,
   actor: ActorInfo,
   userId: string,
-  patch: { role?: Role | undefined; disabled?: boolean | undefined; confirm?: string | undefined },
+  patch: { role?: Role | undefined; disabled?: boolean | undefined; testAccount?: boolean | undefined; confirm?: string | undefined },
 ): Promise<AdminUser> {
   await withTransaction(db, async (tx) => {
     await tx.query("SELECT pg_advisory_xact_lock(hashtext('admin-roles'))");
@@ -146,6 +147,17 @@ export async function updateUserAsAdmin(
         action: patch.disabled ? 'user.disable' : 'user.enable',
         targetType: 'user',
         targetId: target.id,
+        ip: actor.ip,
+      });
+    }
+    if (patch.testAccount !== undefined && patch.testAccount !== target.test_account) {
+      await tx.query('UPDATE users SET test_account = $2 WHERE id = $1', [target.id, patch.testAccount]);
+      await audit(tx, {
+        actorId: actor.id,
+        action: 'user.test_account_change',
+        targetType: 'user',
+        targetId: target.id,
+        details: { testAccount: patch.testAccount },
         ip: actor.ip,
       });
     }

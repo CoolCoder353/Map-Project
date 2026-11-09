@@ -208,6 +208,7 @@ export const adminUser = (over: Partial<AdminUser> = {}): AdminUser =>
     lastSeenAt: null,
     disabledAt: null,
     deletedAt: null,
+    testAccount: false,
     tripCount: 12,
     roadCount: 345,
     settings: { trackingEnabled: true, defaultMode: 'foot', exploreBudgetMin: 20 },

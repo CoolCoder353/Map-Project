@@ -59,6 +59,7 @@ const cases: Case[] = [
   { method: 'POST', url: () => '/api/admin/invites', body: () => ({ count: 1 }), mutation: true },
   { method: 'POST', url: () => '/api/admin/invites/NOPE-NOPE-NOPE/revoke', mutation: true },
   { method: 'PATCH', url: () => `/api/admin/users/${target.id}`, body: () => ({ disabled: false }), mutation: true },
+  { method: 'PATCH', url: () => `/api/admin/users/${target.id}`, body: () => ({ testAccount: false }), mutation: true },
   { method: 'POST', url: () => `/api/admin/users/${target.id}/revoke-sessions`, mutation: true },
   { method: 'POST', url: () => `/api/admin/users/${target.id}/reset-password-link`, mutation: true },
   { method: 'DELETE', url: () => `/api/admin/users/${target.id}`, body: () => ({ confirm: 'wrong' }), mutation: true },

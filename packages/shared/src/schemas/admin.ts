@@ -10,6 +10,8 @@ export const AdminUserSchema = z.object({
   lastSeenAt: z.string().nullable(),
   disabledAt: z.string().nullable(),
   deletedAt: z.string().nullable(),
+  /** Its drives don't count towards learned road speeds or light timings. */
+  testAccount: z.boolean(),
   tripCount: z.number().int(),
   roadCount: z.number().int(),
   settings: UserSettingsSchema,
@@ -29,10 +31,11 @@ export const AdminUpdateUserSchema = z
   .object({
     role: RoleSchema.optional(),
     disabled: z.boolean().optional(),
+    testAccount: z.boolean().optional(),
     /** Type-to-confirm: must equal the target user's email for role changes. */
     confirm: z.string().optional(),
   })
-  .refine((v) => v.role !== undefined || v.disabled !== undefined, 'Nothing to update');
+  .refine((v) => v.role !== undefined || v.disabled !== undefined || v.testAccount !== undefined, 'Nothing to update');
 
 export const ConfirmBodySchema = z.object({ confirm: z.string() });
 

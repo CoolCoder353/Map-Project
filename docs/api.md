@@ -138,7 +138,7 @@ another person's data and every change is written to the audit log.
 | GET | `/jobs` · POST `/jobs/:name/:id/retry` (**admin**) | Job queues |
 | GET | `/pipeline/runs` · POST `/pipeline/refresh` (**admin**) | Map data refreshes |
 | GET | `/users`, `/users/:id`, `/users/:id/trips`, `/users/:id/trips/:tripId`, `/users/:id/coverage`, `/users/:id/coverage/stats` | People and their data |
-| PATCH | `/users/:id` (**admin**) | Role, disable |
+| PATCH | `/users/:id` (**admin**) | Role, disable, test account (its drives don't count towards learned speeds or light timings) |
 | POST | `/users/:id/revoke-sessions`, `/users/:id/reset-password-link`, `/users/:id/restore`, `/users/:id/coverage/rebuild`, `/trips/:tripId/restore` (**admin**) | |
 | DELETE | `/users/:id`, `/users/:id/trips/:tripId` (**admin**) | Soft deletes |
 | GET | `/deleted` | Recently deleted, restorable for 7 days |

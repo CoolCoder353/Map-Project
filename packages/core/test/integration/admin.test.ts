@@ -102,4 +102,26 @@ describe('admin service guardrails', () => {
     expect(usage.totalUsers).toBeGreaterThanOrEqual(4);
     await admin.maintainMetrics(t.db);
   });
+
+  it('marks a test account, audited once, without signing it out, and not on yourself', async () => {
+    const lead = await makeUser(t.db, 'harness-lead@example.com', 'admin');
+    const harness = await makeUser(t.db, 'harness@example.com', 'admin');
+    const session = await auth.login(t.db, tokens, harness.email, 'test password 123', null);
+    const actor = { id: lead.id, ip: null };
+
+    const marked = await admin.updateUserAsAdmin(t.db, actor, harness.id, { testAccount: true });
+    expect(marked).toMatchObject({ testAccount: true, role: 'admin' });
+    const [entry] = await admin.listAudit(t.db, { targetId: harness.id, limit: 10 });
+    expect(entry).toMatchObject({ action: 'user.test_account_change', actorEmail: 'harness-lead@example.com', details: { testAccount: true } });
+
+    // Asking again for what it already is changes and records nothing.
+    const n = await auditCount();
+    await admin.updateUserAsAdmin(t.db, actor, harness.id, { testAccount: true });
+    expect(await auditCount()).toBe(n);
+    // Still signed in: unlike a role change, nothing in their tokens depends on it.
+    await expect(auth.refresh(t.db, tokens, session.tokens.refreshToken, null)).resolves.toBeTruthy();
+
+    expect((await admin.updateUserAsAdmin(t.db, actor, harness.id, { testAccount: false })).testAccount).toBe(false);
+    await expect(admin.updateUserAsAdmin(t.db, { id: harness.id, ip: null }, harness.id, { testAccount: true })).rejects.toMatchObject({ statusCode: 403 });
+  });
 });
