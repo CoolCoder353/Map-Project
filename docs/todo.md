@@ -35,6 +35,11 @@ off this list when it ships, and record it in [verification.md](verification.md)
      account.
   5. Record the run in verification.md (date, phone, what passed), tick only the Android Auto
      items actually seen working, then work through the rest of that checklist with the harness.
+- **First phone run done (2026-11-09):** see [device-test-2026-11-09.md](device-test-2026-11-09.md).
+  It worked over wireless debugging (`adb pair`, then register the `ip:port` serial); USB dropped
+  every few seconds. The harness itself needs fixing before the next run: H2–H8, H12, H13 (it
+  fakes GPS for every app on the phone), H15–H17 in that file. H4 (phone taps refused while
+  Android Auto is connected) is fixed.
 - **Already checked (2026-11-09, emulator):** 0.6.1 opens with no crash and `pnpm device ui`
   recognises the sign-in screen. Android Auto itself doesn't run on an emulator: Play refuses to
   install it there (the spike is in docs/superpowers/specs/2026-11-09-device-harness-design.md).

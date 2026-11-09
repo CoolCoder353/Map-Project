@@ -113,9 +113,19 @@ Results are recorded in [live-stack-results.md](live-stack-results.md).
 To run these, use the device harness on a phone: the first run's steps are in
 [todo.md](todo.md#first-run-of-the-device-harness-on-a-phone-start-here-for-any-android-auto-check).
 
-**Not run yet.** The car app is built and its automated tests pass (`pnpm test:android`,
-`pnpm test:mobile`, `carModule.test.ts`), but no head unit or car was available, so nothing below
-has been ticked. Run it against a release APK on a real phone (build-android.md, "Trying it in a
+**First run on a phone, 2026-11-09:** Nothing Phone A059 (Android 16), app 0.6.1 (versionCode 17),
+DHU 2.0, over wireless debugging (USB kept dropping). Seen working: the car's Home, Search (parked,
+and voice-only with driving restrictions on), route preview with explore options, Go, the driving
+screen with turn card, ETA and speed sign, rerouting after a jump, Discover nearby, Planned routes
+(empty), ending a trip from the car, and a trip started on the phone appearing on the car. Seen
+failing, among 100 car and 100 phone findings: route preview empty when there are no explore
+options, duplicate heads-up turn cards, and a reroute that keeps an explore trip's detour points.
+Everything found is in [device-test-2026-11-09.md](device-test-2026-11-09.md). Spoken directions,
+the zoom buttons and lists below the fold weren't checked (see that file), so the boxes below are
+still unticked.
+
+Before that run nothing below had been tried on a head unit; the automated tests pass
+(`pnpm test:android`, `pnpm test:mobile`, `carModule.test.ts`). Run it against a release APK on a real phone (build-android.md, "Trying it in a
 car"), tick each item as it passes, and record the date. Fix anything that fails, with a test.
 
 `pnpm test:android:device` checks the part of this that needs no head unit: the release APK installs on the

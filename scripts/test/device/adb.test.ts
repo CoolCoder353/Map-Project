@@ -76,6 +76,31 @@ describe('adb commands', () => {
   });
 });
 
+describe('the app in front with Android Auto connected', () => {
+  // With the head unit up, Android Auto adds its own displays, each with an mCurrentFocus;
+  // only the phone's (display 0) says what's on the phone.
+  const dump = (phoneFocus: string) =>
+    [
+      'WINDOW MANAGER DISPLAY CONTENTS (dumpsys window displays)',
+      '  Display: mDisplayId=821',
+      '  mCurrentFocus=null',
+      '  Display: mDisplayId=817 (organized)',
+      '  mCurrentFocus=Window{1bd675a u0 com.google.android.projection.gearhead/com.google.android.apps.auto.carservice.car.activity.virtualdevice.CarVirtualDeviceActivity}',
+      '  Display: mDisplayId=0 (organized)',
+      `  mCurrentFocus=${phoneFocus}`,
+      'WINDOW MANAGER TOKENS (dumpsys window tokens)',
+    ].join('\n');
+
+  it('reads the phone’s display, not the car’s', () => {
+    expect(focusedPackage(dump('Window{f1db7ed u0 app.wayfinder.maps/app.wayfinder.maps.MainActivity}'))).toBe('app.wayfinder.maps');
+  });
+
+  it('says nothing is in front when the phone’s display has no focus, whatever the car shows', () => {
+    expect(focusedPackage(dump('null'))).toBeNull();
+    expect(focusedPackage(dump('Window{2 u0 NotificationShade}'))).toBeNull();
+  });
+});
+
 describe('choosing a device', () => {
   const listed = parseDevices('List of devices attached\nR5CT1234\tdevice\nemulator-5554\tdevice\nXYZ\tunauthorized\n\n');
 

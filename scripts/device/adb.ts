@@ -99,9 +99,15 @@ export function adbArgs(device: Device, cmd: AdbCommand): string[] {
   }
 }
 
-/** The app with focus, from `dumpsys window` ("mCurrentFocus=Window{… u0 app.wayfinder.maps/….MainActivity}"). */
+/**
+ * The app with focus on the phone's own screen, from `dumpsys window`
+ * ("mCurrentFocus=Window{… u0 app.wayfinder.maps/….MainActivity}"). With Android Auto connected
+ * the dump has a section per display, the car's included, so only display 0's counts.
+ */
 export function focusedPackage(dumpsys: string): string | null {
-  return /mCurrentFocus=Window\{[^}]*?\s([\w.]+)\/[^\s}]+\}/.exec(dumpsys)?.[1] ?? null;
+  const phone = /Display: mDisplayId=0\b[\s\S]*?(?=\n\s*Display: mDisplayId=|\nWINDOW MANAGER |$)/.exec(dumpsys)?.[0] ?? dumpsys;
+  const focus = /mCurrentFocus=(Window\{[^}]*\}|\S+)/.exec(phone)?.[1] ?? '';
+  return /^Window\{[^}]*?\s([\w.]+)\/[^\s}]+\}/.exec(focus)?.[1] ?? null;
 }
 
 export function versionCode(dumpsys: string): number | null {
