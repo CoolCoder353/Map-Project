@@ -228,6 +228,7 @@ Each feature a person can use, and where its tests are. Paths are relative to th
 | Feedback | `feedback-api.test.ts` | `account-feedback.test.tsx`, `admin-management.test.tsx` | `feedback.screen.test.tsx` | `feedback.spec.ts` |
 | App name and voice | `copy.test.ts`, `admin-api.test.ts` | `auth-pages.test.tsx`, `admin-management.test.tsx` | `app-shell.native.test.tsx`, `screens.screen.test.tsx` | `admin.spec.ts` |
 | Admin: users, roles, sessions, reset links | `admin.test.ts`, `admin-api.test.ts` | `admin-management.test.tsx` | — | `admin.spec.ts`, `account.spec.ts` |
+| Test accounts: their drives left out of learned speeds and light timings; marked by an admin in /admin | `road-facts.test.ts`, `admin.test.ts`, `admin-api.test.ts` | `admin-management.test.tsx` | — | — |
 | Admin: invites, audit log, recently deleted | `admin.test.ts`, `admin-api.test.ts`, `cli.test.ts` | `admin-management.test.tsx` | — | `admin.spec.ts`, `admin-pages.spec.ts` |
 | Admin: health, performance, errors, jobs, usage | `metrics.test.ts`, `queue.test.ts` (core), `admin-api.test.ts`, `jobs.test.ts` | `admin-monitoring.test.tsx` | — | `admin-pages.spec.ts` |
 | Map tiles and style | `tiles-api.test.ts`, `app-api.test.ts` | `map-provider.test.tsx` | `map-canvas.native.test.tsx` | `planner.spec.ts` |

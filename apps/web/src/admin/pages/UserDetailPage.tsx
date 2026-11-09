@@ -1,6 +1,6 @@
 import type { LngLat, Role, TripDetail, TripSummary } from '@wayfinder/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Ban, Copy, KeyRound, LogOut, RotateCcw, Route, Trash2, UserCheck } from 'lucide-react';
+import { ArrowLeft, Ban, Copy, FlaskConical, KeyRound, LogOut, RotateCcw, Route, Trash2, UserCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -65,8 +65,9 @@ export function UserDetailPage() {
   });
 
   const simple = useMutation({
-    mutationFn: (kind: 'enable' | 'revoke' | 'reset' | 'restore' | 'rebuild') => {
+    mutationFn: (kind: 'enable' | 'revoke' | 'reset' | 'restore' | 'rebuild' | 'test' | 'untest') => {
       if (kind === 'enable') return api(`/api/admin/users/${id}`, { method: 'PATCH', body: { disabled: false } });
+      if (kind === 'test' || kind === 'untest') return api(`/api/admin/users/${id}`, { method: 'PATCH', body: { testAccount: kind === 'test' } });
       if (kind === 'revoke') return api(`/api/admin/users/${id}/revoke-sessions`, { method: 'POST' });
       if (kind === 'restore') return api(`/api/admin/users/${id}/restore`, { method: 'POST' });
       if (kind === 'rebuild') return api(`/api/admin/users/${id}/coverage/rebuild`, { method: 'POST' });
@@ -74,7 +75,7 @@ export function UserDetailPage() {
     },
     onSuccess: (data, kind) => {
       if (kind === 'reset') setResetLink((data as { url: string }).url);
-      else toast({ enable: 'Account enabled.', revoke: 'All sessions signed out.', restore: 'Account restored.', rebuild: 'Coverage rebuild queued.' }[kind]);
+      else toast({ enable: 'Account enabled.', revoke: 'All sessions signed out.', restore: 'Account restored.', rebuild: 'Coverage rebuild queued.', test: 'Marked as a test account. Its drives no longer count towards learned speeds or light timings.', untest: 'No longer a test account.' }[kind]);
       invalidate();
     },
     onError: (e) => toast(errorMessage(e)),
@@ -102,6 +103,7 @@ export function UserDetailPage() {
               <h2>Account</h2>
               <dl className="kv-grid">
                 <div><dt>Role</dt><dd>{u.role === 'user' ? 'User' : u.role === 'dev' ? 'Dev (read-only dashboard)' : 'Admin'}</dd></div>
+                <div><dt>Test account</dt><dd>{u.testAccount ? 'Yes: its drives don’t count towards learned speeds or light timings' : 'No'}</dd></div>
                 <div><dt>Trips</dt><dd className="num">{formatNumber(u.tripCount)}</dd></div>
                 <div><dt>Roads travelled</dt><dd className="num">{formatNumber(u.roadCount)}</dd></div>
                 <div><dt>Background tracking</dt><dd>{u.settings.trackingEnabled ? 'On' : 'Off'}</dd></div>
@@ -123,6 +125,9 @@ export function UserDetailPage() {
                   ) : (
                     <button type="button" className="btn btn-secondary btn-sm" disabled={self} onClick={() => setPending({ kind: 'disable' })}><Ban aria-hidden /> Disable</button>
                   )}
+                  <button type="button" className="btn btn-secondary btn-sm" disabled={self} onClick={() => simple.mutate(u.testAccount ? 'untest' : 'test')}>
+                    <FlaskConical aria-hidden /> {u.testAccount ? 'Not a test account' : 'Mark as test account'}
+                  </button>
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => simple.mutate('revoke')}><LogOut aria-hidden /> Sign out everywhere</button>
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => simple.mutate('reset')}><KeyRound aria-hidden /> Password reset link</button>
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => simple.mutate('rebuild')}><Route aria-hidden /> Rebuild coverage</button>

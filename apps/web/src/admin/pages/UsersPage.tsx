@@ -48,7 +48,7 @@ export function UsersPage() {
               {users.data?.items.map((u) => (
                 <tr key={u.id}>
                   <td><Link to={`/admin/users/${u.id}`}>{u.email}</Link></td>
-                  <td>{u.role === 'user' ? 'User' : u.role === 'dev' ? 'Dev' : 'Admin'}</td>
+                  <td>{u.role === 'user' ? 'User' : u.role === 'dev' ? 'Dev' : 'Admin'}{u.testAccount ? ' · Test account' : ''}</td>
                   <td>
                     {u.deletedAt ? <StatusPill kind="bad">Deleted</StatusPill> : u.disabledAt ? <StatusPill kind="warn">Disabled</StatusPill> : <StatusPill kind="ok">Active</StatusPill>}
                   </td>

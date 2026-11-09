@@ -21,7 +21,7 @@ afterEach(() => clipboard.writeText.mockClear());
 
 describe('Users', () => {
   it('lists users with status, and searches and filters from the first page', async () => {
-    const users = [adminUser(), adminUser({ id: 'u-3', email: 'off@example.test', role: 'dev', disabledAt: '2026-09-02T00:00:00.000Z' }), adminUser({ id: 'u-4', email: 'gone@example.test', role: 'admin', deletedAt: '2026-09-03T00:00:00.000Z', settings: { trackingEnabled: false, defaultMode: 'car', exploreBudgetMin: 15 } })];
+    const users = [adminUser(), adminUser({ id: 'u-3', email: 'off@example.test', role: 'dev', disabledAt: '2026-09-02T00:00:00.000Z' }), adminUser({ id: 'u-4', email: 'gone@example.test', role: 'admin', deletedAt: '2026-09-03T00:00:00.000Z', settings: { trackingEnabled: false, defaultMode: 'car', exploreBudgetMin: 15 } }), adminUser({ id: 'u-5', email: 'harness@example.test', role: 'admin', testAccount: true })];
     const { api } = await renderApp(<UsersPage />, { path: '/admin/users', user: admin, api: { 'GET /api/admin/users': () => ({ items: users, total: 120 }) } });
     const rows = await screen.findAllByRole('row');
     expect(rows[1]).toHaveTextContent('alex@example.test');
@@ -29,6 +29,8 @@ describe('Users', () => {
     expect(rows[1]).toHaveTextContent('345');
     expect(rows[2]).toHaveTextContent('Dev Disabled');
     expect(rows[3]).toHaveTextContent('Admin Deleted');
+    expect(rows[4]).toHaveTextContent('Admin · Test account');
+    expect(rows[1]).not.toHaveTextContent('Test account');
     expect(screen.getByText('1–50 of 120')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: 'Next page' }));
@@ -172,6 +174,25 @@ describe('User detail', () => {
   it('shows a missing user', async () => {
     await open({ 'GET /api/admin/users/u-2': () => apiError(404, 'not_found', 'User not found') });
     expect(await screen.findByRole('alert')).toHaveTextContent('User not found');
+  });
+
+  it('marks and unmarks a test account', async () => {
+    const { api } = await open({ 'PATCH /api/admin/users/u-2': () => ({ ok: true }) });
+    expect(await screen.findByText('Test account')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Mark as test account/ }));
+    expect(await screen.findByText('Marked as a test account. Its drives no longer count towards learned speeds or light timings.')).toBeInTheDocument();
+    expect(api.calls('PATCH /api/admin/users/u-2')[0]!.body).toEqual({ testAccount: true });
+  });
+
+  it('shows a test account and turns it back into an ordinary one', async () => {
+    const { api } = await open({
+      'GET /api/admin/users/u-2': () => adminUserDetail({ testAccount: true }),
+      'PATCH /api/admin/users/u-2': () => ({ ok: true }),
+    });
+    expect(await screen.findByText('Yes: its drives don’t count towards learned speeds or light timings')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Not a test account/ }));
+    expect(await screen.findByText('No longer a test account.')).toBeInTheDocument();
+    expect(api.calls('PATCH /api/admin/users/u-2')[0]!.body).toEqual({ testAccount: false });
   });
 });
 
