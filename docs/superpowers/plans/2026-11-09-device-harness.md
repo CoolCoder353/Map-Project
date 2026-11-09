@@ -2609,6 +2609,8 @@ git push origin master
 
 ### Task 10: On the phone (with the user)
 
+> **Status 2026-11-09:** Tasks 1–9 and 11 are done and pushed (0.6.1 on internal testing, server deployed, the spike's emulator deleted). This task waits for the user; its steps, kept current, are in docs/todo.md, "First run of the device harness on a phone".
+
 Needs the user: their phone on USB with USB debugging, 0.6.1 from Play's internal testing, the test account created, flagged as a test account and signed in, and Android Auto's head unit server started (development.md, Device harness, setup).
 
 - [ ] **Step 1: Register and start**
