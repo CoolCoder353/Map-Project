@@ -138,6 +138,66 @@ driving map style, search and loop shapes are the server's) need a deploy; the r
   (the car's search rows now carry distance first; ranking is the server's, improved for P78),
   C20, C25, C61 (the ✕ on the time card is Android Auto's own).
 
+## Second run, 10 November (0.7.0)
+
+About 15 minutes on the same phone and head unit with 0.7.0 (versionCode 18) from internal
+testing, against the server at 09c94b7. The phone was standing still indoors, so it covered the
+screens and controls rather than a drive (see R2-H1).
+
+**Seen working:** a trip keeps running after leaving the Navigate screen (C63), with the blue
+"Navigating to Woolworths · Back to directions" banner over the tabs; the in-app End
+confirmation; the ended-trip summary with Resume, and Resume restarting directions on both
+screens; the phone's driving map without shops and buildings, speed sign and readout in their
+column; the car's heading arrow and speed box clear of the route; the car's route preview with
+"Fastest" and "Via Finucane Road" (C33, route names); car search results and the route preview from
+one of them; car Discover with "Within 10 min" and numbered pins; the rotary controller reaching
+rows below the fold (once nudged, R2-H3); Plan's note when the fastest route is already all new;
+the map stepping aside while searching; Coverage's colour key and "Travelled 9 Nov 2026, driving."
+on a tapped road; Settings' Sign out beside the account and the Light/Dark/Automatic control.
+
+**Found:**
+
+- **R2-P1 (P76 still open)** "Woolworths Victoria Point" finds neither Woolworths in Victoria
+  Point: a brand or name followed by a suburb, without a house number, isn't split, so it lists
+  the suburb, a pub, and Victoria Plains (827 km) and Point Victor (799 km). "Woolworths" alone
+  finds them.
+- **R2-P2** Picking a search result leaves the keyboard open and the field focused, covering the
+  routes that just appeared.
+- **R2-P3** Both stationary test trips (11 m and 2 m) are in Trips, though the banner said "You
+  hadn't moved, so nothing was added to Trips". The phone's threshold and what the server keeps
+  disagree.
+- **R2-P4** The 11 m trip, standing still in a house, credited "1 new road" (GPS wander onto the
+  street outside).
+- **R2-P5** Trips calls both "To 27 Whitby Place", where they ended (also where they started), not
+  Woolworths, the trip's destination.
+- **R2-P6** "9:51 am–9:51 am": a range within one minute repeats the time.
+- **R2-P7 / R2-C1** "gym" isn't a category: car and phone list Gymea Place (a street, 16 km) and Gym
+  Cartel (25 km) first, then Gympie 163 km away, so the car's results map zooms out to most of
+  Queensland. Car results took about 8 s to appear.
+- **R2-C2 (C1 in part)** At each trip start (twice) a heads-up card, "Turn right onto Carlingford
+  Drive · 130 m · To Woolworths" with a ✕, covered the car's own directions for a few seconds,
+  though the notification is on the low-importance channel. Gone within 10 s.
+- **R2-C3 (C61)** The ✕ on the car's time card ends the trip on one tap; the two-tap guard (C23)
+  is only on the action strip's End. The ✕ is the easier target to hit by mistake.
+- **R2-C4** Parked, the car's Home row runs to five lines (distance, name, type, suburb, postcode)
+  and pushes Discover nearby below the fold; with driving restrictions on, it's cut to two.
+- **R2-C5** On first showing the car's home map, the position dot sits on the right edge of the
+  list card (x≈400 of 800), half hidden. After scrolling the list it was centred in the open map.
+- **R2-H1** `pnpm device drive` moved nothing on the real phone: 339 fixes went to the head unit's
+  console over 6 minutes, but the car map and the phone's trip stayed at the phone's real position
+  (0–1 km/h). No log shows a car position arriving, so whether the head unit sends them or
+  Wayfinder ignores them is unknown. Drives on a real phone have not worked since the harness
+  stopped faking the phone's GPS (H13). Ctrl-C during a drive also runs `down`, which signs the
+  test account out.
+- **R2-H2** Car taps landed 1:1 with the `shot car` picture this session (with `controller = true`
+  now in the head unit's config); the default 1.16 put a tap meant for the ✕ onto the rail's clock
+  and opened the notification panel. `carTapScale: 1.0` in `.harness/config.json` fixed it.
+- **R2-H3** `car scroll` turns the rotary but focus starts in the rail (mic, layout, app icons),
+  so it cycles those. The console's `dpad up` moves focus into the app first; the harness has no
+  command for it.
+- **R2-H4** `pnpm device down` signs the test account out, so using it to reset a session needs
+  the phone's owner to sign in again.
+
 ## Phone app (100)
 
 - **P1** Plan opens on central Australia (OVERVIEW 134.5,-27.5 z3.6) even with location granted and a fresh fix; for a Queensland-only server the map is an empty desert showing "QUEENSLAN" cut off. Should start at the user's position or the server's region.

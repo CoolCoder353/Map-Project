@@ -130,6 +130,13 @@ seen on the phone or head unit: the next run should check by eye a trip with no 
 starting from the car's preview, no heads-up card over the car's directions, End taking two taps,
 and the harness's car taps landing where aimed. The harness no longer fakes a phone's own GPS.
 
+**Second run, 2026-11-10 (0.7.0, versionCode 18):** seen working on the phone and head unit: a trip
+surviving leaving the Navigate screen, the in-app End confirmation, the ended-trip summary and
+Resume, the car's route preview with a named alternative, car search and Discover (drive-time
+bands, numbered pins), the rotary reaching rows below the fold, Coverage's key and road dates,
+and the appearance control. Not checked: a moving drive (the harness's drive moved nothing on the
+real phone), spoken directions. New findings are in the report's "Second run" section.
+
 **The rest, also 2026-11-10:** the findings left that day are fixed in code with tests too, but
 lane guidance (C90) and the few the report's "Still not fixed" lists. Not seen on a device: check by
 eye that a trip survives leaving the Navigate screen, the phone's driving map turns with you and
