@@ -245,6 +245,36 @@ class NavigationCoordinatorTest {
     assertSame(first, posted())
   }
 
+  /** With Wayfinder's own directions on the car's screen, a heads-up card only covered them (C1). */
+  @Test fun noHeadsUpWhileTheDirectionsAreOnTheCarsScreen() {
+    var showing = true
+    val c = NavigationCoordinator(carContext, api, RecordingScenes(), ManeuverIcons(carContext), appShowing = { showing })
+    c.attach()
+    api.pushNav(Samples.nav())
+    assertEquals(NotificationManagerCompat.IMPORTANCE_DEFAULT, extender(posted()!!).importance)
+    showing = false
+    api.pushNav(Samples.nav().copy(cue = "Turn right onto High St", maneuver = CarManeuver("right", null)))
+    assertEquals("Wayfinder isn’t on the car’s screen: a heads-up", NotificationManagerCompat.IMPORTANCE_HIGH, extender(posted()!!).importance)
+  }
+
+  /** The phone has its own turn banner; a heads-up for every turn hid it (P16), and the lock screen hid the turn (P90). */
+  @Test fun isQuietOnThePhoneAndReadableOnItsLockScreen() {
+    coordinator.attach()
+    api.pushNav(Samples.nav())
+    val system = ApplicationProvider.getApplicationContext<Context>().getSystemService(NotificationManager::class.java)
+    assertEquals(NotificationManager.IMPORTANCE_LOW, system.getNotificationChannel(NavNotifications.CHANNEL_ID).importance)
+    assertNull("the old high channel is gone", system.getNotificationChannel(NavNotifications.OLD_CHANNEL_ID))
+    assertEquals(Notification.VISIBILITY_PUBLIC, posted()!!.visibility)
+  }
+
+  /** The phone's message is a sentence or two; the title takes the first, the text the rest. */
+  @Test fun aMessageFromThePhoneIsSplitIntoATitleAndText() {
+    coordinator.attach()
+    api.pushNav(Samples.nav().copy(error = "Couldn’t get a new route. Keep heading to the destination; trying again shortly."))
+    assertEquals("Couldn’t get a new route.", posted()!!.extras.getString(Notification.EXTRA_TITLE))
+    assertTrue(extender(posted()!!).contentText.toString().startsWith("Keep heading to the destination"))
+  }
+
   @Test fun sayingArrivedAndNewRoutesInTheTitle() {
     coordinator.attach()
     api.pushNav(Samples.nav(rerouting = true))

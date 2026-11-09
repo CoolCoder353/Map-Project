@@ -96,3 +96,27 @@ export function expandAbbreviations(q: string): string {
     })
     .join(' ');
 }
+
+/** What people call places in Australia, as the places themselves are named. */
+const NICKNAMES: Record<string, string> = {
+  maccas: 'McDonald’s',
+  'macca’s': 'McDonald’s',
+  "macca's": 'McDonald’s',
+  woolies: 'Woolworths',
+  woolys: 'Woolworths',
+  coles: 'Coles',
+  bunnos: 'Bunnings',
+  'hungry jacks': 'Hungry Jack’s',
+  servo: 'petrol',
+  chemist: 'pharmacy',
+  bottlo: 'bottle shop',
+};
+
+/** "Woolies Cleveland" is "Woolworths Cleveland": each nickname word swapped for the place's own name. */
+export function expandNicknames(q: string): string {
+  return q
+    .trim()
+    .split(/\s+/)
+    .map((word) => NICKNAMES[word.toLowerCase()] ?? word)
+    .join(' ');
+}

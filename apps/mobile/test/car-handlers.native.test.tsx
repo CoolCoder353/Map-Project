@@ -3,7 +3,7 @@ import { timerHold } from '../src/lib/keepTimers';
 import { waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
 import { formatDistanceShort } from '@wayfinder/nav';
-import { carHandlers, carReportMessage, PHONE_FIX_WAIT_MS, REPORT_COOLDOWN_MS, REPORT_JUST_SENT, REPORT_LIMIT, REPORT_OFF, resetCarHandlers } from '../src/car/handlers';
+import { carHandlers, carReportMessage, DISCOVER_MIN_M, isHomeName, NO_OTHER_WAYS, OFFERED_KEPT, PHONE_FIX_WAIT_MS, ROUTE_EXPIRED, REPORT_COOLDOWN_MS, REPORT_JUST_SENT, REPORT_LIMIT, REPORT_OFF, resetCarHandlers } from '../src/car/handlers';
 import { ApiError } from '../src/lib/apiClient';
 import { getServerUrl } from '../src/lib/server';
 import { fake, place, resetFakes, route } from './fakes';
@@ -72,14 +72,15 @@ describe('the car’s own location', () => {
     }
   });
 
-  it('plans from the car’s position rather than wait for a phone with no recent fix', async () => {
-    jest.mocked(Location.getLastKnownPositionAsync).mockResolvedValueOnce(null as never);
+  it('plans from the car’s position without waiting on the phone', async () => {
+    jest.mocked(Location.getLastKnownPositionAsync).mockClear();
     jest.mocked(Location.getCurrentPositionAsync).mockClear();
     fake.api.on({ 'POST api/routes/explore': () => ({ fastest: route({ id: 'r-car' }), explore: [] }) });
     await carHandlers.location!(fixFromCar());
     await carHandlers.plan!({ to: [152.957, -27.4846] });
     expect(fake.api.callsTo('POST api/routes/explore')[0]!.body).toMatchObject({ from: [153.05, -27.45] });
     expect(Location.getCurrentPositionAsync).not.toHaveBeenCalled();
+    expect(Location.getLastKnownPositionAsync).not.toHaveBeenCalled();
   });
 
   it('gives up on a phone that can’t find where it is, rather than leave the car waiting', async () => {
@@ -96,9 +97,10 @@ describe('the car’s own location', () => {
     }
   });
 
-  it('prefers the phone’s position, and forgets the car’s after a minute', async () => {
+  // The car reports every second; the phone's last fix may be minutes old (15 km at highway speed).
+  it('prefers the car’s fresh position to the phone’s, and forgets the car’s after a minute', async () => {
     await carHandlers.location!(fixFromCar());
-    expect(await carHandlers.status!({})).toMatchObject({ here: [153.02, -27.47] });
+    expect(await carHandlers.status!({})).toMatchObject({ here: [153.05, -27.45] });
     jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValue({ granted: false } as never);
     const realNow = Date.now.bind(Date);
     const now = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + 61_000);
@@ -136,8 +138,15 @@ describe('status', () => {
     const { saved } = (await carHandlers.status!({})) as { saved: Array<{ id: string; name: string; detail: string; distanceM: number }> };
     expect(saved.map((p) => p.name)).toEqual(['home', 'Work', 'Gym']);
     expect(saved[0]).toMatchObject({ id: 's-home', location: [153.2526, -27.5624] });
-    expect(saved[0]!.detail).toBe(`12 Moselle Drive, Thornlands · ${formatDistanceShort(saved[0]!.distanceM)} away`);
+    // How far first: a car row has room for one short line.
+    expect(saved[0]!.detail).toBe(`${formatDistanceShort(saved[0]!.distanceM)} away · 12 Moselle Drive, Thornlands`);
     expect(saved[1]!.detail).toBe(`${formatDistanceShort(saved[1]!.distanceM)} away`);
+    expect(saved.every((p) => (p as { saved?: boolean }).saved)).toBe(true);
+  });
+
+  it('knows Home however it was written', () => {
+    for (const name of ['Home', ' home ', 'Home 🏠', 'My home', 'my house', 'HOME!']) expect(isHomeName(name)).toBe(true);
+    for (const name of ['Homeworld', 'Mum’s home cooking', 'Work', '', 'Home Hardware Cleveland']) expect(isHomeName(name)).toBe(false);
   });
 
   it('has no saved places when they can’t be fetched, or nobody is signed in', async () => {
@@ -197,11 +206,15 @@ describe('search', () => {
 });
 
 describe('discover', () => {
-  it('finds places a drive away, saying how unexplored the area is', async () => {
-    fake.api.on({ 'GET api/discover': () => ({ items: [{ id: 'd1', name: 'Mt Coot-tha Lookout', category: 'viewpoint', location: [152.957, -27.4846], distanceM: 6200, areaUnexploredPct: 62, score: 1 }] }) });
-    const res = (await carHandlers.discover!({})) as { places: Array<{ detail: string }> };
-    expect(fake.api.callsTo('GET api/discover')[0]!.query).toMatchObject({ mode: 'car', maxMinutes: 30, limit: 6 });
-    expect(res.places[0]!.detail).toBe('Lookout · 6.2 km away · 62% unexplored area');
+  it('finds places a drive away, nearest first, in one short line each', async () => {
+    const item = (id: string, distanceM: number) => ({ id, name: id, category: 'viewpoint', location: [152.957, -27.4846], distanceM, areaUnexploredPct: 100, score: 1 });
+    fake.api.on({ 'GET api/discover': () => ({ items: [item('far', 6600), item('next door', 180), item('near', 2400)] }) });
+    const res = (await carHandlers.discover!({})) as { places: Array<{ name: string; detail: string }> };
+    expect(fake.api.callsTo('GET api/discover')[0]!.query).toMatchObject({ mode: 'car', maxMinutes: 30, limit: 12 });
+    // A place 180 m away is a walk, not somewhere to drive to.
+    expect(res.places.map((p) => p.name)).toEqual(['near', 'far']);
+    expect(res.places[0]!.detail).toBe('2.4 km away · Lookout');
+    expect(DISCOVER_MIN_M).toBe(1000);
   });
 
   it('explains when it can’t tell where you are', async () => {
@@ -249,7 +262,7 @@ describe('plan and start', () => {
   });
 
   it('won’t start a route it doesn’t have', async () => {
-    await expect(carHandlers.start!({ routeId: 'nope', destinationName: 'x' })).rejects.toThrow(/Plan it again/);
+    await expect(carHandlers.start!({ routeId: 'nope', destinationName: 'x' })).rejects.toThrow(ROUTE_EXPIRED);
   });
 });
 
@@ -285,11 +298,18 @@ describe('during a trip', () => {
 });
 
 describe('test drive (auto drive)', () => {
-  it('follows the trip already running, under its own name', async () => {
+  it('follows a test drive already running, under its own name', async () => {
     const current = route({ id: 'r-now' });
-    mockNavigation.getSnapshot.mockReturnValueOnce({ route: current, active: true, error: null, destinationName: 'Mt Coot-tha Lookout' } as never);
+    mockNavigation.getSnapshot.mockReturnValueOnce({ route: current, active: true, simulated: true, error: null, destinationName: 'Mt Coot-tha Lookout' } as never);
     expect(await carHandlers.simulate!({})).toEqual({});
     expect(startTestDrive).toHaveBeenCalledWith(mockNavigation, current, 'Mt Coot-tha Lookout');
+  });
+
+  // It would stop the real trip recording, and end it when the pretend drive "arrived".
+  it('never replaces a real trip with a pretend one', async () => {
+    mockNavigation.getSnapshot.mockReturnValueOnce({ route: route({ id: 'r-real' }), active: true, simulated: false, error: null, destinationName: 'Home' } as never);
+    expect(await carHandlers.simulate!({})).toEqual({});
+    expect(startTestDrive).not.toHaveBeenCalled();
   });
 
   it('with no trip, drives the built-in route from where the phone is', async () => {
@@ -323,10 +343,10 @@ describe('the edges', () => {
     expect(res.places[0]).toMatchObject({ detail: 'Cafe', distanceM: null });
   });
 
-  it('leaves out how unexplored a place is unless it is mostly unexplored', async () => {
-    fake.api.on({ 'GET api/discover': () => ({ items: [{ id: 'd2', name: 'Cove', category: 'beach', location: [153, -27], distanceM: 900, areaUnexploredPct: 20, score: 1 }] }) });
+  it('leaves out how unexplored a place is: it costs a car row a whole line', async () => {
+    fake.api.on({ 'GET api/discover': () => ({ items: [{ id: 'd2', name: 'Cove', category: 'beach', location: [153, -27], distanceM: 1900, areaUnexploredPct: 100, score: 1 }] }) });
     const res = (await carHandlers.discover!({})) as { places: Array<{ detail: string }> };
-    expect(res.places[0]!.detail).toBe('Beach · 900 m away');
+    expect(res.places[0]!.detail).toBe('1.9 km away · Beach');
   });
 
   it('won’t plan without knowing where you are', async () => {
@@ -338,7 +358,8 @@ describe('the edges', () => {
     fake.api.on({ 'POST api/routes/explore': () => ({ fastest: explored, explore: [] }) });
     const res = (await carHandlers.plan!({ to: [152.957, -27.4846] })) as { options: Array<{ detail: string }>; note: string };
     expect(res.options[0]!.detail).toBe(`10 min · ${formatDistanceShort(explored.distanceM)}`);
-    expect(res.note).toBe('No other ways fit within your extra time.');
+    expect(res.note).toBe(NO_OTHER_WAYS);
+    expect(res.note).toMatch(/Settings on your phone/);
   });
 
   it('gives the line of a route it offered, and refuses one it never had', async () => {
@@ -349,13 +370,13 @@ describe('the edges', () => {
     await expect(carHandlers.routeLine!({ routeId: 'gone' })).rejects.toThrow(/no longer available/);
   });
 
-  it('forgets the oldest routes after thirty', async () => {
-    for (let i = 0; i < 31; i++) {
+  it(`forgets the oldest routes after ${OFFERED_KEPT}`, async () => {
+    for (let i = 0; i <= OFFERED_KEPT; i++) {
       fake.api.on({ 'POST api/routes/explore': () => ({ fastest: route({ id: `r${i}` }), explore: [] }) });
       await carHandlers.plan!({ to: [152.957, -27.4846] });
     }
-    await expect(carHandlers.start!({ routeId: 'r0', destinationName: 'x' })).rejects.toThrow(/Plan it again/);
-    await carHandlers.start!({ routeId: 'r30', destinationName: 'x' });
+    await expect(carHandlers.start!({ routeId: 'r0', destinationName: 'x' })).rejects.toThrow(ROUTE_EXPIRED);
+    await carHandlers.start!({ routeId: `r${OFFERED_KEPT}`, destinationName: 'x' });
     expect(mockNavigation.start).toHaveBeenCalledTimes(1);
   });
 });
@@ -381,6 +402,7 @@ describe('report', () => {
     headingDeg: 87.6,
     speedMps: 16.7,
     travelled: [],
+    simulated: false,
     state: {
       status: 'navigating',
       speedLimitKmh: 60,
@@ -502,9 +524,14 @@ describe('report limits', () => {
 });
 
 describe('carReportMessage', () => {
+  it('stamps the time in the phone’s own time zone, and names it', () => {
+    const msg = carReportMessage({ active: false, route: null, destinationName: null, state: null, rerouting: false, error: null, muted: false, position: null, headingDeg: null, speedMps: null, travelled: [], simulated: false }, new Date('2026-10-06T09:04:22Z'), 'Australia/Perth');
+    expect(msg).toContain('6 Oct 2026, 5:04:22 pm AWST');
+  });
+
   it('says what was shown before the first position and while finding a new route', () => {
-    const msg = carReportMessage({ active: true, route: route({ kind: 'fastest' }), destinationName: null, state: null, rerouting: true, error: 'Still finding where you are.', muted: false, position: null, headingDeg: null, speedMps: null, travelled: [] }, new Date('2026-10-06T09:04:22Z'));
-    expect(msg).toContain('6 Oct 2026, 7:04:22 pm');
+    const msg = carReportMessage({ active: true, route: route({ kind: 'fastest' }), destinationName: null, state: null, rerouting: true, error: 'Still finding where you are.', muted: false, position: null, headingDeg: null, speedMps: null, travelled: [], simulated: false }, new Date('2026-10-06T09:04:22Z'), 'Australia/Brisbane');
+    expect(msg).toContain('6 Oct 2026, 7:04:22 pm AEST');
     expect(msg).toContain('Trip: fastest route, waiting for the first position, finding a new route.');
     expect(msg).toContain('Speed limit shown: none. Speed: unknown.');
     expect(msg).toContain('Message shown: Still finding where you are.');

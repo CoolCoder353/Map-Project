@@ -34,14 +34,19 @@ class NavNotifications(private val carContext: CarContext, private val icons: Ma
   private var lastText: String? = null
   private var receiver: BroadcastReceiver? = null
 
-  /** Posts the notification, or updates it. Quiet unless the instruction changed since the last post. */
-  fun update(nav: CarNav) {
+  /**
+   * Posts the notification, or updates it. A heads-up in the car only when the instruction changed
+   * and [headsUp] allows: not while Wayfinder's own directions are on the car's screen, where the
+   * card would only cover the same instruction (Google's guidance for navigation apps).
+   */
+  fun update(nav: CarNav, headsUp: Boolean = true) {
     val title = titleOf(nav)
     // How far to the instruction changes with every fix; it is the quiet part of an update.
     val ahead = if (nav.status == NavStatus.NAVIGATING && nav.maneuver != null && !nav.rerouting && nav.error == null) nav.distanceToManeuverM?.let(::distanceText) else null
-    val text = listOfNotNull(ahead, nav.destinationName?.let { "To $it" }).joinToString(" · ")
+    val detail = if (nav.status != NavStatus.ARRIVED && !nav.rerouting) nav.error?.let(::afterFirstSentence) else null
+    val text = listOfNotNull(ahead, detail, nav.destinationName?.let { "To $it" }).joinToString(" · ")
     if (title == lastTitle && text == lastText) return // a fix that changed nothing the car shows
-    val changed = title != lastTitle
+    val changed = title != lastTitle && headsUp
     lastTitle = title
     lastText = text
     ensureChannel()
@@ -58,6 +63,8 @@ class NavNotifications(private val carContext: CarContext, private val icons: Ma
       .setOngoing(true)
       .setOnlyAlertOnce(true)
       .setCategory(NotificationCompat.CATEGORY_NAVIGATION)
+      // The next turn is what's worth a glance at the lock screen; it says nothing private.
+      .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
       .extend(
         CarAppExtender.Builder()
           .setContentTitle(title)
@@ -89,14 +96,20 @@ class NavNotifications(private val carContext: CarContext, private val icons: Ma
   private fun titleOf(nav: CarNav): String = when {
     nav.status == NavStatus.ARRIVED -> "You’ve arrived"
     nav.rerouting -> "Finding a new route…"
-    nav.error != null -> nav.error
+    nav.error != null -> firstSentence(nav.error)
     nav.status == NavStatus.OFF_ROUTE -> "Off route"
     else -> nav.cue.ifEmpty { "Continue" }
   }
 
+  /**
+   * On the phone the channel is low: the app's own turn banner is there, and a heads-up for every
+   * turn hid it. The car's heads-up comes from [CarAppExtender.Builder.setImportance], not this.
+   * The old high channel is removed: an app can't lower a channel it has already made.
+   */
   private fun ensureChannel() {
+    manager.deleteNotificationChannel(OLD_CHANNEL_ID)
     manager.createNotificationChannel(
-      NotificationChannelCompat.Builder(CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_HIGH)
+      NotificationChannelCompat.Builder(CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_LOW)
         .setName("Navigation directions")
         .setSound(null, null)
         .setVibrationEnabled(false)
@@ -117,12 +130,27 @@ class NavNotifications(private val carContext: CarContext, private val icons: Ma
 
   companion object {
     const val ID = 4201
-    const val CHANNEL_ID = "wayfinder_navigation"
+    const val CHANNEL_ID = "wayfinder_navigation_quiet"
+    /** The first channel, high importance, which made a heads-up on the phone for every turn. */
+    const val OLD_CHANNEL_ID = "wayfinder_navigation"
     const val ACTION_OPEN_APP = "app.wayfinder.car.action.OPEN_APP"
 
     /** The link a tap on the notification opens the car app with: "show the directions". */
     val DIRECTIONS: Uri = Uri.fromParts("wayfinder", "directions", null)
 
     fun opensDirections(intent: Intent): Boolean = intent.data == DIRECTIONS
+
+    /** "Couldn’t get a new route." from the phone's message: short enough for a title. */
+    internal fun firstSentence(message: String): String {
+      val end = message.indexOf(". ")
+      return (if (end > 0) message.substring(0, end + 1) else message).take(TITLE_MAX)
+    }
+
+    internal fun afterFirstSentence(message: String): String? {
+      val end = message.indexOf(". ")
+      return if (end > 0) message.substring(end + 2).ifBlank { null } else null
+    }
+
+    private const val TITLE_MAX = 60
   }
 }

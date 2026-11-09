@@ -35,6 +35,8 @@ export type AdbCommand =
   | { kind: 'testLocation'; lon: number; lat: number }
   | { kind: 'forward'; add: boolean }
   | { kind: 'geoFix'; lon: number; lat: number }
+  | { kind: 'collapseShade' }
+  | { kind: 'mediaPause' }
   | { kind: 'install'; apk: string }
   | { kind: 'emuKill' };
 
@@ -92,6 +94,10 @@ export function adbArgs(device: Device, cmd: AdbCommand): string[] {
       return cmd.add ? [...s, 'forward', `tcp:${DHU_PORT}`, `tcp:${DHU_PORT}`] : [...s, 'forward', '--remove', `tcp:${DHU_PORT}`];
     case 'geoFix':
       return [...s, 'emu', 'geo', 'fix', coord(cmd.lon, 180), coord(cmd.lat, 90)];
+    case 'collapseShade':
+      return [...s, 'shell', 'cmd', 'statusbar', 'collapse'];
+    case 'mediaPause':
+      return [...s, 'shell', 'input', 'keyevent', 'KEYCODE_MEDIA_PAUSE'];
     case 'install':
       return [...s, 'install', '-r', cmd.apk];
     case 'emuKill':

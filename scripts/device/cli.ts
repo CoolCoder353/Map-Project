@@ -10,7 +10,7 @@
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { type AdbCommand, type Device, type Key, APP, LIST_DEVICES, MIN_SAFE_VERSION_CODE, adbArgs, carShowsWayfinder, focusedPackage, parseDevices, pickDevice, versionCode } from './adb.js';
-import { CAR_KEYS, type CarKey, DHU_CONFIG, dhuCommand } from './dhu.js';
+import { CAR_KEYS, CAR_SCREEN, CAR_TAP_SCALE, type CarKey, DHU_CONFIG, dhuCommand } from './dhu.js';
 import { type Fix, readRoute, replay } from './route.js';
 import { type Config, type Files, type Session, clearSession, harnessDir, loadConfig, loadSession, saveConfig, saveSession } from './state.js';
 import { type UiNode, centre, describeScreen, findByText, forbiddenAt, isSignInScreen, label, parseUiDump, screenSize, signedInEmail } from './ui.js';
@@ -21,6 +21,8 @@ export interface Deps {
   files: Files;
   writeBinary: (path: string, data: Buffer) => Promise<void>;
   exists: (path: string) => Promise<boolean>;
+  /** A file's size in bytes, or null if it isn't there. */
+  sizeOf: (path: string) => Promise<number | null>;
   /** Start the DHU reading console commands from `fifo`; returns its pid. */
   startDhu: (o: { fifo: string; config: string; headless: boolean }) => Promise<number>;
   sendDhu: (fifo: string, line: string) => Promise<void>;
@@ -46,7 +48,8 @@ const USAGE = `Usage: pnpm device <command>
   ui                           what's on the phone's screen, and where to tap it
   tap <text> | tap <x> <y> | tap car <x> <y>
   type <text>   key back|home|enter   swipe <x1> <y1> <x2> <y2>
-  gps <lon> <lat> [--phone|--car]   gps reset
+  gps <lon> <lat> [--car]      the car's position (a real phone's own GPS is never faked)
+  gps reset
   drive <route.geojson|.gpx> [--speed <km/h>]
   car day|night | car key ${CAR_KEYS.join('|')} | car restrict on|off
   logs                         app and car logs since the last look
@@ -111,17 +114,51 @@ function requireDhu(ctx: Ctx): { pid: number; fifo: string } {
   return dhu;
 }
 
+/** How long `up` waits for Wayfinder's Settings to show who is signed in. */
+const SETTINGS_WAIT_MS = 15_000;
+
+/**
+ * Wayfinder's Settings, once it shows an account or the sign-in screen: polled, not one fixed
+ * wait, which on a slow phone read the screen before and reported someone it couldn't read. The
+ * notification shade (pulled down by Android Auto connecting) is closed first.
+ */
 async function readSettings(ctx: Ctx): Promise<UiNode[]> {
+  await adb(ctx, { kind: 'collapseShade' }).catch(() => undefined);
   await adb(ctx, { kind: 'open', path: '/settings' });
-  await ctx.deps.sleep(2500);
-  return screen(ctx);
+  let nodes: UiNode[] = [];
+  for (let waited = 0; waited <= SETTINGS_WAIT_MS; waited += 500) {
+    await ctx.deps.sleep(waited === 0 ? 1000 : 500);
+    nodes = await screen(ctx);
+    if (isSignInScreen(nodes) || signedInEmail(nodes)) return nodes;
+  }
+  const pkg = focusedPackage(await text(ctx, { kind: 'focus' }));
+  if (pkg !== APP) throw new Refused(`Something is covering Wayfinder (${pkg ?? 'the notification shade or lock screen'}), so its Settings couldn’t be read. Unlock the phone and close it, then run up again.`);
+  return nodes;
 }
+
+/**
+ * A session left by an earlier `up` that stopped part-way, or by the computer restarting: its head
+ * unit is gone. `up` picks it up, keeping what `down` must undo, rather than refusing until `down`
+ * (which would sign the test account out for nothing).
+ */
+const stale = (ctx: Ctx, s: Session) => s.serial === ctx.device.serial && (!s.dhu || !ctx.deps.alive(s.dhu.pid));
 
 async function up(ctx: Ctx, o: { car: boolean; window: boolean; startedEmulator: boolean }) {
   const { deps, config, device } = ctx;
   if (!config.testAccountEmail) throw new Refused('No test account set: pnpm device account <email>.');
-  if (ctx.session) throw new Refused('A session is already open: pnpm device down first.');
-  ctx.session = { serial: device.serial, emulator: device.emulator, account: null, testProvider: false, forward: false, dhu: null, startedEmulator: o.startedEmulator, logsSince: deps.nowMs() / 1000 };
+  const before = ctx.session;
+  if (before && !stale(ctx, before)) throw new Refused('A session is already open, with the head unit running: pnpm device down first.');
+  if (before) deps.log('Picking up the session an earlier up left (it stopped part-way, or the computer restarted). Nothing was signed out.');
+  ctx.session = {
+    serial: device.serial,
+    emulator: device.emulator,
+    account: null,
+    testProvider: before?.testProvider ?? false,
+    forward: before?.forward ?? false,
+    dhu: null,
+    startedEmulator: o.startedEmulator || (before?.startedEmulator ?? false),
+    logsSince: deps.nowMs() / 1000,
+  };
   await save(ctx); // first, so down can undo whatever follows even if up stops part-way
 
   const nodes = await readSettings(ctx);
@@ -156,6 +193,12 @@ async function up(ctx: Ctx, o: { car: boolean; window: boolean; startedEmulator:
           : `The head unit stopped straight away. On the phone, start Android Auto's head unit server (Android Auto settings, ⋮, Start head unit server), then pnpm device down and up --car again. Its log: ${join(dir, 'dhu.log')}`,
       );
     }
+    // Connecting the head unit pulls down the shade and brings Android Auto forward on the phone,
+    // and Android Auto may start music playing: put Wayfinder back in front, and pause it.
+    await deps.sleep(2000);
+    await adb(ctx, { kind: 'mediaPause' }).catch(() => undefined);
+    await adb(ctx, { kind: 'collapseShade' }).catch(() => undefined);
+    await adb(ctx, { kind: 'open' });
     deps.log('Head unit running.');
   }
 }
@@ -169,11 +212,17 @@ async function shot(ctx: Ctx, which: string, out?: string) {
   } else if (which === 'car') {
     const dhu = requireDhu(ctx);
     await ctx.deps.sendDhu(dhu.fifo, dhuCommand.screenshot(path));
+    // There, and no longer growing: the head unit writes it a piece at a time, and a picture read
+    // as soon as it appeared was cut off.
     let waited = 0;
-    while (!(await ctx.deps.exists(path))) {
+    let size: number | null = null;
+    for (;;) {
       if (waited >= 10_000) throw new Error('The head unit didn’t save the screenshot.');
       await ctx.deps.sleep(250);
       waited += 250;
+      const now = (await ctx.deps.exists(path)) ? await ctx.deps.sizeOf(path) : null;
+      if (now !== null && now > 0 && now === size) break;
+      size = now;
     }
   } else throw new Refused('shot phone or shot car');
   ctx.deps.log(path);
@@ -185,8 +234,10 @@ async function tap(ctx: Ctx, args: string[]) {
     if (!Number.isFinite(nums[1]) || !Number.isFinite(nums[2])) throw new Refused('tap car <x> <y>');
     requireSession(ctx);
     const dhu = requireDhu(ctx);
+    const [x, y] = [nums[1]!, nums[2]!];
+    if (x < 0 || y < 0 || x >= CAR_SCREEN[0] || y >= CAR_SCREEN[1]) throw new Refused(`That's off the car screen (${CAR_SCREEN[0]}×${CAR_SCREEN[1]}, as shot car shows it).`);
     if (!carShowsWayfinder(await text(ctx, { kind: 'carLog' }))) throw new Refused('The car screen isn’t showing Wayfinder (by its log), so nothing was tapped.');
-    await ctx.deps.sendDhu(dhu.fifo, dhuCommand.tap(nums[1]!, nums[2]!));
+    await ctx.deps.sendDhu(dhu.fifo, dhuCommand.tap(x, y, ctx.config.carTapScale ?? CAR_TAP_SCALE));
     return;
   }
   if (args.length === 2 && nums.every(Number.isFinite)) {
@@ -201,20 +252,18 @@ async function tap(ctx: Ctx, args: string[]) {
   await adb(ctx, { kind: 'tap', x, y });
 }
 
+/**
+ * Moves the emulator's GPS and the head unit's. A real phone's own GPS is never faked: Google Play
+ * services' location reads the replaced "gps" provider, so every other app on the phone (Life360,
+ * Home Assistant) would see the fake position and share it. On a phone, Wayfinder follows the
+ * car's position while the phone's is quiet, which is what a drive needs.
+ */
+const PHONE_GPS_REFUSED =
+  'A real phone’s own GPS is never faked: every other app on it (location sharing, home automation) would see the fake position too. The car’s position moves instead; Wayfinder follows it.';
+
 async function setPosition(ctx: Ctx, f: Pick<Fix, 'lon' | 'lat' | 'speedMps' | 'bearingDeg'>, phone: boolean, car: boolean) {
   const s = ctx.session!;
-  if (phone) {
-    if (ctx.device.emulator) await adb(ctx, { kind: 'geoFix', lon: f.lon, lat: f.lat });
-    else {
-      if (!s.testProvider) {
-        await adb(ctx, { kind: 'mockLocation', allow: true });
-        await adb(ctx, { kind: 'testProvider', add: true });
-        s.testProvider = true;
-        await save(ctx);
-      }
-      await adb(ctx, { kind: 'testLocation', lon: f.lon, lat: f.lat });
-    }
-  }
+  if (phone && ctx.device.emulator) await adb(ctx, { kind: 'geoFix', lon: f.lon, lat: f.lat });
   if (car && s.dhu) await ctx.deps.sendDhu(s.dhu.fifo, dhuCommand.location(f.lon, f.lat, f.speedMps, f.bearingDeg));
 }
 
@@ -286,6 +335,7 @@ async function down(ctx: Ctx): Promise<number> {
 async function drive(ctx: Ctx, file: string, speedKmh: number): Promise<number> {
   requireSession(ctx);
   await guardVersion(ctx);
+  if (!ctx.device.emulator && !ctx.session?.dhu) throw new Refused(`${PHONE_GPS_REFUSED} Start the head unit with up --car first.`);
   const routeText = await ctx.deps.files.read(file);
   if (routeText === null) throw new Refused(`Can't read ${file}`);
   const fixes = replay(readRoute(routeText, file), speedKmh);
@@ -400,6 +450,8 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
         }
         await guardVersion(ctx);
         const [lon, lat] = args.map(Number);
+        if (values.phone && !ctx.device.emulator) throw new Refused(PHONE_GPS_REFUSED);
+        if (!ctx.device.emulator && !ctx.session?.dhu) throw new Refused(`${PHONE_GPS_REFUSED} Start the head unit with up --car first.`);
         const both = !values.phone && !values.car;
         await setPosition(ctx, { lon: lon!, lat: lat!, speedMps: 0, bearingDeg: 0 }, both || values.phone!, both || values.car!);
         return 0;

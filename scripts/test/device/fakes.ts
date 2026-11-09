@@ -68,6 +68,7 @@ export function world(over: Partial<Pick<World, 'focus' | 'version' | 'carLog' |
     },
     writeBinary: async (p, b) => void w.binary.set(p, b),
     exists: async (p) => w.binary.has(p) || w.files.has(p),
+    sizeOf: async (p) => w.binary.get(p)?.length ?? w.files.get(p)?.length ?? null,
     startDhu: async () => 4242,
     sendDhu: async (_fifo, line) => {
       w.dhuLines.push(line);

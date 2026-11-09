@@ -68,7 +68,7 @@ object SceneLayout {
       SceneDrawing(
         chosen,
         scene.options.filterIndexed { i, _ -> i != scene.selected }.map { it.geometry },
-        if (scene.selected == MapScene.Routes.NONE) numbered(scene.options.map { middle(it.geometry) }) else emptyList(),
+        if (scene.selected == MapScene.Routes.NONE) numbered(scene.options.mapIndexed { i, o -> along(o.geometry, (i + 1.0) / (scene.options.size + 1)) }) else emptyList(),
         null,
         destination = chosen.lastOrNull(),
       )
@@ -79,7 +79,11 @@ object SceneLayout {
   /** Numbered by place in the list, so a row with nothing to mark doesn't renumber the ones after it. */
   private fun numbered(at: List<LngLat?>) = at.mapIndexedNotNull { i, p -> p?.let { Pin(it, (i + 1).toString()) } }
 
-  private fun middle(line: List<LngLat>) = line.getOrNull(line.size / 2)
+  /**
+   * A point [share] of the way along [line], by vertex. Each route's number sits at a different
+   * share (1/3 and 2/3 for two), so routes that share roads don't stack their numbers.
+   */
+  internal fun along(line: List<LngLat>, share: Double) = line.getOrNull(Math.round((line.size - 1) * share).toInt().coerceIn(0, maxOf(0, line.size - 1)))
 
   fun camera(scene: MapScene): CameraSpec = when (scene) {
     is MapScene.Overview -> scene.here?.let { CameraSpec.Center(it, 13.0) } ?: AUSTRALIA

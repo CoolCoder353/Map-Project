@@ -70,7 +70,8 @@ class SearchScreenTest {
     screen.callback.onSearchTextChanged("  ")
     api.answer("search", listOf(Samples.place("p3", "Cootharaba")))
     assertTrue("a late answer for words no longer there is dropped", titles().isEmpty())
-    assertNull(template().itemList!!.noItemsMessage)
+    // Empty again: what to type, not the old "nothing found".
+    assertEquals(SearchScreen.NOTHING_YET, template().itemList!!.noItemsMessage!!.text())
     assertEquals(MapScene.Places(emptyList()), scenes.shown.last())
   }
 
@@ -113,5 +114,32 @@ class SearchScreenTest {
     screen.callback.onSearchSubmitted("zzzz")
     api.answer("search", emptyList<Any>())
     assertEquals("Nothing found. Try another name or address.", template().itemList!!.noItemsMessage.text())
+  }
+
+  /** Coming back to Search, the box still says what the results beside it are for (C9). */
+  @Test fun keepsTheWordsInTheBoxWithItsResults() {
+    screen.callback.onSearchSubmitted("coot")
+    api.answer("search", listOf(Samples.place()))
+    assertEquals("coot", template().initialSearchText)
+    assertFalse("results to see: no keyboard over them", template().isShowKeyboardByDefault)
+  }
+
+  /** One or two letters typed: say why nothing is there, rather than the car's bare "No items" (C37). */
+  @Test fun saysToTypeMoreWhenTooFewLettersAreTyped() {
+    screen.callback.onSearchTextChanged("co")
+    assertEquals(SearchScreen.TOO_SHORT, template().itemList!!.noItemsMessage!!.text())
+  }
+
+  /** Before anything is typed, and while driving when typing can't be, your saved places are a tap away (C6, C48, C81). */
+  @Test fun offersYourSavedPlacesBeforeAnythingIsTyped() {
+    val withSaved = SearchScreen(carContext, api, scenes, "Where to?", listOf(Samples.saved("Home").copy(saved = true)))
+    ScreenController(withSaved).moveToState(Lifecycle.State.STARTED)
+    val row = (withSaved.onGetTemplate() as SearchTemplate).itemList!!.items.single() as Row
+    assertEquals("Home", row.title.text())
+    assertTrue(row.texts.single().text()!!.startsWith("Saved place · "))
+  }
+
+  @Test fun saysWhatToDoWhenThereIsNothingYet() {
+    assertEquals(SearchScreen.NOTHING_YET, template().itemList!!.noItemsMessage!!.text())
   }
 }

@@ -57,7 +57,7 @@ export default function Trips() {
             <View style={{ flex: 1, gap: 3 }}>
               <Text style={{ color: t.text, fontWeight: '600' }}>{formatDateTime(item.startedAt)} · {formatDistanceShort(item.distanceM)}</Text>
               <View style={{ flexDirection: 'row', gap: space[2], alignItems: 'center' }}>
-                <Small>{`${item.mode === 'car' ? 'Drive' : 'Walk'}${item.source === 'navigation' ? ', navigated' : ''} · ${formatDuration(tripSeconds(item))}`}</Small>
+                <Small>{`${item.mode === 'car' ? 'Drive' : 'Walk'}${item.source === 'navigation' ? ', with directions' : ''} · ${formatDuration(tripSeconds(item))}`}</Small>
                 {item.newRoads > 0 ? <NewBadge text={`${item.newRoads} new road${item.newRoads === 1 ? '' : 's'}`} /> : null}
               </View>
             </View>

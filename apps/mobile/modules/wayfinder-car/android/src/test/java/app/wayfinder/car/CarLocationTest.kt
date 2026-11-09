@@ -28,7 +28,7 @@ class CarLocationTest {
 
   @Test fun tellsThePhoneEachPositionTheCarReports() {
     val source = FakeSource()
-    CarLocation(source, api).start()
+    CarLocation(source, api, now = { 1_790_000_000_000L }).start()
     source.onFix!!(fix())
     source.onFix!!(fix(lon = 153.06))
     assertEquals(listOf(fix(), fix(lon = 153.06)), api.fixes)
@@ -36,14 +36,14 @@ class CarLocationTest {
 
   @Test fun dropsAPositionThatIsntOne() {
     val source = FakeSource()
-    CarLocation(source, api).start()
+    CarLocation(source, api, now = { 1_790_000_000_000L }).start()
     listOf(fix(lat = Double.NaN), fix(lon = Double.POSITIVE_INFINITY), fix(lon = 0.0, lat = 0.0), fix(lat = 91.0)).forEach { source.onFix!!(it) }
     assertTrue(api.fixes.isEmpty())
   }
 
   @Test fun stopsListeningWhenToldTo() {
     val source = FakeSource()
-    CarLocation(source, api).start()()
+    CarLocation(source, api, now = { 1_790_000_000_000L }).start()()
     assertTrue(source.stopped)
   }
 
@@ -69,5 +69,15 @@ class CarLocationTest {
     assertNull(f.accuracyM)
     assertNull(f.speedMps)
     assertNull(f.headingDeg)
+  }
+
+  @Test fun dropsAFixTooRoughOrTooOldToTrust() {
+    val source = FakeSource()
+    CarLocation(source, api, now = { 1_790_000_000_000L }).start()
+    source.onFix!!(fix().copy(accuracyM = CarLocation.MAX_ACCURACY_M + 1))
+    source.onFix!!(fix().copy(timeMs = 1_790_000_000_000L - CarLocation.MAX_AGE_MS - 1))
+    assertTrue(api.fixes.isEmpty())
+    source.onFix!!(fix())
+    assertEquals(1, api.fixes.size)
   }
 }

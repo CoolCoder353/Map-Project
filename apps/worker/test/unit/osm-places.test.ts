@@ -19,6 +19,10 @@ describe('OSM place mapping', () => {
 
   it('maps discoverable POI categories', () => {
     expect(poiCategory({ tourism: 'viewpoint' })).toBe('viewpoint');
+    // A bird hide or wader roost tagged as a viewpoint isn't a lookout (seen in Discover, 9 Nov).
+    expect(poiCategory({ tourism: 'viewpoint', leisure: 'bird_hide', name: 'Birdhide' })).toBeNull();
+    expect(poiCategory({ tourism: 'viewpoint', name: 'Empire Point Wader Roost' })).toBeNull();
+    expect(poiCategory({ tourism: 'viewpoint', name: 'Sankey’s Lookout' })).toBe('viewpoint');
     expect(poiCategory({ natural: 'peak' })).toBe('peak');
     expect(poiCategory({ waterway: 'waterfall' })).toBe('waterfall');
     expect(poiCategory({ boundary: 'national_park' })).toBe('park');

@@ -124,6 +124,12 @@ Everything found is in [device-test-2026-11-09.md](device-test-2026-11-09.md). S
 the zoom buttons and lists below the fold weren't checked (see that file), so the boxes below are
 still unticked.
 
+**Fixes from that run, 2026-11-10:** most findings are fixed in code with tests (`pnpm check`
+passed); the report's "Fixed on 10 November" section lists them and why the rest aren't. Not yet
+seen on the phone or head unit: the next run should check by eye a trip with no explore options
+starting from the car's preview, no heads-up card over the car's directions, End taking two taps,
+and the harness's car taps landing where aimed. The harness no longer fakes a phone's own GPS.
+
 Before that run nothing below had been tried on a head unit; the automated tests pass
 (`pnpm test:android`, `pnpm test:mobile`, `carModule.test.ts`). Run it against a release APK on a real phone (build-android.md, "Trying it in a
 car"), tick each item as it passes, and record the date. Fix anything that fails, with a test.

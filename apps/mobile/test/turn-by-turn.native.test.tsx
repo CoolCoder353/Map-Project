@@ -120,7 +120,8 @@ it('reroutes after going off route, from where you are to what is left', async (
   expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).toEqual({ from: [153.2, -27.4], to: [153.1, -27.5], via: [], mode: 'car', heading: 90, speedMps: 10 });
   expect(mockReplaced).toEqual([next]);
   expect(result.current.rerouting).toBe(false);
-  expect(Speech.speak).toHaveBeenCalledWith('Route updated', expect.anything());
+  // Says what to do next, not just that the route changed.
+  expect(Speech.speak).toHaveBeenCalledWith('Route updated. Head north on Queen Street', expect.anything());
 });
 
 it('keeps going on the old route when rerouting fails offline', async () => {

@@ -185,6 +185,7 @@ export default function FeedbackScreen() {
             ) : null}
             {about ? null : <Small>Also sent: your Android version, phone model and the app version.</Small>}
             {error ? <Notice tone="error">{error}</Notice> : null}
+            {message.trim().length < 3 ? <Small>Write a few words about what happened to send it.</Small> : null}
             <Button label="Send" onPress={() => void send()} busy={busy} disabled={message.trim().length < 3} />
           </>
         )}

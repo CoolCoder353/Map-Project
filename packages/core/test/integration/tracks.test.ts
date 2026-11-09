@@ -131,6 +131,26 @@ describe('track ingestion and coverage', () => {
     expect(detail.points).toHaveLength(leg.length);
   });
 
+  it('credits no roads from a match far longer than the drive (it wandered the street grid between fixes)', async () => {
+    const u = await makeUser(t.db, 'wanderer@example.com');
+    const leg = drive(base, [148.6, -35.0], 0, 1.6, 15);
+    // The engine's answer runs 7 km out and back for a 1.6 km drive.
+    const wandering = {
+      async match(points: ReadonlyArray<{ lon: number; lat: number }>) {
+        const out = destination([points[0]!.lon, points[0]!.lat], 90, 7000);
+        const coordinates = [[points[0]!.lon, points[0]!.lat], out, ...points.map((p) => [p.lon, p.lat])] as LngLat[];
+        return { distance: lineLengthM(coordinates), time: 0, points: { type: 'LineString' as const, coordinates }, instructions: [], details: { osm_way_id: [[0, coordinates.length - 1, 401]] } };
+      },
+    };
+    await tracks.ingestBatch(t.db, queue, u.id, { batchId: randomUUID(), source: 'background', points: leg });
+    await runJobs(u.id, wandering as never);
+    const { items } = await tracks.listTrips(t.db, u.id, 10);
+    expect(items).toHaveLength(1);
+    expect(items[0]!.newRoads).toBe(0);
+    expect((await roads.roadStats(t.db, u.id)).km).toBe(0);
+    expect(roads.plausibleMatch(leg, leg.map((p) => [p.lon, p.lat] as LngLat))).toBe(true);
+  });
+
   it('re-matches a trip that grew, so roads driven after the first upload still count', async () => {
     const u = await makeUser(t.db, 'grower@example.com');
     const leg = drive(base, [148.5, -35.0], 0, 10, 20);

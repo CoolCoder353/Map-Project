@@ -32,6 +32,7 @@ process.exitCode = await run(process.argv.slice(2), {
     await writeFile(p, b);
   },
   exists: (p) => stat(p).then(() => true, () => false),
+  sizeOf: (p) => stat(p).then((s) => s.size, () => null),
   startDhu: async ({ fifo, config, headless }) => {
     await mkdir(dirname(fifo), { recursive: true });
     await rm(fifo, { force: true });

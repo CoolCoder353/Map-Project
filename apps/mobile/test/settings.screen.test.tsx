@@ -27,6 +27,7 @@ jest.mock('expo-router', () => {
   };
 });
 jest.mock('expo-linking', () => ({ openSettings: jest.fn(), openURL: (...a: unknown[]) => mockOpenURL(...a) }));
+jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { version: '0.6.1', android: { versionCode: 17 } } } }));
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('../src/lib/api', () => ({ api: { request: (...a: unknown[]) => mockRequest(...a) }, errorMessage: (e: Error) => e.message }));
 jest.mock('../src/lib/session', () => ({ useSession: () => ({ user: mockCurrent, setUser: mockSetUser, signOut: () => mockSignOut() }) }));
@@ -320,5 +321,20 @@ describe('delete account', () => {
     expect(await screen.findByText(/Couldn’t delete your account. Server is busy/)).toBeOnTheScreen();
     expect(mockSignOut).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+});
+
+describe('for testers', () => {
+  it('says which build this is (P53)', async () => {
+    await renderSettings();
+    expect(await screen.findByText(/0\.6\.1 \(17\)$/)).toBeOnTheScreen();
+  });
+
+  it('opens the website, where your data can be downloaded (P55)', async () => {
+    await renderSettings();
+    const button = await screen.findByRole('button', { name: 'Open the website' });
+    await waitFor(() => expect(button).toBeEnabled());
+    await fireEvent.press(button);
+    expect(mockOpenURL).toHaveBeenCalledWith('https://maps.example.com/settings');
   });
 });

@@ -29,8 +29,22 @@ object NavigateIntents {
   fun parse(intent: Intent): NavigateRequest? {
     if (intent.action != CarContext.ACTION_NAVIGATE) return null
     val uri = intent.data ?: return NavigateRequest.Malformed
-    if (uri.scheme != "geo") return NavigateRequest.Malformed
-    return parse(uri)
+    return when (uri.scheme) {
+      "geo" -> parse(uri)
+      // What many apps send for Google Maps: google.navigation:q=place or q=lat,lon.
+      "google.navigation" -> googleNavigation(uri)
+      else -> NavigateRequest.Malformed
+    }
+  }
+
+  internal fun googleNavigation(uri: Uri): NavigateRequest {
+    val q = query("?" + (uri.encodedSchemeSpecificPart ?: return NavigateRequest.Malformed))?.trim()?.ifEmpty { null }
+      ?: return NavigateRequest.Malformed
+    return COORDS_IN_Q.matchEntire(q)?.let { m ->
+      val lat = m.groupValues[1].toDouble()
+      val lon = m.groupValues[2].toDouble()
+      if (valid(lat, lon)) NavigateRequest.At(LngLat(lon = lon, lat = lat), m.groupValues[3].trim().ifEmpty { null }) else NavigateRequest.Malformed
+    } ?: NavigateRequest.Named(q)
   }
 
   internal fun parse(uri: Uri): NavigateRequest {

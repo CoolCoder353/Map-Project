@@ -1,6 +1,6 @@
 import { CoverageStatsSchema } from '@wayfinder/shared/schemas';
 import { useQuery } from '@tanstack/react-query';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -103,7 +103,12 @@ export default function Coverage() {
         refreshControl={<RefreshControl refreshing={pulled} onRefresh={() => void pullToRefresh()} />}
       >
         <Body muted>{copy.coverageIntro}</Body>
-        {!user?.settings.trackingEnabled ? <Notice>{copy.trackingOffHint}</Notice> : null}
+        {!user?.settings.trackingEnabled ? (
+          <View style={{ gap: space[2] }}>
+            <Notice>{copy.trackingOffHintApp}</Notice>
+            <Button label="Open Settings" kind="secondary" compact onPress={() => router.navigate('/settings')} style={{ alignSelf: 'flex-start' }} />
+          </View>
+        ) : null}
         {stats.isLoading ? <Loading /> : null}
         {stats.error ? <Notice tone="error">{errorMessage(stats.error)}</Notice> : null}
         {roadsFailed ? (

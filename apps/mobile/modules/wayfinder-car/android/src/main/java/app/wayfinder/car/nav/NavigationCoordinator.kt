@@ -29,6 +29,8 @@ class NavigationCoordinator(
   private val ensureStyles: () -> Unit = {},
   /** Pictures of the car map, for reports. */
   private val pictures: MapPictures? = null,
+  /** Wayfinder is what the car's screen shows (the session is resumed). */
+  private val appShowing: () -> Boolean = { false },
 ) {
   /** The road this trip has driven, for the map: kept here as the driving screen can be left and come back to. */
   private val trail = TripTrail()
@@ -93,7 +95,7 @@ class NavigationCoordinator(
     if (nav != null) {
       trail.add(nav.position)
       navManager.updateTrip(NavTemplates.trip(nav, icons))
-      notifications.update(nav)
+      notifications.update(nav, headsUp = !(appShowing() && driving()))
     }
   }
 

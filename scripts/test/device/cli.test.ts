@@ -119,7 +119,10 @@ describe('tapping and typing', () => {
     const w = world();
     await run(['up', '--car'], w.deps);
     expect(await run(['tap', 'car', '400', '240'], w.deps)).toBe(0);
-    expect(w.dhuLines).toContain('tap 400 240');
+    // On the head unit's own tap grid, 1.16 times the screenshot's.
+    expect(w.dhuLines).toContain('tap 464 278');
+    // Off the 800×480 screen: nothing.
+    expect(await run(['tap', 'car', '820', '100'], w.deps)).toBe(1);
     w.carLog = 'I WayfinderCar: car screen shown\nI WayfinderCar: car screen hidden\n';
     expect(await run(['tap', 'car', '100', '100'], w.deps)).toBe(1);
     expect(w.dhuLines).not.toContain('tap 100 100');
@@ -150,16 +153,26 @@ describe('location', () => {
     expect(sent(w).some((c) => c.includes('location'))).toBe(false);
   });
 
-  it('sets the phone through a test provider, and the car through the head unit, [lon, lat] in', async () => {
+  // Play services' location reads a faked "gps", so every app on the phone (Life360, Home
+  // Assistant) would have seen the fake position (H13).
+  it('never fakes a real phone’s own GPS: it moves the car, [lon, lat] in', async () => {
     const w = world();
     await run(['up', '--car'], w.deps);
+    const lines = logged(w);
     expect(await run(['gps', '153.02', '-27.47'], w.deps)).toBe(0);
     expect(await run(['gps', '153.03', '-27.48'], w.deps)).toBe(0);
-    const s = sent(w);
-    expect(s.filter((c) => c.includes('add-test-provider'))).toHaveLength(1);
-    expect(s).toContain('shell appops set com.android.shell android:mock_location allow');
-    expect(s).toContain('shell cmd location providers set-test-provider-location gps --location -27.470000,153.020000');
+    expect(sent(w).some((c) => c.includes('test-provider') || c.includes('mock_location'))).toBe(false);
     expect(w.dhuLines).toContain('location -27.480000 153.030000 5 0 0.0 0');
+    expect(await run(['gps', '153.02', '-27.47', '--phone'], w.deps)).toBe(1);
+    expect(lines.join('\n')).toContain('never faked');
+  });
+
+  it('on a phone with no head unit, refuses rather than move nothing', async () => {
+    const w = world();
+    await run(['up'], w.deps);
+    expect(await run(['gps', '153.02', '-27.47'], w.deps)).toBe(1);
+    w.files.set('/r.geojson', JSON.stringify({ type: 'LineString', coordinates: [[153, -27.5], [153.001, -27.5]] }));
+    expect(await run(['drive', '/r.geojson'], w.deps)).toBe(1);
   });
 
   it('uses geo fix on the emulator', async () => {
@@ -174,15 +187,16 @@ describe('location', () => {
     w.files.set('/r.geojson', JSON.stringify({ type: 'LineString', coordinates: [[153, -27.5], [153.001, -27.5]] }));
     await run(['up', '--car'], w.deps);
     expect(await run(['drive', '/r.geojson', '--speed', '36'], w.deps)).toBe(0);
-    const fixes = sent(w).filter((c) => c.includes('set-test-provider-location'));
+    const fixes = w.dhuLines.filter((l) => l.startsWith('location'));
     expect(fixes.length).toBeGreaterThan(9);
+    expect(sent(w).some((c) => c.includes('test-provider'))).toBe(false);
     expect(w.dhuLines.filter((l) => l.startsWith('location')).at(-1)).toMatch(/ 0\.0 90$/);
 
     w.deps.sleep = async () => w.interrupt();
     w.screens = [settings(), signIn()];
     expect(await run(['drive', '/r.geojson'], w.deps)).toBe(130);
     expect(session(w)).toBeNull();
-    expect(sent(w)).toContain('shell cmd location providers remove-test-provider gps');
+    expect(w.dhuLines.at(-1)).toBe('quit');
   });
 });
 
@@ -190,7 +204,8 @@ describe('down', () => {
   it('signs the test account out, turns the test location off and stops the head unit', async () => {
     const w = world();
     await run(['up', '--car'], w.deps);
-    await run(['gps', '153.02', '-27.47'], w.deps);
+    // A session from an older harness that did fake the phone's GPS: down still turns it off.
+    w.files.set(`${ROOT}/.harness/session.json`, JSON.stringify({ ...session(w), testProvider: true }));
     w.calls.length = 0;
     w.screens = [settings(), signIn()];
     const lines = logged(w);
@@ -263,7 +278,8 @@ describe('the rest of the commands', () => {
     const none = world();
     none.files.set(`${ROOT}/.harness/config.json`, JSON.stringify({ phones: ['R5CT1234'] }));
     expect(await run(['up'], none.deps)).toBe(1);
-    const twice = await up(['up']);
+    // A session with the head unit running is one already open.
+    const twice = await up();
     expect(await run(['up'], twice.deps)).toBe(1);
     const out = world({ screens: [signIn()] });
     const lines = logged(out);
@@ -310,22 +326,28 @@ describe('the rest of the commands', () => {
     expect(await run(['logs'], w.deps)).toBe(0); // no session: the last five minutes
   });
 
-  it('turns the test location off on request, and only moves one side when asked', async () => {
+  it('turns an old session’s test location off on request, and only moves one side when asked', async () => {
     const w = await up();
     expect(await run(['gps', '153.02', '-27.47', '--car'], w.deps)).toBe(0);
-    expect(sent(w).some((c) => c.includes('set-test-provider-location'))).toBe(false);
-    expect(await run(['gps', '153.02', '-27.47', '--phone'], w.deps)).toBe(0);
+    expect(w.dhuLines.some((l) => l.startsWith('location'))).toBe(true);
+    w.files.set(`${ROOT}/.harness/session.json`, JSON.stringify({ ...session(w), testProvider: true }));
     expect(await run(['gps', 'reset'], w.deps)).toBe(0);
     expect(sent(w)).toContain('shell cmd location providers remove-test-provider gps');
     expect(await run(['gps', 'reset'], w.deps)).toBe(0); // nothing left to undo
+    const emu = await up(['up'], { devices: 'List of devices attached\nemulator-5554\tdevice\n' });
+    expect(await run(['gps', '153.02', '-27.47', '--phone'], emu.deps)).toBe(0);
+    expect(sent(emu)).toContain('emu geo fix 153.020000 -27.470000');
   });
 
   it('says when a route can’t be read, and undoes everything when a drive fails part-way', async () => {
     const w = await up();
     expect(await run(['drive', '/missing.geojson'], w.deps)).toBe(1);
     w.files.set('/r.geojson', JSON.stringify({ type: 'LineString', coordinates: [[153, -27.5], [153.001, -27.5]] }));
-    const adb = w.deps.adb;
-    w.deps.adb = async (args) => (args.join(' ').includes('set-test-provider-location') ? { code: 1, out: Buffer.from(''), err: 'device offline' } : adb(args));
+    const send = w.deps.sendDhu;
+    w.deps.sendDhu = async (f, line) => {
+      if (line.startsWith('location')) throw new Error('device offline');
+      return send(f, line);
+    };
     w.screens = [settings(), signIn()];
     const lines = logged(w);
     expect(await run(['drive', '/r.geojson'], w.deps)).toBe(1);
@@ -363,5 +385,52 @@ describe('the rest of the commands', () => {
     const lines = logged(w);
     expect(await run(['shot', 'phone'], w.deps)).toBe(1);
     expect(lines.join('\n')).toContain('exit 1');
+  });
+
+  it('picks up a session left by an up that stopped, or a restart, without signing out (H2, H3)', async () => {
+    const w = await up();
+    w.dhuAlive = false; // the computer restarted: the head unit is gone
+    w.screens = [settings()];
+    w.deps.startDhu = async () => {
+      w.dhuAlive = true;
+      return 4242;
+    };
+    w.calls.length = 0;
+    const lines = logged(w);
+    expect(await run(['up', '--car'], w.deps)).toBe(0);
+    expect(lines.join('\n')).toContain('Picking up the session');
+    expect(sent(w).some((c) => c.startsWith('shell input tap'))).toBe(false);
+    expect(session(w)).toMatchObject({ account: TEST_EMAIL, forward: true, dhu: { pid: 4242 } });
+  });
+
+  it('waits for Settings to show the account, rather than reading the screen before (H5)', async () => {
+    const w = world({ screens: [dump(node({ text: 'Plan', b: [0, 0, 100, 100] })), dump(node({ text: 'Plan', b: [0, 0, 100, 100] })), settings()] });
+    expect(await run(['up'], w.deps)).toBe(0);
+    expect(session(w).account).toBe(TEST_EMAIL);
+  });
+
+  it('closes the shade first, and says when something covers Wayfinder (H6)', async () => {
+    const w = world({ screens: [dump(node({ text: 'Notifications', b: [0, 0, 100, 100] }))], focus: 'NotificationShade' });
+    const lines = logged(w);
+    expect(await run(['up'], w.deps)).toBe(1);
+    expect(sent(w)[0]).toBe('shell cmd statusbar collapse');
+    expect(lines.join('\n')).toContain('Something is covering Wayfinder');
+  });
+
+  it('after the head unit connects, pauses music and brings Wayfinder back in front (H7, H9)', async () => {
+    const w = await up();
+    const s = sent(w);
+    const started = s.lastIndexOf('forward tcp:5277 tcp:5277');
+    expect(s.slice(started)).toEqual(expect.arrayContaining(['shell input keyevent KEYCODE_MEDIA_PAUSE', 'shell cmd statusbar collapse', 'shell am start -n app.wayfinder.maps/.MainActivity']));
+  });
+
+  it('waits until the car screenshot stops growing (H12)', async () => {
+    const w = await up();
+    const sizes = [100, 180_000, 310_000, 310_000];
+    w.deps.sizeOf = async () => sizes.shift() ?? 310_000;
+    const lines = logged(w);
+    expect(await run(['shot', 'car'], w.deps)).toBe(0);
+    expect(sizes).toHaveLength(0);
+    expect(lines.at(-1)).toMatch(/\.png$/);
   });
 });

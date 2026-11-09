@@ -4,7 +4,7 @@
   "searchHint": "Search places and addresses",
   "here": [153.0251, -27.4698],
   "saved": [
-    { "id": "s-home", "name": "Home", "detail": "12 Moselle Drive, Thornlands · 25 km away", "location": [153.2526, -27.5624], "distanceM": 24800 },
-    { "id": "s-work", "name": "Work", "detail": "", "location": [153.03, -27.47], "distanceM": null }
+    { "id": "s-home", "name": "Home", "detail": "12 Moselle Drive, Thornlands · 25 km away", "location": [153.2526, -27.5624], "distanceM": 24800, "saved": true, "home": true },
+    { "id": "s-work", "name": "Work", "detail": "", "location": [153.03, -27.47], "distanceM": null, "saved": true }
   ]
 }

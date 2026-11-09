@@ -165,7 +165,10 @@ export async function matchTrips(
       await db.query<{ ts: Date; lon: number; lat: number }>('SELECT ts, lon, lat FROM track_points WHERE trip_id = $1 ORDER BY ts', [trip.id])
     ).rows.map((p) => ({ lon: p.lon, lat: p.lat, ts: p.ts.getTime() }));
     const path = await graphhopper.match(points, trip.mode);
-    if (!path) {
+    // A match far longer than the line recorded didn't follow the trip: sparse or jumping fixes
+    // let the engine wander the street grid between them (a 1.6 km drive once matched 11.5 km and
+    // 185 roads). Crediting it would fill coverage with roads never driven, so it counts as none.
+    if (!path || !plausibleMatch(points, path.points.coordinates)) {
       // Remember the attempt so it isn't retried on every pass; the raw line still shows.
       await db.query(`UPDATE trips SET matched_geometry = '[]'::jsonb, matched_m = 0 WHERE id = $1`, [trip.id]);
       unmatched++;
@@ -192,6 +195,16 @@ export async function matchTrips(
     ways += travelled.length;
   }
   return { matched, unmatched, ways };
+}
+
+/** A matched path may run this much longer than the recorded line (roads curve between fixes), plus [MATCH_SLACK_M]. */
+export const MATCH_MAX_RATIO = 1.5;
+export const MATCH_SLACK_M = 300;
+
+/** Whether a matched path is about as long as the line recorded, so it can be what was driven. */
+export function plausibleMatch(points: ReadonlyArray<{ lon: number; lat: number }>, matched: ReadonlyArray<LngLat>): boolean {
+  const recorded = lineLengthM(points.map((p) => [p.lon, p.lat] as LngLat));
+  return lineLengthM([...matched]) <= recorded * MATCH_MAX_RATIO + MATCH_SLACK_M;
 }
 
 /** How much road a person has travelled, for the coverage stats. */

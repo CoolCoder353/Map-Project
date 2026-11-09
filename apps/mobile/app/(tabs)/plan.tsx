@@ -17,11 +17,16 @@ import { space, useTheme } from '../../src/lib/theme';
 import { MapCanvas, type MapCanvasHandle } from '../../src/map/MapCanvas';
 import { type ChosenPlace, PlaceSearch } from '../../src/ui/PlaceSearch';
 import { RouteCard } from '../../src/ui/RouteCard';
-import { isSavedPlace, SavePlace } from '../../src/ui/SavePlace';
+import { canSavePlace, SavePlace } from '../../src/ui/SavePlace';
 import { Body, Button, Empty, Heading, Loading, MIN_TARGET, Notice, Press, Segmented, Small } from '../../src/ui/kit';
 import { useApproxLocation } from '../../src/lib/useApproxLocation';
 
 type Tab = 'directions' | 'loop';
+
+/** Map padding when fitting routes: room for the start and end labels at the sides. */
+export const FIT_PADDING = { top: 70, bottom: 60, left: 90, right: 90 };
+/** The round trip length last chosen, kept while the app runs. */
+let lastLoopMinutes = 60;
 
 /** How long the extra-time stepper waits for taps to stop before asking for routes. */
 const EXPLORE_WAIT_MS = 400;
@@ -35,12 +40,21 @@ export default function Plan() {
   const split = splitStyles(useLayout().sideBySide, '38%');
   const [tab, setTab] = useState<Tab>('directions');
   const [mode, setMode] = useState<Mode>(user?.settings.defaultMode ?? 'car');
+  // Round trip keeps its own: a walk planned there doesn't turn Directions into walking.
+  const [loopMode, setLoopMode] = useState<Mode>(user?.settings.defaultMode ?? 'car');
   const [from, setFrom] = useState<ChosenPlace | null>(null);
   // Start where you are, once a position is known — but only the first time, so clearing the
   // field doesn't immediately fill it in again.
   const filledStart = useRef(false);
   useEffect(() => {
-    if (!here || filledStart.current || from) return;
+    if (!here) return;
+    // "Your location" is where you are now: it moves with you (useApproxLocation says when you've
+    // moved far enough to matter), and routes from it are worked out again.
+    if (from?.current && (from.location[0] !== here[0] || from.location[1] !== here[1])) {
+      setFrom({ ...from, location: here });
+      return;
+    }
+    if (filledStart.current || from) return;
     filledStart.current = true;
     setFrom({ name: 'Your location', description: '', location: here, current: true });
   }, [here, from]);
@@ -54,7 +68,17 @@ export default function Plan() {
     setTo(from);
   };
   const [budget, setBudget] = useState(user?.settings.exploreBudgetMin ?? 15);
-  const [loopMinutes, setLoopMinutes] = useState(60);
+  // A new default chosen in Settings applies here too, without restarting the app.
+  const defaultBudget = user?.settings.exploreBudgetMin;
+  useEffect(() => {
+    if (defaultBudget != null) setBudget(defaultBudget);
+  }, [defaultBudget]);
+  const [loopMinutes, setLoopMinutesState] = useState(lastLoopMinutes);
+  const setLoopMinutes = (f: (m: number) => number) =>
+    setLoopMinutesState((m) => {
+      lastLoopMinutes = f(m);
+      return lastLoopMinutes;
+    });
   const [routes, setRoutes] = useState<Route[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [fastestNew, setFastestNew] = useState(0);
@@ -104,7 +128,8 @@ export default function Plan() {
           setRoutes(all);
           setSelected(res.fastest.id);
           setFastestNew(res.fastest.novelty.noveltyPct);
-          map.current?.fitTo(all.flatMap((r) => r.geometry), { top: 60, bottom: 60, left: 40, right: 40 });
+          // Room for the start and end labels (about 150 px wide), so neither is cut at the edge.
+          map.current?.fitTo(all.flatMap((r) => r.geometry), FIT_PADDING);
         })
         .catch((e) => ticket === latest.current && setError(errorMessage(e)))
         .finally(() => ticket === latest.current && setLoading(false));
@@ -118,7 +143,7 @@ export default function Plan() {
   // Loops made for another start or mode no longer match what the form shows.
   useEffect(() => {
     if (tab === 'loop') setRoutes(null);
-  }, [tab, from, mode]);
+  }, [tab, from, loopMode]);
 
   const makeLoops = async () => {
     if (!from || loading) return;
@@ -126,11 +151,11 @@ export default function Plan() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.request('api/routes/roundtrip', { method: 'POST', body: { start: from.location, mode, targetMin: loopMinutes }, schema: RoundTripResponseSchema });
+      const res = await api.request('api/routes/roundtrip', { method: 'POST', body: { start: from.location, mode: loopMode, targetMin: loopMinutes }, schema: RoundTripResponseSchema });
       if (ticket !== latest.current) return;
       setRoutes(res.routes);
       setSelected(res.routes[0]?.id ?? null);
-      if (res.routes.length) map.current?.fitTo(res.routes.flatMap((r) => r.geometry));
+      if (res.routes.length) map.current?.fitTo(res.routes.flatMap((r) => r.geometry), FIT_PADDING);
     } catch (e) {
       if (ticket === latest.current) setError(errorMessage(e));
     } finally {
@@ -192,9 +217,9 @@ export default function Plan() {
           ) : null}
         </View>
         {tab === 'directions' && !to && saved.data?.items.length ? <SavedShortcuts places={saved.data.items} onChoose={setTo} /> : null}
-        {tab === 'directions' && to && !isSavedPlace(to) ? <SavePlace key={`${to.location[0]},${to.location[1]}`} place={to} /> : null}
+        {tab === 'directions' && to && canSavePlace(to) ? <SavePlace key={`${to.location[0]},${to.location[1]}`} place={to} /> : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[3], flexWrap: 'wrap' }}>
-          <Segmented<Mode> label="Travel mode" value={mode} onChange={setMode} options={[{ value: 'car', label: 'Drive', icon: Car }, { value: 'foot', label: 'Walk', icon: Footprints }]} />
+           <Segmented<Mode> label="Travel mode" value={tab === 'loop' ? loopMode : mode} onChange={tab === 'loop' ? setLoopMode : setMode} options={[{ value: 'car', label: 'Drive', icon: Car }, { value: 'foot', label: 'Walk', icon: Footprints }]} />
           {tab === 'directions' ? (
             <Stepper label={copy.budgetLabel(budget)} onMinus={() => setBudget((b) => Math.max(5, b - 5))} onPlus={() => setBudget((b) => Math.min(60, b + 5))} />
           ) : (

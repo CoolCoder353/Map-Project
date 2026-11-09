@@ -123,4 +123,29 @@ describe('searchScore', () => {
       places.searchScore({ ...base, lon: farLon, lat: farLat }, 'Woolworths', braddon),
     );
   });
+
+  it('reads coordinates as a point, latitude first or longitude first', async () => {
+    const [p] = await places.searchPlaces(t.db, '-27.4698, 153.0251', null, 5, friday);
+    expect(p).toMatchObject({ location: [153.0251, -27.4698], typeLabel: 'Map point', name: '-27.46980, 153.02510' });
+    expect(places.coordinatesIn('153.0251, -27.4698')).toEqual([153.0251, -27.4698]);
+    expect(places.coordinatesIn('Main Street')).toBeNull();
+    expect(places.coordinatesIn('200, 200')).toBeNull();
+  });
+
+  it('finds the suburbs of a postcode', async () => {
+    await places.upsertPlaces(t.db, [{ id: 'bris', name: 'Brisbane City', kind: 'suburb', category: null, description: 'Suburb', lon: 153.025, lat: -27.47, importance: 0.5, suburb: 'Brisbane City', state: 'QLD', postcode: '4000' }] as places.PlaceInput[]);
+    const r = await places.searchPlaces(t.db, '4000', null, 5, friday);
+    expect(r.map((p) => p.id)).toEqual(['bris']);
+  });
+
+  it('knows what Australians call places', async () => {
+    const r = await places.searchPlaces(t.db, 'woolies', braddon, 2, friday);
+    expect(r.map((p) => p.id)).toEqual(['w1', 'w2']);
+  });
+
+  it('puts the nearer branch of a chain first, whether it is named the brand or the brand and more', () => {
+    const near = { name: 'Bunnings Warehouse', kind: 'poi', importance: 0.05, sim: 0.6, lon: 149.14, lat: -35.27 };
+    const far = { name: 'Bunnings', kind: 'poi', importance: 0.05, sim: 1, lon: 149.35, lat: -35.27 };
+    expect(places.searchScore(near, 'Bunnings', braddon)).toBeGreaterThan(places.searchScore(far, 'Bunnings', braddon));
+  });
 });

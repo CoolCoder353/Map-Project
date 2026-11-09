@@ -194,6 +194,8 @@ export default function Navigate() {
             {s && !arrived ? <Text style={{ color: t.text2, fontSize: 15, fontVariant: ['tabular-nums'] }}>{`Arrive ${formatClock(Date.now() + s.remainingDurationS * 1000)}`}</Text> : null}
           </View>
           <Text style={{ color: t.text2 }}>{s ? `${formatDistanceShort(s.remainingDistanceM)} to go` : ''}</Text>
+          {/* Muted is kept trip to trip: say so, or a trip starts silent with nothing to say why. */}
+          {nav.muted && !arrived ? <Text style={{ color: t.text2 }}>Voice directions are off</Text> : null}
         </View>
         <Press accessibilityRole="button" accessibilityLabel={nav.muted ? 'Unmute voice' : 'Mute voice'} onPress={() => nav.setMuted(!nav.muted)} style={({ hovered }) => ({ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: hovered ? t.surface3 : 'transparent' })}>
           {nav.muted ? <VolumeX size={24} color={t.text2} /> : <Volume2 size={24} color={t.text} />}

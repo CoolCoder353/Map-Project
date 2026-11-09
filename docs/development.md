@@ -146,15 +146,19 @@ One-off setup, in order:
    restart).
 5. Before each session, sign Wayfinder in to the test account.
 
+Connect the phone over **wireless debugging** (Developer options → Wireless debugging; `adb pair
+<ip:port>` with the pairing code, then `adb connect <ip:port>` and `pnpm device register <ip:port>`).
+On the first phone run USB dropped every few seconds with Android Auto installed.
+
 | Command | Does |
 |---|---|
-| `up [--car] [--window] [--emulator]` | Checks Wayfinder is signed in to the test account; `--car` starts the head unit (`--window` to watch it) |
+| `up [--car] [--window] [--emulator]` | Checks Wayfinder is signed in to the test account (closing the notification shade, and waiting for Settings to show it); `--car` starts the head unit (`--window` to watch it), pauses any music Android Auto starts and puts Wayfinder back in front. A session left by an `up` that stopped, or by a restart, is picked up, not refused |
 | `shot phone\|car` | Screenshot to `.harness/shots/`; prints the path |
 | `ui` | What's on the phone's screen, and where to tap it |
-| `tap <text>`, `tap <x> <y>`, `tap car <x> <y>` | Tap by visible text or position |
+| `tap <text>`, `tap <x> <y>`, `tap car <x> <y>` | Tap by visible text or position. Car positions are in the `shot car` picture (800×480); the head unit's own grid is 1.16 times that (`carTapScale` in `.harness/config.json` for another head unit) |
 | `type <text>`, `key back\|home\|enter`, `swipe x1 y1 x2 y2` | Text and keys on the phone |
-| `gps <lon> <lat> [--phone\|--car]`, `gps reset` | Move the phone and the car (`[lon, lat]`, as everywhere) |
-| `drive <route.geojson\|.gpx> [--speed 50]` | Replay a route a fix a second; `scripts/device/routes/` has a rough one from the CBD to Mt Coot-tha |
+| `gps <lon> <lat> [--car]`, `gps reset` | Move the car (and the emulator's GPS) (`[lon, lat]`, as everywhere). **A real phone's own GPS is never faked**: Play services' location reads a faked provider, so every other app on the phone (location sharing, home automation) would see the fake position. Wayfinder follows the car's position while the phone's is quiet |
+| `drive <route.geojson\|.gpx> [--speed 50]` | Replay a route a fix a second through the head unit (needs `up --car` on a phone); `scripts/device/routes/` has a rough one from the CBD to Mt Coot-tha |
 | `car day\|night`, `car key home\|back\|search\|navigation`, `car restrict on\|off` | The head unit's own controls |
 | `logs` | App and car logs since the last look |
 | `install <apk>` | Emulator only |
@@ -167,7 +171,9 @@ What it won't do, whatever it's asked:
   port: no installing, uninstalling, clearing data, deleting files, rebooting or changing settings
   (`scripts/device/adb.ts` is the only place commands are built).
 - Tap outside Wayfinder (and its permission prompts), or tap Sign out or Delete account; tap the
-  car screen unless the car app's log says Wayfinder is showing.
+  car screen unless the car app's log says Wayfinder is showing (the car app logs "car screen
+  shown" again every 15 s while it is, so the line survives a busy log), or off the car screen.
+- Fake a real phone's own GPS.
 - Change anything unless Wayfinder is signed in to the test account; it stops if the sign-in
   screen appears.
 - Move the GPS on an app older than versionCode 17, whose upload queue could send a test drive as
@@ -175,7 +181,8 @@ What it won't do, whatever it's asked:
 - Change anything in `/admin`: Claude looks there, and asks before changing anything on the
   testers' server.
 
-`down` (and Ctrl-C during `drive`) undoes the phone changes. To undo them by hand:
+`down` (and Ctrl-C during `drive`) undoes the phone changes. To undo them by hand (the test
+provider only after an older harness, which faked the phone's GPS):
 `adb shell cmd location providers remove-test-provider gps`,
 `adb shell appops set com.android.shell android:mock_location deny`, `adb forward --remove tcp:5277`,
 and on the phone Android Auto's ⋮, **Stop head unit server** (its developer settings can be turned

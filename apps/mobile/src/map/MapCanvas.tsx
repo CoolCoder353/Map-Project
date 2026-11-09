@@ -12,7 +12,7 @@ import { isServerUrl } from '../lib/apiClient';
 import { getServerUrl } from '../lib/server';
 import { MapErrorBoundary } from './MapErrorBoundary';
 import { useTheme } from '../lib/theme';
-import { rememberMapView } from '../lib/mapView';
+import { lastMapView, rememberMapView } from '../lib/mapView';
 
 export interface MapMarker {
   id: string;
@@ -58,6 +58,12 @@ const OVERVIEW = { center: [134.5, -27.5] as LngLat, zoom: 3.6 };
  * keeps whatever zoom the map already had, so without this a trip starts on the country overview.
  */
 export const FOLLOW_ZOOM = 16;
+/** How close a map with nothing else to show opens on where you are: your part of town. */
+export const NEARBY_ZOOM = 11;
+/** How close "Show my location" goes. */
+export const MINE_ZOOM = 14;
+/** What a screen reader says for the map, in place of MapLibre's own English instructions. */
+export const MAP_LABEL = 'Map';
 
 const isLngLat = (c: LngLat | undefined): c is LngLat =>
   !!c && Number.isFinite(c[0]) && Number.isFinite(c[1]) && Math.abs(c[0]) <= 180 && Math.abs(c[1]) <= 90;
@@ -105,6 +111,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
 
   // The user-location layer asks Android for updates; rendering it without permission can take
   // the native map down, so it only appears once permission is granted.
+  // A map with nothing of its own to show opens where you are, not on the whole country.
+  const empty = !followUser && routes.length === 0 && markers.length === 0 && !coverage && !track?.length;
   useEffect(() => {
     let live = true;
     void Location.getForegroundPermissionsAsync()
@@ -114,6 +122,27 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       live = false;
     };
   }, []);
+  // Once the native map (and its camera) is there.
+  const openedNearby = useRef(false);
+  useEffect(() => {
+    if (!styleUrl || !canShowUser || !empty || openedNearby.current || lastMapView()) return;
+    openedNearby.current = true;
+    let live = true;
+    void Location.getLastKnownPositionAsync()
+      .then((here) => {
+        if (live && here) camera.current?.flyTo({ center: [here.coords.longitude, here.coords.latitude], zoom: NEARBY_ZOOM, duration: 0 });
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [styleUrl, canShowUser, empty]);
+
+  /** "Show my location" on a map that isn't following you: there, close up. */
+  const showMine = async () => {
+    const here = await Location.getLastKnownPositionAsync().catch(() => null);
+    if (here) camera.current?.flyTo({ center: [here.coords.longitude, here.coords.latitude], zoom: MINE_ZOOM, duration: 600 });
+  };
 
   useImperativeHandle(ref, () => ({
     fitTo(coords, padding = { top: 80, bottom: 80, left: 48, right: 48 }) {
@@ -146,7 +175,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   // Following starts close up on where the trip starts, so the map is already zoomed in before
   // the first position fix arrives; the country overview is for maps with nothing to follow.
   const start = (routes.find((r) => r.id === selectedRouteId) ?? routes[0])?.geometry[0];
-  const initialView = followUser ? { center: isLngLat(start) ? start : OVERVIEW.center, zoom: FOLLOW_ZOOM } : OVERVIEW;
+  // Not following: where any map was last left, else the country until your position is known.
+  const initialView = followUser ? { center: isLngLat(start) ? start : OVERVIEW.center, zoom: FOLLOW_ZOOM } : (lastMapView() ?? OVERVIEW);
   const chosen = routes.find((r) => r.id === selectedRouteId);
   const shownLights = lights ?? (chosen && chosen.geometry.length > 1 ? lightsAhead(chosen, cumulativeM(chosen.geometry), 0, Date.now(), Infinity) : []);
   const lightData: GeoJSON.FeatureCollection = {
@@ -169,6 +199,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     <MapErrorBoundary>
     <Map
       style={style}
+      accessibilityLabel={MAP_LABEL}
       mapStyle={styleUrl}
       attribution
       logo={false}
@@ -240,6 +271,27 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         style={({ hovered }) => ({
           position: 'absolute',
           // Top right: the speed sign has the top left, and notices the bottom (Navigate).
+          right: 12,
+          top: 12,
+          minWidth: 48,
+          minHeight: 48,
+          borderRadius: 24,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: hovered ? t.surface2 : t.surface,
+          elevation: 3,
+        })}
+      >
+        <LocateFixed size={24} color={t.accent} />
+      </Press>
+    ) : null}
+    {!followUser && showUser && canShowUser ? (
+      <Press
+        accessibilityRole="button"
+        accessibilityLabel="Show my location"
+        onPress={() => void showMine()}
+        style={({ hovered }) => ({
+          position: 'absolute',
           right: 12,
           top: 12,
           minWidth: 48,

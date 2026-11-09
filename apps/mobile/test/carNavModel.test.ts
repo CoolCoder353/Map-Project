@@ -9,7 +9,7 @@ const route = (instructions: Instruction[]): Route => ({
   id: 'r1', kind: 'fastest', mode: 'car', distanceM: 5000, durationS: 600, extraDurationS: 0,
   geometry: [[153, -27.4], [153.1, -27.5]], instructions, viaPoints: [], novelty: { totalKm: 5, newKm: 1, noveltyPct: 20 },
 });
-const snap = (over: Partial<NavSnapshot>): NavSnapshot => ({ active: true, route: null, destinationName: 'Lookout', state: null, rerouting: false, error: null, muted: false, position: null, headingDeg: null, speedMps: null, travelled: [], ...over });
+const snap = (over: Partial<NavSnapshot>): NavSnapshot => ({ active: true, route: null, destinationName: 'Lookout', state: null, rerouting: false, error: null, muted: false, position: null, headingDeg: null, speedMps: null, travelled: [], simulated: false, ...over });
 
 describe('maneuverOf', () => {
   it.each([
@@ -73,18 +73,23 @@ describe('toCarNav', () => {
     expect(n.next).toBeNull();
   });
 
-  it('gives the speed limit only while on the route, and your speed in km/h', () => {
+  it('keeps the speed limit off the route, where the road is unfamiliar, and gives your speed in km/h', () => {
     const state = { status: 'navigating' as const, snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: instructions[1]!, nextInstruction: instructions[2]!, nextInstructionIndex: 2, distanceToNextManeuverM: 50, speedLimitKmh: 80, speedLimitEstimated: false, lightsAhead: [], lightWait: null };
     expect(toCarNav(snap({ route: r, state, speedMps: 22.3 }), 0)).toMatchObject({ speedLimitKmh: 80, speedKmh: 80 });
-    expect(toCarNav(snap({ route: r, state: { ...state, status: 'offRoute' }, speedMps: 10 }), 0)).toMatchObject({ speedLimitKmh: null, speedKmh: 36 });
+    expect(toCarNav(snap({ route: r, state: { ...state, status: 'offRoute' }, speedMps: 10 }), 0)).toMatchObject({ speedLimitKmh: 80, speedKmh: 36 });
+    expect(toCarNav(snap({ route: r, state: { ...state, status: 'arrived' } }), 0)).toMatchObject({ speedLimitKmh: null });
     expect(toCarNav(snap({ route: r }), 0)).toMatchObject({ speedLimitKmh: null, speedKmh: null });
+  });
+
+  it('leaves a walk to the phone: the car’s driving screen is for driving', () => {
+    expect(toCarNav(snap({ route: { ...r, mode: 'foot' } }), 0)).toBeNull();
   });
 
   it('says when the limit is only the road’s legal default, and never without a limit', () => {
     const state = { status: 'navigating' as const, snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: instructions[1]!, nextInstruction: instructions[2]!, nextInstructionIndex: 2, distanceToNextManeuverM: 50, speedLimitKmh: 50, speedLimitEstimated: true, lightsAhead: [], lightWait: null };
     expect(toCarNav(snap({ route: r, state }), 0)).toMatchObject({ speedLimitKmh: 50, speedLimitEstimated: true });
     expect(toCarNav(snap({ route: r, state: { ...state, speedLimitKmh: null } }), 0)).toMatchObject({ speedLimitKmh: null, speedLimitEstimated: false });
-    expect(toCarNav(snap({ route: r, state: { ...state, status: 'offRoute' } }), 0)).toMatchObject({ speedLimitEstimated: false });
+    expect(toCarNav(snap({ route: r, state: { ...state, status: 'offRoute' } }), 0)).toMatchObject({ speedLimitKmh: 50, speedLimitEstimated: true });
   });
 });
 
@@ -94,9 +99,10 @@ describe('lights ahead on the car map', () => {
   const state = { status: 'navigating' as const, snapped: null, distanceFromRouteM: 0, progressM: 0, remainingDistanceM: 900, remainingDurationS: 90, currentInstruction: instructions[0]!, nextInstruction: instructions[1]!, nextInstructionIndex: 1, distanceToNextManeuverM: 50, speedLimitKmh: null, speedLimitEstimated: false, lightWait: null,
     lightsAhead: [{ at: [153.01, -27.4] as [number, number], progressM: 400, state: 'red' as const, waitS: 30 }, { at: [153.02, -27.4] as [number, number], progressM: 900, state: 'green' as const, waitS: 0 }] };
 
-  it('sends each as red or green while on the route, and none off it', () => {
+  // Red or green is a guess from learned timings; on the driving display it reads as the real light.
+  it('sends no guessed light colours to the driving display', () => {
     const n = toCarNav(snap({ route: r, state }), 0)!;
-    expect(n.lights).toEqual([{ at: [153.01, -27.4], red: true }, { at: [153.02, -27.4], red: false }]);
+    expect(n.lights).toEqual([]);
     expect(CarNavSchema.safeParse(n).success).toBe(true);
     expect(toCarNav(snap({ route: r, state: { ...state, status: 'offRoute' } }), 0)!.lights).toEqual([]);
     expect(toCarNav(snap({ route: r }), 0)!.lights).toEqual([]);

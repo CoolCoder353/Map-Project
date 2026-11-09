@@ -462,7 +462,19 @@ export async function exploreRoutes(
     })),
   ]);
   // Times now allow for lights and what trips have learned, so the extra time is by the same measure.
-  return { fastest: fastest!, explore: explore.map((r) => ({ ...r, extraDurationS: Math.max(0, r.durationS - fastest!.durationS) })) };
+  return quickestFirst(fastest!, explore);
+}
+
+/**
+ * Fastest first, by the finished times. Lights and learned speeds can make an explore route quicker
+ * than the engine's fastest ("Explore 2" at 52 min beside "Fastest" at 53): that one is then the
+ * fastest, and the engine's, slower with less that's new, is left out. Extra times are from it.
+ */
+export function quickestFirst(fastest: Route, explore: Route[]): { fastest: Route; explore: Route[] } {
+  const quickest = explore.reduce<Route>((best, r) => (r.durationS < best.durationS ? r : best), fastest);
+  const first = quickest === fastest ? fastest : { ...quickest, kind: 'fastest' as const, extraDurationS: 0 };
+  const rest = quickest === fastest ? explore : explore.filter((r) => r !== quickest);
+  return { fastest: first, explore: rest.map((r) => ({ ...r, extraDurationS: Math.max(0, r.durationS - first.durationS) })) };
 }
 
 export async function roundTrips(
@@ -669,13 +681,29 @@ export async function discover(
     })
     .sort((a, b) => b.score - a.score);
 
-  // Drop same-named places close together (e.g. a park mapped as several nodes).
-  const out: DiscoverItem[] = [];
-  for (const item of scored) {
-    if (out.some((o) => o.name === item.name && haversineM(o.location, item.location) < 300)) continue;
-    out.push(item);
-    if (out.length >= q.limit) break;
-  }
+  const out = withoutDuplicates(scored, q.limit);
   await recordRequest(deps.db, userId, 'discover', q.mode);
+  return out;
+}
+
+const plainName = (n: string) => n.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/**
+ * One place mapped twice is listed once: the same name, or one name the start of the other
+ * ("Whites Hill" and "Whites Hill Lookout"), close together. The first (best scored) is kept.
+ */
+export function withoutDuplicates<T extends { name: string; location: LngLat }>(items: readonly T[], limit: number): T[] {
+  const out: T[] = [];
+  for (const item of items) {
+    const name = plainName(item.name);
+    const same = (o: T) => {
+      const other = plainName(o.name);
+      const named = other === name || other.startsWith(`${name} `) || name.startsWith(`${other} `);
+      return named && haversineM(o.location, item.location) < 1000;
+    };
+    if (out.some(same)) continue;
+    out.push(item);
+    if (out.length >= limit) break;
+  }
   return out;
 }

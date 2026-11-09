@@ -48,7 +48,7 @@ it('keeps the car up to date with navigation, and clears it when the trip ends',
   const nav = { getSnapshot: () => snap as never, subscribe: (l: () => void) => (listeners.add(l), () => listeners.delete(l)) };
   const stop = startCarNavigationFeed(car as never, nav as never, () => 0);
   expect(car.setNavigation).toHaveBeenLastCalledWith(null);
-  snap = { active: true, route: { id: 'r1', distanceM: 1000, durationS: 60, instructions: [] }, destinationName: 'Lookout', state: null, rerouting: false, error: null, muted: false, position: null, headingDeg: null };
+  snap = { active: true, route: { id: 'r1', mode: 'car', distanceM: 1000, durationS: 60, instructions: [] }, destinationName: 'Lookout', state: null, rerouting: false, error: null, muted: false, position: null, headingDeg: null };
   listeners.forEach((l) => l());
   expect(JSON.parse(car.setNavigation.mock.calls.at(-1)![0] as string)).toMatchObject({ routeId: 'r1', status: 'starting' });
   stop();

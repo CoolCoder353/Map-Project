@@ -29,7 +29,8 @@ export function maneuverOf(ins: Pick<Instruction, 'sign' | 'exitNumber' | 'exitA
 
 /** What the car screen shows for a trip, or null when there isn't one. */
 export function toCarNav(s: NavSnapshot, now: number): CarNav | null {
-  if (!s.active || !s.route) return null;
+  // A walk is followed on the phone; the car's driving screen is for driving.
+  if (!s.active || !s.route || s.route.mode !== 'car') return null;
   const st = s.state;
   const ins = st?.nextInstruction ?? st?.currentInstruction ?? null;
   const idx = st?.nextInstructionIndex ?? null;
@@ -37,6 +38,7 @@ export function toCarNav(s: NavSnapshot, now: number): CarNav | null {
   const gap = idx != null ? s.route.instructions[idx]?.distanceM : undefined;
   const after = idx != null ? s.route.instructions[idx + 1] : undefined;
   const remainingS = st?.remainingDurationS ?? s.route.durationS;
+  const hasLimit = st != null && st.status !== 'arrived';
   return {
     routeId: s.route.id,
     destinationName: s.destinationName,
@@ -58,9 +60,12 @@ export function toCarNav(s: NavSnapshot, now: number): CarNav | null {
     arrivalEpochMs: Math.round(now + remainingS * 1000),
     position: s.position,
     headingDeg: s.headingDeg,
-    speedLimitKmh: st?.status === 'navigating' ? st.speedLimitKmh : null,
-    speedLimitEstimated: st?.status === 'navigating' && st.speedLimitKmh !== null ? st.speedLimitEstimated : false,
+    // Off the route, or waiting for a new one, is when the road is least familiar: the limit stays.
+    speedLimitKmh: hasLimit ? st.speedLimitKmh : null,
+    speedLimitEstimated: hasLimit && st.speedLimitKmh !== null ? st.speedLimitEstimated : false,
     speedKmh: s.speedMps != null ? Math.round(s.speedMps * 3.6) : null,
-    lights: st?.status === 'navigating' ? st.lightsAhead.map((l) => ({ at: l.at, red: l.state === 'red' })) : [],
+    // Whether a light will be red is a guess from learned timings. On the driving display it would
+    // read as the light's real state, and a driver might slow or speed up on it, so none are sent.
+    lights: [],
   };
 }

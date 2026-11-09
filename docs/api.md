@@ -50,7 +50,7 @@ exactly what each field is.
 
 | Method | Path | Schema / notes |
 |---|---|---|
-| GET | `/api/search` | `SearchQuerySchema` (`q`, optional `lon`/`lat` to rank by distance, `limit`) → `{ results: Place[] }`. Your own saved places whose name starts with `q` come first (`kind: "saved"`, id `saved:<id>`, `typeLabel` "Saved place"): at most half of `limit`, and not repeated as the place they were saved from (a found place within 30 m of one) |
+| GET | `/api/search` | `SearchQuerySchema` (`q`, optional `lon`/`lat` to rank by distance, `limit`) → `{ results: Place[] }`. Coordinates (`-27.4698, 153.0251`, either order) give one `kind: "point"` place there; a four-digit postcode gives its suburbs and towns, nearest first; everyday names are understood ("maccas", "woolies"). Branches of a chain are ranked by distance, whatever each is named. Your own saved places whose name starts with `q` come first (`kind: "saved"`, id `saved:<id>`, `typeLabel` "Saved place"): at most half of `limit`, and not repeated as the place they were saved from (a found place within 30 m of one) |
 | GET | `/api/saved-places` | Your saved places → `SavedPlaceListSchema`, by name |
 | POST | `/api/saved-places` | `SavedPlaceSaveSchema` (`name`, `description`, `location`) → the `SavedPlace`. A name already used (any capitals) moves that place. Up to 50 (`409 conflict` beyond) |
 | DELETE | `/api/saved-places/:id` | |
@@ -64,10 +64,10 @@ exactly what each field is.
 | Method | Path | Schema / notes |
 |---|---|---|
 | POST | `/api/routes/fastest` | `FastestRouteRequestSchema` (`from`, `to`, `mode`, `via`, optional `heading` and `speedMps`) → one `Route`. The app sends `heading` (compass degrees) and `speedMps` with a new route asked for mid-drive, so it starts the way the car is going and doesn't begin with a turn too close to make at that speed (under about 6 s of driving). Where it can't (a dead end), the first instruction says "Turn around when you can" instead of GraphHopper's "Make a U-turn onto …". A roundabout instruction carries `exitAngleDeg`, how far round the exit is (90 left, 180 straight on, 270 right), where GraphHopper gives it (for a roundabout split by a stop, the angles of its two halves added) |
-| POST | `/api/routes/explore` | `ExploreRouteRequestSchema` (`budgetMin` defaults to the person's setting) → `{ fastest, explore: Route[] }` |
+| POST | `/api/routes/explore` | `ExploreRouteRequestSchema` (`budgetMin` defaults to the person's setting) → `{ fastest, explore: Route[] }`. `fastest` is the quickest by the finished times (lights and learned speeds included): an explore route that comes out quicker takes its place |
 | POST | `/api/routes/roundtrip` | `RoundTripRequestSchema` (`start`, `mode`, `targetMin`) → `{ routes }` |
 | GET | `/api/roads/speed-limit` | `SpeedLimitQuerySchema` (`lon`, `lat`, optional `heading`) → `SpeedLimitResponseSchema` `{ kmh, estimated, road }`: the limit on the road where a car is, for the car's map with no trip. Worked out as a 400 m route ahead the way the car is going, finished as any route is (signs, school zones in force, electronic signs, main-road estimates), and read at its start. `kmh` null where no limit is known or the point is more than 40 m from a road; `estimated` when it's the road's legal default, not a sign |
-| GET | `/api/discover` | `DiscoverQuerySchema` (`lon`, `lat`, `mode`, `maxMinutes`, `categories`) → `{ items }`. The slow one: several seconds on a small server |
+| GET | `/api/discover` | `DiscoverQuerySchema` (`lon`, `lat`, `mode`, `maxMinutes`, `categories`) → `{ items }`. One place mapped twice ("Whites Hill", "Whites Hill Lookout") is listed once. The slow one: several seconds on a small server |
 
 `mode` is `car` or `foot`. Each `Route` carries its geometry, turn instructions, `novelty`
 (new kilometres of road for this person) and `speedLimits`: `{ from, to, kmh }` runs of geometry

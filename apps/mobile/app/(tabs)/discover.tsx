@@ -34,7 +34,13 @@ export default function Discover() {
   // clearing the field doesn't fill it in again.
   const filledStart = useRef(false);
   useEffect(() => {
-    if (!here || filledStart.current || origin) return;
+    if (!here) return;
+    // "Your location" moves with you until a search runs from it (then the results stay put).
+    if (origin?.current && !searched.current && (origin.location[0] !== here[0] || origin.location[1] !== here[1])) {
+      setOrigin({ ...origin, location: here });
+      return;
+    }
+    if (filledStart.current || origin) return;
     filledStart.current = true;
     setOrigin({ name: 'Your location', description: '', location: here, current: true });
   }, [here, origin]);
@@ -81,10 +87,10 @@ export default function Discover() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on a change of filter; `search` reads them as they are now.
   }, [filters]);
 
-  // Nothing found, or the search failed: the map has nothing new to show, and on a phone the
-  // message is below the filters, out of sight, so bring it into view.
+  // Places found, nothing found, or the search failed: on a phone it is all below the filters, out
+  // of sight, so bring it into view (a sliver of the first card looked like nothing happened).
   useEffect(() => {
-    if (error || items?.length === 0) panel.current?.scrollToEnd({ animated: true });
+    if (error || items) panel.current?.scrollToEnd({ animated: true });
   }, [items, error]);
 
   /** A place found is somewhere to go: Plan works out the trip there, from the same start. */
@@ -154,7 +160,7 @@ export default function Discover() {
                 <Text style={{ color: t.text, fontWeight: '700', fontSize: 16 }}>{i.name}</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2], alignItems: 'center', marginTop: 4 }}>
                   <Small>{kindOf(i.category)} · {formatDistanceShort(i.distanceM)} away</Small>
-                  {i.areaUnexploredPct >= 50 ? <NewBadge text={`${i.areaUnexploredPct}% unexplored area`} /> : null}
+                  {i.areaUnexploredPct >= 50 ? <NewBadge text={i.areaUnexploredPct >= 95 ? 'Roads around it are new to you' : `${i.areaUnexploredPct}% of roads around it new to you`} /> : null}
                 </View>
               </View>
               <Small color={t.accent}>Directions</Small>

@@ -17,6 +17,22 @@ import { setNavigationFixHandler, startNavigationLocation, stopNavigationLocatio
 
 /** How long to wait before asking again for a new route after one couldn't be fetched. */
 export const REROUTE_RETRY_MS = 15_000;
+/** Each failure in a row doubles the wait, up to this, so a long outage isn't asked every 15 s. */
+export const REROUTE_RETRY_MAX_MS = 120_000;
+/** A fix less sure of where it is than this isn't recorded as driven (it still moves the arrow). */
+export const RECORD_MAX_ACCURACY_M = 50;
+/**
+ * Faster than this from the last recorded fix is a jump, not driving: a bad fix, or a phone that
+ * lost and found itself. It isn't recorded, and the trail on the map starts again from it.
+ */
+export const JUMP_SPEED_MPS = 70;
+/**
+ * After leaving an explore route, a detour point is kept only while going by it adds no more than
+ * this share of the straight way to the destination (plus [VIA_KEEP_SLACK_M]): a missed turn
+ * shouldn't drag the driver back across town to every point left.
+ */
+export const VIA_KEEP_RATIO = 1.25;
+export const VIA_KEEP_SLACK_M = 2000;
 /**
  * How long a request for a new route may run before it's given up on. Checked as fixes arrive,
  * not with a timer: with the phone locked React Native pauses its timers, and a request that
@@ -69,6 +85,8 @@ export interface NavSnapshot {
   speedMps: number | null;
   /** Where this trip has been, including any stretch off the route. */
   travelled: LngLat[];
+  /** A test drive (the car's auto drive): nothing about it is recorded. */
+  simulated: boolean;
 }
 
 export interface StartOptions {
@@ -118,7 +136,37 @@ const IDLE: NavSnapshot = {
   headingDeg: null,
   speedMps: null,
   travelled: [],
+  simulated: false,
 };
+
+/**
+ * The detour points still worth going by from [from] on the way to [to]: in order, each kept only
+ * while the way by the ones kept so far stays within [VIA_KEEP_RATIO] of the straight way.
+ */
+export function viaStillWorthIt(from: LngLat, to: LngLat, via: LngLat[]): LngLat[] {
+  const allowed = haversineM(from, to) * VIA_KEEP_RATIO + VIA_KEEP_SLACK_M;
+  const kept: LngLat[] = [];
+  for (const v of via) {
+    const path = [from, ...kept, v, to];
+    let length = 0;
+    for (let i = 1; i < path.length; i++) length += haversineM(path[i - 1]!, path[i]!);
+    if (length <= allowed) kept.push(v);
+  }
+  return kept;
+}
+
+/** Speed between two fixes however far apart in time, or null if they're at the same moment. */
+function speedBetweenAny(a: { ts: number; lon: number; lat: number }, b: { ts: number; lon: number; lat: number }): number | null {
+  const dt = (b.ts - a.ts) / 1000;
+  return dt > 0 ? haversineM([a.lon, a.lat], [b.lon, b.lat]) / dt : Infinity;
+}
+
+/** Speed between two fixes, metres a second, or null when they're too far apart in time to say. */
+function speedBetween(a: { ts: number; lon: number; lat: number }, b: { ts: number; lon: number; lat: number }): number | null {
+  const dt = (b.ts - a.ts) / 1000;
+  if (!(dt > 0) || dt > 10) return null;
+  return haversineM([a.lon, a.lat], [b.lon, b.lat]) / dt;
+}
 
 /** GraphHopper's U-turn signs: -98 direction unknown, -8 left, 8 right. */
 const isTurnaround = (sign: number | undefined) => sign === -98 || sign === -8 || sign === 8;
@@ -167,6 +215,12 @@ export function createNavigationService(): NavigationService {
   /** When the request for a new route in flight was made, and its number: one given up on is ignored. */
   let reroutingSince = 0;
   let rerouteAttempt = 0;
+  /** New routes asked for in a row that couldn't be had: each doubles the wait before the next. */
+  let rerouteFailures = 0;
+  /** The last fix recorded for this trip, to tell a jump from driving. */
+  let lastRecorded: { ts: number; lon: number; lat: number } | null = null;
+  /** The fix before this one, to work out a speed the phone didn't give. */
+  let previousFix: { ts: number; lon: number; lat: number } | null = null;
   /** Set while off route without a new route yet, so a failed attempt is retried. */
   let pendingReroute: { to: LngLat; via: LngLat[]; at: number; kind?: Route['kind'] } | null = null;
   /** Bumped by every start and stop, so work from an earlier trip that finishes late is dropped. */
@@ -239,7 +293,9 @@ export function createNavigationService(): NavigationService {
       const heading = current.mode === 'car' && travelHeading !== null ? { heading: travelHeading, ...(snap.speedMps !== null ? { speedMps: snap.speedMps } : {}) } : {};
       const fresh = await api.request('api/routes/fastest', { method: 'POST', body: { from, to, via, mode: current.mode, ...heading }, schema: RouteSchema });
       if (stale()) return;
-      const next: Route = { ...fresh, kind: kind ?? current.currentRoute.kind };
+      rerouteFailures = 0;
+      // With no detour points left it is just the fastest way now.
+      const next: Route = { ...fresh, kind: kind ?? (via.length === 0 && current.currentRoute.kind === 'explore' ? 'fastest' : current.currentRoute.kind) };
       current.replaceRoute(next);
       pendingReroute = null;
       set({ route: next, error: null });
@@ -251,9 +307,13 @@ export function createNavigationService(): NavigationService {
       const alreadyTold = turnaround && turnaroundSince !== null && Date.now() - turnaroundSince < TURNAROUND_GRACE_MS;
       if (!alreadyTold) turnaroundSince = turnaround ? Date.now() : null;
       turnaroundFrom = turnaround ? from : null;
-      if (!alreadyTold) speak(turnaround ? `Route updated. ${first!.text}` : 'Route updated');
+      // Say what to do next, not just that something changed.
+      if (!alreadyTold) speak(first?.text ? `Route updated. ${first.text}` : 'Route updated');
     } catch {
-      if (!stale()) set({ error: REROUTE_FAILED });
+      if (!stale()) {
+        rerouteFailures++;
+        set({ error: REROUTE_FAILED });
+      }
     } finally {
       if (!stale()) {
         reroutingNow = false;
@@ -272,6 +332,7 @@ export function createNavigationService(): NavigationService {
   /** Stop waiting for a new route that hasn't come; ask again a little later if still off route. */
   function abandonReroute() {
     rerouteAttempt++;
+    rerouteFailures++;
     reroutingNow = false;
     if (pendingReroute) {
       pendingReroute = { ...pendingReroute, at: Date.now() };
@@ -297,8 +358,8 @@ export function createNavigationService(): NavigationService {
       if (e.type === 'offRoute') {
         // Told to turn around and not yet able to: asking again now would only say the same.
         if (turnaroundSince !== null && Date.now() - turnaroundSince < TURNAROUND_GRACE_MS) {
-          pendingReroute = { to: e.to, via: e.remainingVia, at: turnaroundSince + TURNAROUND_GRACE_MS - REROUTE_RETRY_MS };
-        } else void reroute(e.from, e.to, e.remainingVia);
+          pendingReroute = { to: e.to, via: viaStillWorthIt(e.from, e.to, e.remainingVia), at: turnaroundSince + TURNAROUND_GRACE_MS - REROUTE_RETRY_MS };
+        } else void reroute(e.from, e.to, viaStillWorthIt(e.from, e.to, e.remainingVia));
       }
     }
   }
@@ -336,10 +397,17 @@ export function createNavigationService(): NavigationService {
     if (loc.timestamp <= (source === 'service' || source === 'car' ? lastFixTs : lastServiceFixTs)) return;
     lastFixTs = Math.max(lastFixTs, loc.timestamp);
     if (source === 'service') lastServiceFixTs = loc.timestamp;
-    const fix = { ts: loc.timestamp, lon, lat, accuracyM: loc.coords.accuracy, speedMps: loc.coords.speed, headingDeg: loc.coords.heading };
-    followHeading(fix);
+    const given = loc.coords.speed != null && Number.isFinite(loc.coords.speed) && loc.coords.speed >= 0 ? loc.coords.speed : null;
+    // No speed from the phone (some fixes carry none): work it out from the last fix.
+    const at = { ts: loc.timestamp, lon, lat };
+    const worked = given ?? (previousFix ? speedBetween(previousFix, at) : null);
+    previousFix = at;
+    const fix = { ts: loc.timestamp, lon, lat, accuracyM: loc.coords.accuracy, speedMps: given, headingDeg: loc.coords.heading };
+    followHeading({ ...fix, speedMps: worked });
     const here: LngLat = [lon, lat];
-    const speedMps = fix.speedMps != null && Number.isFinite(fix.speedMps) && fix.speedMps >= 0 ? fix.speedMps : null;
+    const speedMps = worked;
+    // A jump (a bad fix, or the phone finding itself far from where it thought) isn't driving.
+    const jumped = lastRecorded !== null && haversineM([lastRecorded.lon, lastRecorded.lat], here) > 200 && (speedBetweenAny(lastRecorded, at) ?? 0) > JUMP_SPEED_MPS;
     const firstFix = snap.error === NO_FIX_YET ? { error: null } : {};
     let result: ReturnType<NavigationSession['update']>;
     try {
@@ -350,7 +418,7 @@ export function createNavigationService(): NavigationService {
     }
     // The way the car is going, not the fix's own heading: stopped, Android reports 0 (no
     // bearing), which would turn the car's arrow and map to face north at every red light.
-    set({ position: here, headingDeg: travelHeading ?? snap.headingDeg, speedMps, travelled: withTravelled(snap.travelled, here), state: result.state, ...firstFix });
+    set({ position: here, headingDeg: travelHeading ?? snap.headingDeg, speedMps, travelled: jumped ? [here] : withTravelled(snap.travelled, here), state: result.state, ...firstFix });
     if (turnaroundSince !== null && result.state.status === 'navigating' && result.state.progressM >= TURNAROUND_DONE_M) {
       turnaroundSince = null;
       turnaroundFrom = null;
@@ -360,10 +428,19 @@ export function createNavigationService(): NavigationService {
     // Still off route after a failed attempt: ask again from here, now and then.
     const pending = pendingReroute;
     const drivenOn = turnaroundFrom !== null && haversineM(turnaroundFrom, here) >= TURNAROUND_MOVED_M;
-    if (result.state.status === 'offRoute' && pending && !reroutingNow && (drivenOn || Date.now() - pending.at >= REROUTE_RETRY_MS)) {
+    const retryAfter = Math.min(REROUTE_RETRY_MAX_MS, REROUTE_RETRY_MS * 2 ** Math.max(0, rerouteFailures - 1));
+    if (result.state.status === 'offRoute' && pending && !reroutingNow && (drivenOn || Date.now() - pending.at >= retryAfter)) {
       void reroute([lon, lat], pending.to, pending.via, pending.kind);
     }
     if (simulated) return;
+    // Only fixes that are sure of where they are, and follow on from the last, count as driven: the
+    // server credits roads between recorded points.
+    if (jumped) {
+      lastRecorded = at;
+      return;
+    }
+    if (fix.accuracyM != null && fix.accuracyM > RECORD_MAX_ACCURACY_M) return;
+    lastRecorded = at;
     const account = cachedAccountId();
     if (!account) return;
     void sqliteQueueStore
@@ -460,11 +537,14 @@ export function createNavigationService(): NavigationService {
     lastFixTs = -Infinity;
     lastServiceFixTs = -Infinity;
     lastPhoneFixAt = -Infinity;
+    lastRecorded = null;
+    previousFix = null;
+    rerouteFailures = 0;
     travelHeading = null;
     movedFrom = null;
     travelledStepM = TRAVELLED_STEP_M;
     const gen = generation;
-    set({ ...idle(), active: true, route, destinationName: opts.destinationName ?? null });
+    set({ ...idle(), active: true, route, destinationName: opts.destinationName ?? null, simulated });
     timerHold.hold(TIMERS_FOR_TRIP);
     // A test drive is fed its fixes by the caller and saves nothing.
     if (simulated) return;

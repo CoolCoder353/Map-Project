@@ -73,8 +73,10 @@ class NavTemplatesTest {
   @Test fun passesOnProblems() =
     assertEquals("Navigation needs location permission.", (template(Samples.nav(error = "Navigation needs location permission.")).navigationInfo as MessageInfo).title.text())
 
-  @Test fun saysWhenYouAreOffRoute() =
+  @Test fun saysWhenYouAreOffRoute() {
     assertEquals("Off route", (template(Samples.nav(status = NavStatus.OFF_ROUTE)).navigationInfo as MessageInfo).title.text())
+    assertEquals("A new way to Mt Coot-tha Lookout is on its way", (template(Samples.nav(status = NavStatus.OFF_ROUTE)).navigationInfo as MessageInfo).text.text())
+  }
 
   @Test fun arrives() {
     val t = template(Samples.nav(status = NavStatus.ARRIVED, muted = true))
@@ -140,7 +142,8 @@ class NavTemplatesTest {
     var recentred = 0
     fun withMap(panned: Boolean) = NavTemplates.navigation(Samples.nav(), icons, onEnd = {}, onMute = {}, onReport = {}, map = MapButtons(panned, icon, icon, icon, { zooms += it }, { recentred++ }))
     val t = withMap(panned = false)
-    assertEquals(listOf("speaker", "Report", "End"), buttons(t))
+    // Report first and End last, mute between: a slip from one doesn't do the other.
+    assertEquals(listOf("Report", "speaker", "End"), buttons(t))
     val mapActions = t.mapActionStrip!!.actions
     assertEquals(listOf(androidx.car.app.model.Action.TYPE_PAN, androidx.car.app.model.Action.TYPE_CUSTOM, androidx.car.app.model.Action.TYPE_CUSTOM), mapActions.map { it.type })
     assertNotNull(t.panModeDelegate)
@@ -160,5 +163,9 @@ class NavTemplatesTest {
     for (exit in listOf(null, 0, -1)) {
       assertEquals("exit $exit", Maneuver.TYPE_ROUNDABOUT_ENTER_CW, maneuverOf(Samples.nav(maneuver = CarManeuver("roundabout", exit))).type)
     }
+  }
+
+  @Test fun endAsksForASecondTapByItsOwnLabel() {
+    assertEquals(listOf("speaker", NavTemplates.END_CONFIRM), buttons(NavTemplates.navigation(Samples.nav(), icons, onEnd = {}, onMute = {}, confirmingEnd = true)))
   }
 }

@@ -20,6 +20,14 @@ import { confirmBackgroundLocation } from '../../src/tracking/disclosure';
 import { sqliteQueueStore } from '../../src/tracking/sqliteStore';
 import { syncQueue } from '../../src/tracking/sync';
 import { Body, Button, Card, Field, Heading, Notice, Segmented, Small, Title } from '../../src/ui/kit';
+import Constants from 'expo-constants';
+
+/** Which build this is, for testers to say ("0.6.1 (17)"). */
+export const appVersion = () => {
+  const v = Constants.expoConfig?.version ?? 'unknown';
+  const code = Constants.expoConfig?.android?.versionCode;
+  return code ? `${v} (${code})` : v;
+};
 
 export default function SettingsScreen() {
   const t = useTheme();
@@ -300,6 +308,14 @@ export default function SettingsScreen() {
         <Heading>Your data</Heading>
         <Small>Download a copy of your data from Settings on the website.</Small>
         <Button
+          label="Open the website"
+          kind="secondary"
+          icon={ExternalLink}
+          disabled={!server}
+          onPress={() => void Linking.openURL(`${server.replace(/\/+$/, '')}/settings`).catch(() => setMessage('Couldn’t open the website. Is a browser installed?'))}
+          style={{ alignSelf: 'flex-start' }}
+        />
+        <Button
           label="Privacy policy"
           kind="secondary"
           icon={ExternalLink}
@@ -339,6 +355,7 @@ export default function SettingsScreen() {
         ) : (
           <Button label="Delete account" kind="danger" icon={Trash2} onPress={() => setConfirmingDelete(true)} style={{ alignSelf: 'flex-start' }} />
         )}
+        <Small>{`${config.appName} ${appVersion()}`}</Small>
       </ScrollView>
     </SafeAreaView>
   );

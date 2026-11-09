@@ -41,8 +41,11 @@ it('keeps the message readable in dark mode', async () => {
 it('needs a message before it can be sent', async () => {
   await render(<FeedbackScreen />);
   expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+  // Says why it can't be sent yet, rather than a dim button and nothing else.
+  expect(screen.getByText('Write a few words about what happened to send it.')).toBeOnTheScreen();
   await fireEvent.changeText(screen.getByLabelText('What went wrong?'), 'Route vanished');
   expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
+  expect(screen.queryByText('Write a few words about what happened to send it.')).toBeNull();
 });
 
 it('sends the report with a gallery screenshot and, only when switched on, the map view', async () => {

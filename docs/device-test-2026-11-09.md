@@ -41,6 +41,61 @@ P = phone app, C = Android Auto, H = the device harness and setup.
 - **H4** (fixed in this change) The harness refused every phone tap while Android Auto was connected.
 
 
+## Fixed on 10 November
+
+Fixed in code with tests, `pnpm check` passing. None of it has been seen on the phone or the head
+unit yet: the next harness run should check the top ones by eye. Server changes need a deploy, the
+app ones a new build to internal testing.
+
+- **Top of the list:** C33 (the preview's note now rides on the row's one line), H13/H8/H18 (the
+  harness never fakes a phone's own GPS; drives move the car), P31/P34/P37 (a road match far longer
+  than the drive credits nothing; the phone records no jumps or fixes worse than 50 m; trips
+  already credited stay as they are), P60, C15/P61 (after a missed turn only detour points still on
+  the way are kept), C1/C21/C60/P16/P88 (no heads-up while Wayfinder's directions are on the car;
+  a low-importance channel on the phone), C38 (no speech while audio focus is refused), P8 (an
+  explore route that comes out quicker becomes the fastest), P14/P94/P67 (Your location is kept
+  current and routes follow it), C74 (no guessed light colours on the car).
+- **Phone:** P1, P2, P3, P6, P11, P19/P65 (a "Voice directions are off" line), P26, P29, P38, P39,
+  P40 (until a search runs), P41, P42 (after the next places import), P44, P46, P53, P55, P59, P62,
+  P64 (the wait doubles, up to 2 min), P74, P75, P76, P77 (search ranks from where you are now),
+  P78, P80, P81, P82, P90, P92, P93 (kept while the app runs), P95, P98.
+- **Car:** C6, C9, C10/C50, C11/C51, C12/C52, C22, C23 (End takes a second tap within 5 s; Done
+  doesn't), C28/C54, C29, C32, C35, C36, C37, C39, C40, C41, C42/C96 (Report first, End last, mute
+  between), C43, C46 (and so C19 in part), C47, C48, C55, C56, C57 (100 routes kept), C59, C64,
+  C68, C73, C76, C79/C87 in part (distance first; no drive time yet), C80, C81, C85.
+- **Harness:** H2, H3, H4, H5, H6, H7, H9, H11 (todo.md's check), H12, H14 (moot), H15 (the car
+  app re-logs "car screen shown" every 15 s), H16 (measured 1.16 scale; taps off the screen
+  refused). H1 is documented: use wireless debugging.
+
+## Not fixed, and why
+
+- **Needs the phone or head unit to find the cause:** C2/C88 (where the host draws the speed box),
+  C5/C24/C27 (map tilt and rotation on idle screens), C16 (the host formats its own duration),
+  C44 (the code already shows a running trip on reconnecting; not reproduced), C62, C63 (a trip
+  that ended by itself: no log of why), C71, C82, C83, P24, P25, P85.
+- **Layout and look, to do with the design notes:** P4, P5, P7, P12, P15, P20, P21, P22, P27,
+  P28, P35, P45, P47, P48, P50, P56, P57, P66, P68, P70, P86, P96, P99, P100, C4, C17, C18, C30,
+  C49, C70, C77, C89, C91, C92, C93.
+- **Features, not fixes; each needs a decision:** P10/C94 (naming a route by where it goes), P23
+  (a trip summary), P32 (the path driven on the trip map), P33 (the destination on a trip), P36,
+  P43 (drive times in Discover), P54/P58 (voice and route settings), P63 (resume after arriving),
+  P69, P72 (loop shapes), P83/P84 (starting away from the start), P89/P91 (actions and the next
+  turn in the "Navigating" notification, which expo-location owns), P97, C13/C34 (a start
+  marker), C14/C45 (the phone and car showing one plan), C26, C31/C53 (Discover choices on the
+  car), C58, C65/C97 (the car waits 45 s because the phone waits 30 s for the server), C66, C67
+  (no position: the car still opens on Australia), C69, C72/C75 (choosing among Assistant
+  results; looking up an unnamed point), C78, C84/C86 (the test drive's route and speed, now only
+  started by the car's auto drive), C90 (lane guidance), C95, C98, C99, C100/P30 (route numbers
+  as shields).
+- **By design, kept:** P9 ("1 h"), P13, P17, P18/C3 (the grey ring marks an estimate; the
+  screen-reader label says so), P49 (Discover's reach is a drive-time area, a route's time can be a
+  minute over), P51, P52, P71, P87 (the foreground service needs its own notification), C7/C8
+  (the car's search rows now carry distance first; ranking is the server's, improved for P78),
+  C20, C25, C61 (the ✕ on the time card is Android Auto's own).
+- **Search:** P73 ("1 George St Brisbane": a locality without a comma isn't split off yet); P79 ("Hardware" and "Hardware store" come from how each shop is tagged in OpenStreetMap).
+- **Harness:** H10 (no audio from DHU 2.0 on this PC), H17 (the head unit's console has no swipe,
+  so car lists can't be scrolled).
+
 ## Phone app (100)
 
 - **P1** Plan opens on central Australia (OVERVIEW 134.5,-27.5 z3.6) even with location granted and a fresh fix; for a Queensland-only server the map is an empty desert showing "QUEENSLAN" cut off. Should start at the user's position or the server's region.

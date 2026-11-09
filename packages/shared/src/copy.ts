@@ -23,6 +23,8 @@ export interface CopyCatalog {
   coverageEmpty: string;
   tripsEmpty: string;
   trackingOffHint: string;
+  /** The same, inside the Android app, where the switch is in Settings. */
+  trackingOffHintApp: string;
   sentToPhone: string;
 }
 
@@ -43,6 +45,7 @@ const plain: CopyCatalog = {
   coverageEmpty: 'Nothing recorded yet. Turn on tracking in the Android app, or navigate a route, and your roads start filling in.',
   tripsEmpty: 'No trips yet. Trips appear here after the Android app records them.',
   trackingOffHint: 'Background tracking is off. You can turn it on in the Android app.',
+  trackingOffHintApp: 'Background tracking is off, so roads you travel without directions aren’t recorded. Turn it on in Settings.',
   sentToPhone: 'Saved. Open Planned routes on your phone to start.',
 };
 
@@ -63,6 +66,7 @@ const playful: CopyCatalog = {
   coverageEmpty: 'No roads travelled yet. Switch on tracking in the Android app and start filling the map in.',
   tripsEmpty: 'No expeditions logged yet. The Android app records them as you go.',
   trackingOffHint: 'Tracking’s off, so no new roads are being logged. Switch it on in the Android app.',
+  trackingOffHintApp: 'Tracking’s off, so no new roads are being logged. Switch it on in Settings.',
   sentToPhone: 'Packed and ready. Find it under Planned routes on your phone.',
 };
 
@@ -83,6 +87,7 @@ const minimal: CopyCatalog = {
   coverageEmpty: 'No coverage recorded.',
   tripsEmpty: 'No trips.',
   trackingOffHint: 'Tracking off.',
+  trackingOffHintApp: 'Tracking off. Turn it on in Settings.',
   sentToPhone: 'Saved to planned routes.',
 };
 

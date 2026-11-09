@@ -4,6 +4,8 @@ import { join } from 'node:path';
 export interface Config {
   testAccountEmail: string;
   phones: string[];
+  /** How the head unit's tap grid compares with its screenshots (see dhuCommand.tap). */
+  carTapScale?: number;
 }
 
 /** `.harness/session.json`: what `up` set going, so `down` can undo every part of it. */
@@ -33,7 +35,7 @@ const sessionPath = (root: string) => join(harnessDir(root), 'session.json');
 export async function loadConfig(files: Files, root: string): Promise<Config> {
   const text = await files.read(configPath(root));
   const c = text ? (JSON.parse(text) as Partial<Config>) : {};
-  return { testAccountEmail: c.testAccountEmail ?? '', phones: c.phones ?? [] };
+  return { testAccountEmail: c.testAccountEmail ?? '', phones: c.phones ?? [], ...(c.carTapScale ? { carTapScale: c.carTapScale } : {}) };
 }
 export const saveConfig = (files: Files, root: string, c: Config) => files.write(configPath(root), `${JSON.stringify(c, null, 2)}\n`);
 

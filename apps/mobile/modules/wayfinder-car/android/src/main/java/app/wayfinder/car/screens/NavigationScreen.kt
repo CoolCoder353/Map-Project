@@ -44,6 +44,11 @@ class NavigationScreen(
   private var line: List<LngLat> = emptyList()
   private var lineFor: String? = null
   private var reporting = false
+  /** End was tapped once, [END_CONFIRM_MS] ago at most. */
+  private var confirmingEnd = false
+  /** Muted or not as last tapped, until the phone's update says the same. */
+  private var mutedAsked: Boolean? = null
+  private val handler = Handler(Looper.getMainLooper())
   private val mapIcons by lazy {
     fun icon(res: Int) = CarIcon.Builder(IconCompat.createWithResource(carContext, res)).build()
     Triple(icon(R.drawable.wf_zoom_in), icon(R.drawable.wf_zoom_out), icon(R.drawable.wf_recentre))
@@ -74,6 +79,7 @@ class NavigationScreen(
     // over the screen that took its place.
     if (lifecycle.currentState == Lifecycle.State.DESTROYED) return
     nav = n
+    if (n == null || n.muted == mutedAsked) mutedAsked = null
     // The route changes on a reroute; fetch its line once per route, not on every fix.
     if (n != null && n.routeId != lineFor) {
       val id = n.routeId
@@ -129,16 +135,45 @@ class NavigationScreen(
     return MapButtons(c.panned, zoomIn, zoomOut, recentre, onZoom = c::zoomBy, onRecentre = c::recentre)
   }
 
+  private val muted get() = mutedAsked ?: (nav?.muted == true)
+
+  /**
+   * Ending is two taps unless arrived: the phone asks "End this trip?" and a car at speed can't, so
+   * the first tap turns End into "Tap to end" for [END_CONFIRM_MS].
+   */
+  internal fun end() {
+    if (nav?.status == app.wayfinder.car.bridge.NavStatus.ARRIVED || confirmingEnd) {
+      api.stop()
+      return
+    }
+    confirmingEnd = true
+    invalidate()
+    handler.postDelayed({
+      confirmingEnd = false
+      invalidate()
+    }, END_CONFIRM_MS)
+  }
+
+  /** Shown straight away, so the button answers the tap rather than waiting on the phone. */
+  internal fun toggleMute() {
+    mutedAsked = !muted
+    api.setMuted(mutedAsked!!)
+    invalidate()
+  }
+
   override fun onGetTemplate(): Template =
     NavTemplates.navigation(
       nav, icons,
-      onEnd = { api.stop() },
-      onMute = { api.setMuted(!(nav?.muted ?: false)) },
+      onEnd = ::end,
+      onMute = ::toggleMute,
       onReport = ::report,
       map = mapButtons(),
+      confirmingEnd = confirmingEnd,
+      muted = muted,
     )
 
   companion object {
     const val PICTURE_WAIT_MS = 1_500L
+    const val END_CONFIRM_MS = 5_000L
   }
 }

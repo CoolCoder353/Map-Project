@@ -12,7 +12,8 @@ enum class Account { SIGNED_IN, SIGNED_OUT, OFFLINE }
 data class CarStatus(val account: Account, val styleLight: String?, val styleDark: String?, val searchHint: String, val here: LngLat?, val saved: List<CarPlace> = emptyList())
 /** The limit where the car is, with no trip: [kmh] null where none is known; [estimated] the road's legal default, not a sign. */
 data class CarSpeedLimit(val kmh: Int?, val estimated: Boolean, val road: String?)
-data class CarPlace(val id: String, val name: String, val detail: String, val location: LngLat, val distanceM: Double?)
+/** [saved]: one of your saved places; [home]: the one saved as Home, however it was written. */
+data class CarPlace(val id: String, val name: String, val detail: String, val location: LngLat, val distanceM: Double?, val saved: Boolean = false, val home: Boolean = false)
 data class RouteOption(
   val routeId: String, val title: String, val detail: String,
   val durationS: Double, val distanceM: Double, val extraDurationS: Double, val geometry: List<LngLat>,
@@ -82,7 +83,10 @@ object Protocol {
 
   fun places(o: JSONObject): List<CarPlace> = o.getJSONArray("places").objects().map(::place)
 
-  fun place(o: JSONObject) = CarPlace(o.getString("id"), o.getString("name"), o.getString("detail"), lngLat(o.getJSONArray("location")), o.doubleOrNull("distanceM"))
+  fun place(o: JSONObject) = CarPlace(
+    o.getString("id"), o.getString("name"), o.getString("detail"), lngLat(o.getJSONArray("location")), o.doubleOrNull("distanceM"),
+    saved = o.optBoolean("saved", false), home = o.optBoolean("home", false),
+  )
 
   fun plan(o: JSONObject) = PlanResult(o.getJSONArray("options").objects().map(::option), o.stringOrNull("note"))
 

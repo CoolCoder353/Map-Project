@@ -60,19 +60,21 @@ function within<T>(p: Promise<T>, ms: number): Promise<T | null> {
 }
 
 /**
- * Where you are: the phone's recent position, else the car's, else (when [fresh]) a new fix from
- * the phone. The phone says nothing when it is locked in a pocket or has not been given location;
- * the car always knows where it is, so it is used before waiting on the phone. Never prompts: the
- * car can't.
+ * Where you are: the car's own position from the last minute, else the phone's recent one, else
+ * (when [fresh]) a new fix from the phone. The car's GNSS reports every second while it is
+ * connected, so it beats a phone fix that may be minutes old (15 km at highway speed in ten). The
+ * phone says nothing when it is locked in a pocket or has not been given location. Never prompts:
+ * the car can't.
  */
 async function here(fresh = false): Promise<LngLat | null> {
-  const granted = await Location.getForegroundPermissionsAsync().then((p) => p.granted, () => false);
-  const phone = granted ? located(await Location.getLastKnownPositionAsync({ maxAge: fresh ? 60_000 : 10 * 60_000 }).catch(() => null)) : null;
-  if (phone) return phone;
   if (lastCarFix && Date.now() - lastCarFix.at <= CAR_FIX_MAX_AGE_MS) return lastCarFix.position;
+  const granted = await Location.getForegroundPermissionsAsync().then((p) => p.granted, () => false);
+  const phone = granted ? located(await Location.getLastKnownPositionAsync({ maxAge: fresh ? 60_000 : 2 * 60_000 }).catch(() => null)) : null;
+  if (phone) return phone;
   return granted && fresh ? located(await within(Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }), PHONE_FIX_WAIT_MS)) : null;
 }
 
+export const NO_OTHER_WAYS = 'No other ways fit your extra time. You can allow more in Settings on your phone.';
 /** Android Auto shows about six rows while driving; never send more. */
 export const MAX_ROWS = 6;
 // Shown in the car: anything that sends the driver to the phone says to wait until it's safe (VI-1).
@@ -89,13 +91,18 @@ export const resetReportCooldown = () => {
   lastReportAt = -Infinity;
 };
 
-/** Routes the car has been offered, so "Go" can start one by id. The newest 30 are kept. */
+/** How many routes the car keeps to start by id: every list it has shown in a long drive's searching. */
+export const OFFERED_KEPT = 100;
+/** Routes the car has been offered, so "Go" can start one by id. The newest [OFFERED_KEPT] are kept. */
 const offered = new Map<string, Route>();
 function remember(r: Route) {
   offered.delete(r.id);
   offered.set(r.id, r);
-  while (offered.size > 30) offered.delete(offered.keys().next().value!);
+  while (offered.size > OFFERED_KEPT) offered.delete(offered.keys().next().value!);
 }
+export const ROUTE_EXPIRED = 'That route has expired. Go back and choose the place again.';
+/** Discover by car leaves out places closer than this: they're a walk, not a drive. */
+export const DISCOVER_MIN_M = 1000;
 
 const toPlace = (p: Place): CarPlace => ({
   id: p.id,
@@ -105,11 +112,17 @@ const toPlace = (p: Place): CarPlace => ({
   distanceM: p.distanceM ?? null,
 });
 
-function toOption(r: Route, title: string, c: CopyCatalog): CarRouteOption {
+/**
+ * A route's row in the car: its time, how much longer than the fastest, its length and how much of
+ * it is new. The extra time is the difference of the two times as shown, so "57 min (12 min
+ * longer)" beside a "45 min" fastest always adds up.
+ */
+function toOption(r: Route, title: string, c: CopyCatalog, fastestS: number = r.durationS - r.extraDurationS): CarRouteOption {
   remember(r);
-  const time = r.extraDurationS >= 60 ? `${formatDuration(r.durationS)} (${formatDuration(r.extraDurationS)} longer)` : formatDuration(r.durationS);
-  const what = r.novelty.newKm >= 0.1 ? c.newKm(r.novelty.newKm) : formatDistanceShort(r.distanceM);
-  return { routeId: r.id, title, detail: `${time} · ${what}`, durationS: r.durationS, distanceM: r.distanceM, extraDurationS: r.extraDurationS, geometry: r.geometry };
+  const extraMin = Math.round(r.durationS / 60) - Math.round(fastestS / 60);
+  const time = extraMin >= 1 ? `${formatDuration(r.durationS)} (${formatDuration(extraMin * 60)} longer)` : formatDuration(r.durationS);
+  const parts = [time, formatDistanceShort(r.distanceM), r.novelty.newKm >= 0.1 ? c.newKm(r.novelty.newKm) : null];
+  return { routeId: r.id, title, detail: parts.filter(Boolean).join(' · '), durationS: r.durationS, distanceM: r.distanceM, extraDurationS: r.extraDurationS, geometry: r.geometry };
 }
 
 /** Forget cached words and offered routes between tests. */
@@ -120,6 +133,12 @@ export function resetCarHandlers() {
   resetReportCooldown();
 }
 
+/** A saved place called Home, however it was written: "Home", "home 🏠", "My home", "My house". */
+export function isHomeName(name: string): boolean {
+  const words = name.toLowerCase().replace(/[^\p{L}\s]/gu, ' ').trim().split(/\s+/);
+  return words.length > 0 && words.length <= 2 && (words.at(-1) === 'home' || words.join(' ') === 'my house') && (words.length === 1 || words[0] === 'my');
+}
+
 /**
  * Your saved places for the car's home screen: Home first (it's where most drives end), then the
  * nearest. None when they can't be fetched: the rest of the screen still works.
@@ -127,7 +146,7 @@ export function resetCarHandlers() {
 async function savedPlaces(near: LngLat | null): Promise<CarPlace[]> {
   const res = await api.request('api/saved-places', { schema: SavedPlaceListSchema }).catch(() => null);
   if (!res) return [];
-  const isHome = (name: string) => name.trim().toLowerCase() === 'home';
+  const isHome = isHomeName;
   return res.items
     .map((p) => ({ p, distanceM: near ? haversineM(near, p.location) : null }))
     .sort((a, b) => Number(isHome(b.p.name)) - Number(isHome(a.p.name)) || (a.distanceM ?? 0) - (b.distanceM ?? 0) || a.p.name.localeCompare(b.p.name))
@@ -135,9 +154,12 @@ async function savedPlaces(near: LngLat | null): Promise<CarPlace[]> {
     .map(({ p, distanceM }) => ({
       id: p.id,
       name: p.name,
-      detail: [p.description || null, distanceM != null ? `${formatDistanceShort(distanceM)} away` : null].filter(Boolean).join(' · '),
+      // How far first: the car's row has room for one short line, and that's what a driver judges by.
+      detail: [distanceM != null ? `${formatDistanceShort(distanceM)} away` : null, p.description || null].filter(Boolean).join(' · '),
       location: p.location,
       distanceM,
+      saved: true,
+      home: isHome(p.name),
     }));
 }
 
@@ -170,15 +192,21 @@ export const carHandlers: CarHandlers = {
   async discover() {
     const from = await here(true);
     if (!from) throw new Error(NO_LOCATION);
-    const res = await api.request('api/discover', { query: { lon: from[0], lat: from[1], mode: 'car', maxMinutes: 30, limit: MAX_ROWS }, schema: DiscoverResponseSchema });
+    const res = await api.request('api/discover', { query: { lon: from[0], lat: from[1], mode: 'car', maxMinutes: 30, limit: MAX_ROWS * 2 }, schema: DiscoverResponseSchema });
+    // Nearest first, and nothing a short walk away: the car's list is for somewhere to drive to. How
+    // new a place is stays on the phone; one short line is all a car row has room for.
     return {
-      places: res.items.slice(0, MAX_ROWS).map<CarPlace>((i) => ({
-        id: i.id,
-        name: i.name,
-        detail: [kindOf(i.category), `${formatDistanceShort(i.distanceM)} away`, i.areaUnexploredPct >= 50 ? `${i.areaUnexploredPct}% unexplored area` : null].filter(Boolean).join(' · '),
-        location: i.location,
-        distanceM: i.distanceM,
-      })),
+      places: res.items
+        .filter((i) => i.distanceM >= DISCOVER_MIN_M)
+        .sort((a, b) => a.distanceM - b.distanceM)
+        .slice(0, MAX_ROWS)
+        .map<CarPlace>((i) => ({
+          id: i.id,
+          name: i.name,
+          detail: [`${formatDistanceShort(i.distanceM)} away`, kindOf(i.category)].filter(Boolean).join(' · '),
+          location: i.location,
+          distanceM: i.distanceM,
+        })),
     };
   },
 
@@ -188,8 +216,8 @@ export const carHandlers: CarHandlers = {
     if (!from) throw new Error(NO_LOCATION);
     // The extra time allowed for ways you haven't been is the person's own setting (server default).
     const [res, c] = await Promise.all([api.request('api/routes/explore', { method: 'POST', body: { from, to, mode: 'car' }, schema: ExploreRouteResponseSchema }), copy()]);
-    const options = [toOption(res.fastest, 'Fastest', c), ...res.explore.map((r, i) => toOption(r, `Explore ${i + 1}`, c))].slice(0, MAX_ROWS);
-    const note = res.explore.length ? null : res.fastest.novelty.noveltyPct >= 90 ? c.allNewAlready : 'No other ways fit within your extra time.';
+    const options = [toOption(res.fastest, 'Fastest', c), ...res.explore.map((r, i) => toOption(r, `Explore ${i + 1}`, c, res.fastest.durationS))].slice(0, MAX_ROWS);
+    const note = res.explore.length ? null : res.fastest.novelty.noveltyPct >= 90 ? c.allNewAlready : NO_OTHER_WAYS;
     return { options, note };
   },
 
@@ -210,7 +238,7 @@ export const carHandlers: CarHandlers = {
   async start(params) {
     const { routeId, destinationName } = CarParams.start.parse(params);
     const r = offered.get(routeId);
-    if (!r) throw new Error('That route has expired. Plan it again.');
+    if (!r) throw new Error(ROUTE_EXPIRED);
     navigation.start(r, { destinationName });
     // A route navigation can't follow leaves it idle with the reason; say so rather than leave the
     // car waiting on "Starting…".
@@ -230,6 +258,9 @@ export const carHandlers: CarHandlers = {
    */
   async simulate() {
     const now = navigation.getSnapshot();
+    // A real trip is never swapped for a pretend one: it would stop recording, and end when the
+    // pretend drive "arrived".
+    if (now.active && now.route && !now.simulated) return {};
     if (now.active && now.route) startTestDrive(navigation, now.route, now.destinationName);
     else startTestDrive(navigation, demoRoute((await here()) ?? undefined), DEMO_DESTINATION_NAME);
     return {};
@@ -311,8 +342,9 @@ async function sendReport(screenshotJpeg?: string): Promise<Record<string, never
 const STATUS_WORDS = { navigating: 'on the route', offRoute: 'off the route', arrived: 'arrived' } as const;
 
 /** What the car was showing when the driver pressed Report, in words an admin can act on. */
-export function carReportMessage(s: NavSnapshot, at: Date = new Date()): string {
-  const when = at.toLocaleString('en-AU', { timeZone: 'Australia/Brisbane', dateStyle: 'medium', timeStyle: 'medium' });
+export function carReportMessage(s: NavSnapshot, at: Date = new Date(), timeZone?: string): string {
+  // The phone's own time zone (not always Brisbane's), named, so a report from interstate reads right.
+  const when = at.toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'long', ...(timeZone ? { timeZone } : {}) });
   const lines = [`Reported from the car at ${when}, with one tap. When it's safe, the driver can send the details from Settings → Send feedback.`];
   if (!s.active || !s.route) {
     lines.push('No trip running.');

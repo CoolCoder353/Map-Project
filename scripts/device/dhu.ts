@@ -1,12 +1,22 @@
 /** Desktop Head Unit console commands (developer.android.com/training/cars/testing/dhu), written to its stdin. */
 
+/** The car screen's size in `shot car` pictures (DHU_CONFIG's resolution). */
+export const CAR_SCREEN = [800, 480] as const;
+/** See [dhuCommand.tap]; `.harness/config.json` `carTapScale` overrides it for another head unit. */
+export const CAR_TAP_SCALE = 1.16;
+
 /** Car keys the harness may press. No call, end-call or phone keys: it never starts a call. */
 export const CAR_KEYS = ['home', 'back', 'search', 'navigation'] as const;
 export type CarKey = (typeof CAR_KEYS)[number];
 
 export const dhuCommand = {
   screenshot: (path: string) => `screenshot ${path}`,
-  tap: (x: number, y: number) => `tap ${Math.round(x)} ${Math.round(y)}`,
+  /**
+   * A tap at (x, y) in the `shot car` picture. The head unit's console takes taps on a grid
+   * [scale] times the picture's (measured 1.16 on DHU 2.0 at 800×480: unscaled, taps landed at
+   * x / 1.16 and the right of the screen couldn't be reached).
+   */
+  tap: (x: number, y: number, scale = CAR_TAP_SCALE) => `tap ${Math.round(x * scale)} ${Math.round(y * scale)}`,
   /** The car's own GPS. The DHU takes latitude first; accuracy 5 m, altitude 0. */
   location: (lon: number, lat: number, speedMps = 0, bearing = 0) => `location ${lat.toFixed(6)} ${lon.toFixed(6)} 5 0 ${speedMps.toFixed(1)} ${Math.round(bearing)}`,
   day: () => 'day',

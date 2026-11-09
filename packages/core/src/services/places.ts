@@ -6,6 +6,7 @@ import {
   categoryTypes,
   cellToBigInt,
   expandAbbreviations,
+  expandNicknames,
   haversineM,
   placeContext,
   poiTypeLabel,
@@ -78,7 +79,9 @@ export function searchScore(
   const lower = q.trim().toLowerCase();
   const exact = name === lower;
   const prefix = name.startsWith(lower);
-  let score = r.sim + (prefix ? 0.3 : 0) + (exact ? 0.25 : 0) + (exact && SETTLEMENT.has(r.kind) ? 0.35 : 0) + (KIND_BOOST[r.kind] ?? 0) + r.importance * 0.2;
+  // Branches of a chain are named "Bunnings" or "Bunnings Warehouse" as mapped: neither is a better
+  // answer, so the exact-name bonus is for places that aren't shops, and the nearer branch wins.
+  let score = r.sim + (prefix ? 0.3 : 0) + (exact && r.kind !== 'poi' ? 0.25 : 0) + (exact && SETTLEMENT.has(r.kind) ? 0.35 : 0) + (KIND_BOOST[r.kind] ?? 0) + r.importance * 0.2;
   if (origin) {
     const quality = exact ? 1 : prefix ? 0.9 : Math.min(1, Math.max(0, (r.sim - 0.3) / 0.5)) ** 2;
     const d = haversineM(origin, [r.lon, r.lat]);
@@ -110,6 +113,10 @@ function sameThing(a: PlaceRow, b: PlaceRow): boolean {
  * of that kind first.
  */
 export async function searchPlaces(db: DbClient, rawQuery: string, near: LngLat | null, limit: number, now = new Date()): Promise<Place[]> {
+  const point = coordinatesIn(rawQuery);
+  if (point) return [coordinatePlace(point, near)];
+  if (POSTCODE.test(rawQuery.trim())) return byPostcode(db, rawQuery.trim(), near, limit, now);
+  rawQuery = expandNicknames(rawQuery);
   const address = splitAddress(rawQuery);
   if (!address || (!address.locality && !address.postcode)) return searchNames(db, rawQuery, near, limit, now);
   // "12 Wellington St, Cleveland QLD 4163": that address in Cleveland, or failing that the street
@@ -118,6 +125,44 @@ export async function searchPlaces(db: DbClient, rawQuery: string, near: LngLat 
   const out = located.map((r) => toPlace(r, near, now));
   for (const p of named) if (!out.some((o) => o.id === p.id)) out.push(p);
   return out.slice(0, limit);
+}
+
+const POSTCODE = /^\d{4}$/;
+
+/**
+ * "-27.4698, 153.0251" (latitude first, as maps share them) or "153.0251, -27.4698": a point.
+ * Which is which is told by range: only a longitude goes past 90.
+ */
+export function coordinatesIn(q: string): LngLat | null {
+  const m = /^\s*(-?\d{1,3}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/.exec(q);
+  if (!m) return null;
+  const a = Number(m[1]);
+  const b = Number(m[2]);
+  if (Math.abs(a) <= 90 && Math.abs(b) <= 180) return [b, a];
+  if (Math.abs(b) <= 90 && Math.abs(a) <= 180) return [a, b];
+  return null;
+}
+
+function coordinatePlace([lon, lat]: LngLat, near: LngLat | null): Place {
+  const name = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+  return {
+    id: `point:${lon.toFixed(6)},${lat.toFixed(6)}`,
+    name,
+    kind: 'point',
+    description: 'Map point',
+    location: [lon, lat],
+    typeLabel: 'Map point',
+    ...(near ? { distanceM: Math.round(haversineM(near, [lon, lat])) } : {}),
+  };
+}
+
+/** A postcode: its suburbs and towns, nearest first. */
+async function byPostcode(db: DbClient, postcode: string, near: LngLat | null, limit: number, now: Date): Promise<Place[]> {
+  const rows = (
+    await db.query<PlaceRow>(`SELECT ${COLUMNS}, 1 AS sim FROM places WHERE postcode = $1 AND kind IN ('city', 'town', 'suburb') LIMIT 50`, [postcode])
+  ).rows;
+  const dist = (r: PlaceRow) => (near ? haversineM(near, [r.lon, r.lat]) : -r.importance);
+  return rows.sort((a, b) => dist(a) - dist(b)).slice(0, limit).map((r) => toPlace(r, near, now));
 }
 
 const HOUSE_NUMBER = /^(?:\S+\/)?(\d+[a-z]?)\s+/i;

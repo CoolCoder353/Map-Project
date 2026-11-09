@@ -14,6 +14,10 @@ export const CarPlaceSchema = z.object({
   detail: z.string(),
   location: LngLatSchema,
   distanceM: z.number().nullable(),
+  /** One of your saved places, so the car can mark it as one. */
+  saved: z.boolean().optional(),
+  /** The saved place that is Home, however it was written ("Home 🏠", "My house"). */
+  home: z.boolean().optional(),
 });
 
 export const CarStatusSchema = z.object({

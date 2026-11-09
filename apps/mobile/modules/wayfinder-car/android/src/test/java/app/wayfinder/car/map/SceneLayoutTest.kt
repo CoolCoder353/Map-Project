@@ -3,6 +3,7 @@ package app.wayfinder.car.map
 import app.wayfinder.car.Samples
 import app.wayfinder.car.bridge.LngLat
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -37,6 +38,13 @@ class SceneLayoutTest {
     assertEquals(emptyList<LngLat>(), d.selected)
     assertEquals(listOf(a.geometry, empty.geometry, c.geometry), d.others)
     assertNull("nothing chosen, so no destination", d.destination)
+  }
+
+  /** Two routes sharing their roads put their numbers in different places, not one on the other (C68). */
+  @Test fun routesOnTheSameRoadsAreNumberedApart() {
+    val line = (0..9).map { LngLat(153.0 + it * 0.01, -27.4) }
+    val d = SceneLayout.drawing(MapScene.Routes(listOf(Samples.option("a").copy(geometry = line), Samples.option("b").copy(geometry = line)), MapScene.Routes.NONE))
+    assertNotEquals(d.pins[0].at, d.pins[1].at)
   }
 
   @Test fun theChosenRouteEndsAtTheDestinationPin() {

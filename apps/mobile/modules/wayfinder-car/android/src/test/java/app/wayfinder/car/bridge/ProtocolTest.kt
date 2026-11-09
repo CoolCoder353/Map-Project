@@ -24,6 +24,8 @@ class ProtocolTest {
     assertEquals(listOf("Home", "Work"), s.saved.map { it.name })
     assertEquals(24800.0, s.saved[0].distanceM!!, 0.0)
     assertNull(s.saved[1].distanceM)
+    assertTrue(s.saved.all { it.saved })
+    assertEquals(listOf(true, false), s.saved.map { it.home })
   }
 
   @Test fun statusFromAnOlderPhoneAppHasNoSavedPlaces() {

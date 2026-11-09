@@ -25,8 +25,9 @@ import app.wayfinder.car.map.MapScenes
 /**
  * Where the car starts: Home and the other saved places, search, planned routes and Discover, over
  * the map. During a trip it also offers the way back to directions ([onDrive]), for a driver who
- * pressed Back on them. Otherwise it offers a test drive ([onTestDrive]), and the map follows the
- * car on [fixes] with its speed and the road's limit (see [IdleDrive]). Each row has its own icon,
+ * pressed Back on them. With no trip the map follows the car on [fixes] with its speed and the
+ * road's limit (see [IdleDrive]). There is no test-drive row: a pretend trip on a real dashboard
+ * confused drivers; the car's own auto drive (reviewers, the Desktop Head Unit) still starts one. Each row has its own icon,
  * so a glance finds it, and there are never more than six.
  */
 class HomeScreen(
@@ -34,7 +35,6 @@ class HomeScreen(
   private val api: CarApi,
   private val map: MapScenes,
   private val onDrive: () -> Unit = {},
-  private val onTestDrive: () -> Unit = {},
   private val fixes: ((CarFix) -> Unit) -> () -> Unit = { { } },
   private val onStatus: (CarStatus) -> Unit,
 ) : Screen(carContext) {
@@ -113,11 +113,9 @@ class HomeScreen(
           ItemList.Builder()
             .apply { if (backToDirections) addItem(row("Back to directions", browsable = true, icon = icon(R.drawable.wf_navigation)) { onDrive() }) }
             .apply { savedRows(s.saved).forEach { addItem(it) } }
-            .addItem(row("Search", browsable = true, icon = icon(R.drawable.wf_search)) { screenManager.push(SearchScreen(carContext, api, map, s.searchHint)) })
+            .addItem(row("Search", browsable = true, icon = icon(R.drawable.wf_search)) { screenManager.push(SearchScreen(carContext, api, map, s.searchHint, s.saved)) })
             .addItem(row("Planned routes", browsable = true, icon = icon(R.drawable.wf_route)) { screenManager.push(PickScreens.planned(carContext, api, map)) })
             .addItem(row("Discover nearby", browsable = true, icon = icon(R.drawable.wf_explore)) { screenManager.push(PickScreens.discover(carContext, api, map)) })
-            // A pretend trip for trying the car app without driving; not offered over a real one.
-            .apply { if (!backToDirections) addItem(row("Test drive", "Follow a pretend trip, nothing is recorded", browsable = true, icon = icon(R.drawable.wf_car)) { onTestDrive() }) }
             .build(),
         )
         .build()
@@ -131,7 +129,7 @@ class HomeScreen(
    * places behind one "Saved places" row, so the list stays at six rows.
    */
   private fun savedRows(saved: List<CarPlace>): List<Row> {
-    val home = saved.firstOrNull { it.name.trim().equals("home", ignoreCase = true) }
+    val home = saved.firstOrNull { it.home || it.name.trim().equals("home", ignoreCase = true) }
     val others = saved.filter { it !== home }
     return listOfNotNull(
       home?.let { h -> row(h.name, h.detail, browsable = true, icon = icon(R.drawable.wf_home)) { screenManager.push(RoutePreviewScreen.forPlace(carContext, api, map, h)) } },

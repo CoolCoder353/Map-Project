@@ -21,7 +21,7 @@ interface CarFixSource {
  * keeps directions and planning working. A car without location, or without permission for it,
  * leaves things as they were.
  */
-class CarLocation(private val source: CarFixSource, private val api: CarApi) {
+class CarLocation(private val source: CarFixSource, private val api: CarApi, private val now: () -> Long = System::currentTimeMillis) {
   /** Starts listening; each usable position also goes to [also] (the map with no trip). */
   fun start(also: (CarFix) -> Unit = {}): () -> Unit =
     runCatching {
@@ -36,7 +36,14 @@ class CarLocation(private val source: CarFixSource, private val api: CarApi) {
   private fun usable(f: CarFix) =
     f.lon.isFinite() && f.lat.isFinite() && f.lon in -180.0..180.0 && f.lat in -90.0..90.0 &&
       // 0, 0 is what a sensor with no fix reports.
-      !(f.lon == 0.0 && f.lat == 0.0)
+      !(f.lon == 0.0 && f.lat == 0.0) &&
+      // A rough or stale fix would pull the map and the phone's trip away from the road (C19).
+      (f.accuracyM == null || f.accuracyM <= MAX_ACCURACY_M) && now() - f.timeMs <= MAX_AGE_MS
+
+  companion object {
+    const val MAX_ACCURACY_M = 100.0
+    const val MAX_AGE_MS = 30_000L
+  }
 }
 
 /** The car's GNSS through Android Auto (Car API level 3 and up). */

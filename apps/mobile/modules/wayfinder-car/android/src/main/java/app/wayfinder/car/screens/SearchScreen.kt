@@ -28,7 +28,13 @@ class SearchScreen(
   private val api: CarApi,
   private val map: MapScenes,
   private val hint: String,
+  /** Your saved places: what the screen offers before anything is typed, and all it can while driving. */
+  private val saved: List<CarPlace> = emptyList(),
 ) : Screen(carContext) {
+  /** The words last searched for, put back in the box on return so the results beside it make sense. */
+  private var query = ""
+  /** Typed so far but too short to search. */
+  private var tooShort = false
   private var results: List<CarPlace> = emptyList()
   private var loading = false
   private var error: String? = null
@@ -43,7 +49,14 @@ class SearchScreen(
       cancelTyped()
       val q = searchText.trim()
       if (q.isEmpty()) return clear()
-      if (q.length < MIN_TYPED) return
+      if (q.length < MIN_TYPED) {
+        if (results.isEmpty() && !tooShort) {
+          tooShort = true
+          invalidate()
+        }
+        return
+      }
+      tooShort = false
       val later = Runnable {
         typed = null
         search(q)
@@ -75,6 +88,8 @@ class SearchScreen(
     ticket++ // an answer still on its way is for words no longer there
     loading = false
     error = null
+    tooShort = false
+    query = ""
     if (results.isNotEmpty()) {
       results = emptyList()
       show(map, MapScene.Places(results))
@@ -84,6 +99,8 @@ class SearchScreen(
 
   private fun search(q: String) {
     val mine = ++ticket
+    query = q.trim()
+    tooShort = false
     loading = true
     error = null
     invalidate()
@@ -103,18 +120,30 @@ class SearchScreen(
   }
 
   override fun onGetTemplate(): Template {
-    val b = SearchTemplate.Builder(callback).setHeaderAction(Action.BACK).setSearchHint(hint).setShowKeyboardByDefault(true)
+    val b = SearchTemplate.Builder(callback).setHeaderAction(Action.BACK).setSearchHint(hint)
+      // Results already there: the keyboard would only cover them.
+      .setShowKeyboardByDefault(results.isEmpty())
+      .apply { if (query.isNotEmpty()) setInitialSearchText(query) }
     // Only a spinner when there is nothing to show meanwhile.
     if (loading && results.isEmpty()) return b.setLoading(true).build()
     val list = ItemList.Builder()
-    error?.let { list.setNoItemsMessage(it) }
-    results.forEachIndexed { i, p -> list.addItem(row(p.name, p.detail, icon = numberIcon(i + 1)) { screenManager.push(RoutePreviewScreen.forPlace(carContext, api, map, p)) }) }
+    // Nothing searched yet: your saved places, which also work while driving, when typing can't.
+    val shown = if (query.isEmpty() && results.isEmpty() && error == null) saved.take(MAX_ROWS) else results
+    val message = error ?: if (tooShort) TOO_SHORT else if (shown.isEmpty()) NOTHING_YET else null
+    message?.let { list.setNoItemsMessage(it) }
+    shown.forEachIndexed { i, p ->
+      val detail = if (p.saved) listOf(SAVED, p.detail).filter { it.isNotBlank() }.joinToString(" · ") else p.detail
+      list.addItem(row(p.name, detail, icon = numberIcon(i + 1)) { screenManager.push(RoutePreviewScreen.forPlace(carContext, api, map, p)) })
+    }
     return b.setItemList(list.build()).build()
   }
 
   companion object {
     /** Fewer letters than this are too few to search for while typing (submitting searches anyway). */
     const val MIN_TYPED = 3
+    const val TOO_SHORT = "Type at least 3 letters, or press search."
+    const val NOTHING_YET = "Type a place or address."
+    const val SAVED = "Saved place"
 
     /** How long typing must pause before the words are searched for. */
     const val TYPING_PAUSE_MS = 500L

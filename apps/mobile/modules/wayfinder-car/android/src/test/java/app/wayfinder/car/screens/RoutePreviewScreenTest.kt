@@ -44,10 +44,19 @@ class RoutePreviewScreenTest {
     assertEquals("Starting…", (screen.onGetTemplate() as RoutePreviewNavigationTemplate).navigateAction!!.title.text())
   }
 
-  @Test fun explainsWhyThereIsOnlyOneWay() {
-    api.answer("plan", PlanResult(options.take(1), "No other ways fit within your extra time."))
-    val row = (screen.onGetTemplate() as RoutePreviewNavigationTemplate).itemList!!.items[0] as Row
-    assertEquals("No other ways fit within your extra time.", row.texts[1].text())
+  /**
+   * Seen on the head unit: a second text line on the only row left the preview empty, no route and no
+   * Go, so every trip with no explore alternative couldn't be started from the car. One line, always.
+   */
+  @Test fun explainsWhyThereIsOnlyOneWayOnTheRowsOneLine() {
+    val only = Samples.option("r-fast", "Fastest").copy(detail = "12 min · 5.1 km", durationS = 720.0)
+    api.answer("plan", PlanResult(listOf(only), "No other ways fit your extra time."))
+    val t = screen.onGetTemplate() as RoutePreviewNavigationTemplate
+    val row = t.itemList!!.items.single() as Row
+    assertEquals(1, row.texts.size)
+    assertEquals("12 min · 5.1 km · No other ways fit your extra time.", row.texts[0].text())
+    assertEquals(listOf(Triple(0, "12 min".length, 720L)), durationSpans(row))
+    assertEquals("Go", t.navigateAction!!.title.text())
   }
 
   @Test fun saysWhenNoRouteCanBeFound() {

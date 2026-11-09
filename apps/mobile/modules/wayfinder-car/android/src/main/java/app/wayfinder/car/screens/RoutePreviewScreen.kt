@@ -88,10 +88,11 @@ class RoutePreviewScreen(
     val plan = r.getOrElse { return problem(it.message ?: "Couldn’t plan a route. Try again.", canRetry = true) }
     if (plan.options.isEmpty()) return problem("No route found to $destinationName.")
     val list = ItemList.Builder().setOnSelectedListener { select(it) }.setSelectedIndex(selected)
+    // One line of text per row, always: a second line (the note, once) left the car's preview empty,
+    // with no route and no Go, whenever a trip had only the fastest way. The note rides on that line.
     plan.options.forEachIndexed { i, o ->
-      list.addItem(
-        Row.Builder().setTitle(o.title).addText(withDuration(o)).apply { if (i == 0 && plan.note != null) addText(plan.note) }.build(),
-      )
+      val option = if (i == 0 && plan.note != null) o.copy(detail = listOf(o.detail, plan.note).filter { it.isNotBlank() }.joinToString(" · ")) else o
+      list.addItem(Row.Builder().setTitle(o.title).addText(withDuration(option)).build())
     }
     return b
       .setItemList(list.build())

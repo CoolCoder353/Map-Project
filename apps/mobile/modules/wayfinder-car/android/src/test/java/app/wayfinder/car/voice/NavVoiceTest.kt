@@ -108,6 +108,43 @@ class NavVoiceTest {
     assertTrue(shadowOf(voice.tts).isShutdown)
   }
 
+  /** A phone call holds the audio: talking over it is worse than silence. */
+  @Test fun saysNothingWhileAudioFocusIsRefused() {
+    val voice = NavVoice(context)
+    ready(voice)
+    shadowOf(audio).setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_FAILED)
+    voice.speak("Turn left")
+    assertNull(shadowOf(voice.tts).lastSpokenText)
+    assertNull(voice.current)
+  }
+
+  @Test fun saysEveryDirectionAskedForBeforeTheVoiceWasReady() {
+    val voice = NavVoice(context)
+    voice.speak("Head north on Queen Street")
+    voice.speak("In 200 metres, turn left")
+    ready(voice)
+    assertEquals(listOf("Head north on Queen Street", "In 200 metres, turn left"), shadowOf(voice.tts).spokenTextList)
+  }
+
+  @Test fun queuesANewDirectionBehindTheOneBeingSaidRatherThanCuttingItOff() {
+    val voice = NavVoice(context)
+    ready(voice)
+    voice.speak("In 200 metres, turn left")
+    voice.speak("Route updated. Turn right onto Main Street")
+    assertEquals(TextToSpeech.QUEUE_ADD, shadowOf(voice.tts).queueMode)
+    assertTrue(!shadowOf(voice.tts).isStopped)
+  }
+
+  @Test fun fallsBackToAnotherEnglishVoiceWhenTheAustralianOneIsMissing() {
+    val voice = NavVoice(context, createTts = { c, l -> NoAustralianTts(c, l) })
+    ready(voice)
+    assertEquals(java.util.Locale.UK, voice.locale)
+  }
+
+  private class NoAustralianTts(context: android.content.Context, listener: OnInitListener) : TextToSpeech(context, listener) {
+    override fun setLanguage(loc: java.util.Locale?) = if (loc?.country == "AU") LANG_MISSING_DATA else LANG_AVAILABLE
+  }
+
   private class RefusingTts(context: android.content.Context, listener: OnInitListener) : TextToSpeech(context, listener) {
     override fun speak(text: CharSequence?, queueMode: Int, params: Bundle?, utteranceId: String?) = ERROR
   }

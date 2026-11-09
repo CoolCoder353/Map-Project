@@ -36,6 +36,9 @@ object NavTemplates {
   /** What the driving screen says before the phone has its first position for the trip. */
   const val FINDING_YOU = "Finding where you are…"
 
+  /** End, tapped once: a second tap ends the trip, so a slip at speed doesn't. */
+  const val END_CONFIRM = "Tap to end"
+
   /**
    * The turn card's colour: the app's blue, the route line's, so the card and the line ahead read as
    * one; darker at night. White text on either is well over 4.5:1, and a host that disagrees uses
@@ -50,12 +53,17 @@ object NavTemplates {
     onMute: () -> Unit,
     onReport: (() -> Unit)? = null,
     map: MapButtons? = null,
+    /** End was tapped once: the next tap ends the trip. */
+    confirmingEnd: Boolean = false,
+    /** Muted as the driver last asked, before the phone has said so. */
+    muted: Boolean = nav?.muted == true,
   ): NavigationTemplate {
     val arrived = nav?.status == NavStatus.ARRIVED
+    // Report first and End last, with mute between: a slip from one doesn't do the other.
     val strip = ActionStrip.Builder()
-      .addAction(Action.Builder().setIcon(icons.sound(nav?.muted == true)).setOnClickListener(onMute).build())
       .apply { if (onReport != null && nav != null) addAction(Action.Builder().setTitle("Report").setOnClickListener(onReport).build()) }
-      .addAction(Action.Builder().setTitle(if (arrived) "Done" else "End").setOnClickListener(onEnd).build())
+      .addAction(Action.Builder().setIcon(icons.sound(muted)).setOnClickListener(onMute).build())
+      .addAction(Action.Builder().setTitle(if (arrived) "Done" else if (confirmingEnd) END_CONFIRM else "End").setOnClickListener(onEnd).build())
       .build()
     val b = NavigationTemplate.Builder().setActionStrip(strip).setBackgroundColor(TURN_CARD)
     if (map != null) {
@@ -77,7 +85,8 @@ object NavTemplates {
       )
       nav.rerouting -> b.setNavigationInfo(MessageInfo.Builder("Finding a new route…").build())
       nav.error != null -> b.setNavigationInfo(MessageInfo.Builder(nav.error).build())
-      nav.status == NavStatus.OFF_ROUTE -> b.setNavigationInfo(MessageInfo.Builder("Off route").build())
+      nav.status == NavStatus.OFF_ROUTE ->
+        b.setNavigationInfo(MessageInfo.Builder("Off route").setText(nav.destinationName?.let { "A new way to $it is on its way" } ?: "A new route is on its way").build())
       // Not a spinner: one that never stops reads as the car app hanging.
       nav.status == NavStatus.STARTING && nav.maneuver == null ->
         b.setNavigationInfo(MessageInfo.Builder(FINDING_YOU).apply { nav.destinationName?.let { setText("To $it") } }.build())

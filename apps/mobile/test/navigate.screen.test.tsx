@@ -87,6 +87,12 @@ it('waits for a position, then shows the next turn, distance and time left', asy
   expect(screen.getByText('5.4 km to go')).toBeOnTheScreen();
 });
 
+it('says when voice directions are off, as muting is kept from trip to trip (P19)', async () => {
+  mockNav.muted = true;
+  await renderScreen(<Navigate />);
+  expect(screen.getByText('Voice directions are off')).toBeOnTheScreen();
+});
+
 it('says when you’ll arrive, by the clock', async () => {
   jest.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-28T09:00:00Z'));
   mockNav.state = { status: 'navigating', nextInstruction: { sign: 0, text: 'Continue' }, distanceToNextManeuverM: 900, remainingDurationS: 600, remainingDistanceM: 5400 };

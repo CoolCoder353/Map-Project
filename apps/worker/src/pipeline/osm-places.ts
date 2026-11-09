@@ -63,7 +63,8 @@ const CATEGORY_LABEL: Record<PoiCategory, string> = {
 
 export function poiCategory(tags: Record<string, unknown>): PoiCategory | null {
   const t = (k: string) => (typeof tags[k] === 'string' ? (tags[k] as string) : undefined);
-  if (t('tourism') === 'viewpoint') return 'viewpoint';
+  // A bird hide or wader roost is often tagged as a viewpoint too; it isn't a lookout to drive to.
+  if (t('tourism') === 'viewpoint') return t('leisure') === 'bird_hide' || /bird ?hide|roost/i.test(t('name') ?? '') ? null : 'viewpoint';
   if (t('natural') === 'peak' || t('natural') === 'volcano') return 'peak';
   if (t('waterway') === 'waterfall' || t('natural') === 'waterfall') return 'waterfall';
   if (t('natural') === 'beach') return 'beach';

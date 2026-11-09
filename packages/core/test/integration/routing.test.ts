@@ -538,3 +538,31 @@ describe('the speed limit where a car is, with no route', () => {
     expect(await routing.speedLimitAt(limitDeps(none), { at })).toEqual({ kmh: null, estimated: false, road: null });
   });
 });
+
+describe('quickestFirst', () => {
+  const r = (id: string, durationS: number, kind: 'fastest' | 'explore') =>
+    ({ id, kind, mode: 'car', durationS, distanceM: 1000, extraDurationS: 0, geometry: [], instructions: [], viaPoints: [], novelty: { totalKm: 1, newKm: 1, noveltyPct: 100 } }) as never;
+
+  it('makes an explore route that finished quicker the fastest, and drops the engine’s slower one', () => {
+    const out = routing.quickestFirst(r('engine', 53 * 60, 'fastest'), [r('e1', 60 * 60, 'explore'), r('e2', 52 * 60, 'explore')]);
+    expect(out.fastest).toMatchObject({ id: 'e2', kind: 'fastest', extraDurationS: 0 });
+    expect(out.explore.map((x) => [x.id, x.extraDurationS])).toEqual([['e1', 8 * 60]]);
+  });
+
+  it('leaves them as they are when the fastest is fastest', () => {
+    const out = routing.quickestFirst(r('engine', 50 * 60, 'fastest'), [r('e1', 55 * 60, 'explore')]);
+    expect(out.fastest.id).toBe('engine');
+    expect(out.explore[0]!.extraDurationS).toBe(5 * 60);
+  });
+});
+
+describe('withoutDuplicates', () => {
+  const at = (name: string, lon: number) => ({ name, location: [lon, -27.47] as LngLat });
+  it('lists one place mapped twice once, by name or name and kind, when close together', () => {
+    const out = routing.withoutDuplicates([at('Whites Hill Lookout', 153.07), at('Whites Hill', 153.071), at('Whites Hill Reserve', 153.2), at('Whitesands', 153.0705)], 10);
+    expect(out.map((o) => o.name)).toEqual(['Whites Hill Lookout', 'Whites Hill Reserve', 'Whitesands']);
+  });
+  it('stops at the limit', () => {
+    expect(routing.withoutDuplicates([at('A', 1), at('B', 2), at('C', 3)], 2)).toHaveLength(2);
+  });
+});

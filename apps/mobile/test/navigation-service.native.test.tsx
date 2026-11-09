@@ -4,7 +4,7 @@ import { timerHold } from '../src/lib/keepTimers';
 import { startNavigationLocation } from '../src/nav/navigationLocation';
 import { waitFor } from '@testing-library/react-native';
 import * as Speech from 'expo-speech';
-import { ARRIVED_END_MS, FIRST_FIX_WAIT_MS, navigation, REROUTE_RETRY_MS, REROUTE_TIMEOUT_MS, TRAVELLED_MAX_POINTS, TURNAROUND_GRACE_MS } from '../src/nav/navigationService';
+import { ARRIVED_END_MS, FIRST_FIX_WAIT_MS, navigation, RECORD_MAX_ACCURACY_M, REROUTE_RETRY_MAX_MS, REROUTE_RETRY_MS, REROUTE_TIMEOUT_MS, TRAVELLED_MAX_POINTS, TURNAROUND_GRACE_MS, viaStillWorthIt } from '../src/nav/navigationService';
 import { isNavigationRecording } from '../src/tracking/navigationRecording';
 import { fake, resetFakes, route } from './fakes';
 
@@ -205,9 +205,9 @@ it('follows fixes from the location service, skipping ones the GPS watch already
   navigation.start(route());
   await waitFor(() => expect(mockOnFix).not.toBeNull());
   mockOnFix!(fix(153, -27.4, 5000));
-  mockFeed([fix(153, -27.4, 5000) as never, fix(153.01, -27.4, 6000) as never]);
+  mockFeed([fix(153, -27.4, 5000) as never, fix(153.0002, -27.4, 6000) as never]);
   expect(mockAppend).toHaveBeenCalledTimes(2);
-  expect(navigation.getSnapshot().position).toEqual([153.01, -27.4]);
+  expect(navigation.getSnapshot().position).toEqual([153.0002, -27.4]);
 });
 
 it('keeps the last position but skips recording a fix the route engine could not match', async () => {
@@ -316,7 +316,7 @@ it('drops a GPS watch fix the location service already gave', async () => {
   mockOnFix!(fix(153, -27.4, 5000));
   expect(mockAppend).toHaveBeenCalledTimes(1);
   // A newer one from the watch is followed as usual.
-  mockOnFix!(fix(153.01, -27.4, 6000));
+  mockOnFix!(fix(153.0002, -27.4, 6000));
   expect(mockAppend).toHaveBeenCalledTimes(2);
 });
 
@@ -500,8 +500,11 @@ it('keeps the road driven, off the route too, and your speed', async () => {
   mockResults.push({ state: { status: 'offRoute' }, events: [] });
   mockOnFix!({ timestamp: 3000, coords: { longitude: 153.001, latitude: -27.4, accuracy: 5, speed: 12.5, heading: 90 } });
   expect(navigation.getSnapshot()).toMatchObject({ travelled: [[153, -27.4], [153.001, -27.4]], speedMps: 12.5 });
-  // A phone that gives no speed (or a nonsense one) shows none.
-  mockOnFix!({ timestamp: 4000, coords: { longitude: 153.002, latitude: -27.4, accuracy: 5, speed: -1, heading: 90 } });
+  // A phone that gives no speed (or a nonsense one): worked out from how far it went since the last fix.
+  mockOnFix!({ timestamp: 4000, coords: { longitude: 153.0012, latitude: -27.4, accuracy: 5, speed: -1, heading: 90 } });
+  expect(navigation.getSnapshot().speedMps).toBeCloseTo(19.7, 0);
+  // With the last fix too long ago to say, none.
+  mockOnFix!({ timestamp: 60_000, coords: { longitude: 153.0014, latitude: -27.4, accuracy: 5, speed: null, heading: 90 } });
   expect(navigation.getSnapshot().speedMps).toBeNull();
   navigation.stop();
   expect(navigation.getSnapshot().travelled).toEqual([]);
@@ -623,7 +626,8 @@ it('told to turn around but driven on well past it, asks again without waiting o
     mockOnFix!(fix(153.2216, -27.56, 11000));
     await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-onward'));
     expect(fake.api.callsTo('POST api/routes/fastest')[1]!.body).toMatchObject({ from: [153.2216, -27.56] });
-    expect(Speech.speak).toHaveBeenLastCalledWith('Route updated', expect.anything());
+    // Says what to do next, not just that the route changed.
+    expect(Speech.speak).toHaveBeenLastCalledWith('Route updated. Head north on Queen Street', expect.anything());
   } finally {
     now.mockRestore();
   }
@@ -735,7 +739,7 @@ it('without the car’s heading, a U-turn is just the best way: no waiting, no �
   mockOnFix!(still(153.2, 1000));
   await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-uturn'));
   expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).not.toHaveProperty('heading');
-  expect(Speech.speak).toHaveBeenLastCalledWith('Route updated', expect.anything());
+  expect(Speech.speak).toHaveBeenLastCalledWith('Route updated. Make a U-turn onto Ironbark Street', expect.anything());
   mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2, -27.56], to: [153.25, -27.56], remainingVia: [] }] });
   mockOnFix!(still(153.2001, 2000));
   await waitFor(() => expect(fake.api.callsTo('POST api/routes/fastest')).toHaveLength(2));
@@ -786,4 +790,86 @@ it('keeps the way the car was going while it is stopped, not the 0 the phone rep
   expect(navigation.getSnapshot().headingDeg).toBe(182);
   mockOnFix!({ timestamp: 2000, coords: { longitude: 153.2527, latitude: -27.5601, accuracy: 5, speed: 0, heading: 0 } });
   expect(navigation.getSnapshot().headingDeg).toBe(182);
+});
+
+describe('what counts as driven', () => {
+  it('records neither a jump (a bad fix, or the phone finding itself 30 km away) nor joins the trail across it', async () => {
+    navigation.start(route());
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    mockOnFix!(fix(153.2, -27.56, 1000));
+    mockOnFix!(fix(153.2002, -27.56, 2000));
+    expect(mockAppend).toHaveBeenCalledTimes(2);
+    // Cleveland to the CBD in a second.
+    mockOnFix!(fix(153.0251, -27.4698, 3000));
+    expect(mockAppend).toHaveBeenCalledTimes(2);
+    expect(navigation.getSnapshot().travelled).toEqual([[153.0251, -27.4698]]);
+    // Driving on from there counts again.
+    mockOnFix!(fix(153.0253, -27.4698, 4000));
+    expect(mockAppend).toHaveBeenCalledTimes(3);
+  });
+
+  it('doesn’t record a fix unsure of where it is, though the arrow still follows it', async () => {
+    navigation.start(route());
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    mockOnFix!({ timestamp: 1000, coords: { longitude: 153.2, latitude: -27.56, accuracy: RECORD_MAX_ACCURACY_M + 30, speed: 10, heading: 90 } });
+    expect(mockAppend).not.toHaveBeenCalled();
+    expect(navigation.getSnapshot().position).toEqual([153.2, -27.56]);
+  });
+});
+
+describe('leaving an explore route', () => {
+  it('keeps detour points on the way, and drops ones that would drag you back across town', () => {
+    const from: [number, number] = [153.0251, -27.4698]; // Brisbane CBD
+    const to: [number, number] = [152.966, -27.62]; // Forest Lake
+    const onTheWay: [number, number] = [153.0, -27.55];
+    const cleveland: [number, number] = [153.265, -27.525];
+    expect(viaStillWorthIt(from, to, [cleveland, onTheWay])).toEqual([onTheWay]);
+    expect(viaStillWorthIt(from, to, [])).toEqual([]);
+  });
+
+  it('after a missed turn, routes on without the far detour points, as the fastest way once none are left', async () => {
+    fake.api.on({ 'POST api/routes/fastest': () => route({ id: 'r-new' }) });
+    navigation.start(route({ kind: 'explore' }));
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    mockOnFix!(fix(153.0251, -27.4698, 1000));
+    mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.0251, -27.4698], to: [152.966, -27.62], remainingVia: [[153.265, -27.525]] }] });
+    mockOnFix!(fix(153.0252, -27.4698, 2000));
+    await waitFor(() => expect(navigation.getSnapshot().route?.id).toBe('r-new'));
+    expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).toMatchObject({ via: [] });
+    expect(navigation.getSnapshot().route?.kind).toBe('fastest');
+  });
+});
+
+it('waits longer each time a new route can’t be had, so a long outage isn’t asked every 15 s', async () => {
+  fake.api.on({ 'POST api/routes/fastest': () => Promise.reject(new Error('offline')) });
+  const realNow = Date.now.bind(Date);
+  let ahead = 0;
+  const now = jest.spyOn(Date, 'now').mockImplementation(() => realNow() + ahead);
+  const asked = () => fake.api.callsTo('POST api/routes/fastest').length;
+  let ts = 1000;
+  const offRouteFix = () => {
+    mockResults.push({ state: { status: 'offRoute' }, events: [] });
+    mockOnFix!(fix(153.2, -27.4, (ts += 1000)));
+  };
+  try {
+    navigation.start(route());
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    mockResults.push({ state: { status: 'offRoute' }, events: [{ type: 'offRoute', from: [153.2, -27.4], to: [153.1, -27.5], remainingVia: [] }] });
+    mockOnFix!(fix(153.2, -27.4, ts));
+    await waitFor(() => expect(navigation.getSnapshot().error).toMatch(/Couldn’t get a new route/));
+    ahead = REROUTE_RETRY_MS;
+    offRouteFix();
+    await waitFor(() => expect(asked()).toBe(2));
+    await waitFor(() => expect(navigation.getSnapshot().rerouting).toBe(false));
+    // Two failures in a row: 15 s more isn't enough now, 30 s is.
+    ahead += REROUTE_RETRY_MS;
+    offRouteFix();
+    expect(asked()).toBe(2);
+    ahead += REROUTE_RETRY_MS;
+    offRouteFix();
+    await waitFor(() => expect(asked()).toBe(3));
+    expect(REROUTE_RETRY_MAX_MS).toBeGreaterThan(REROUTE_RETRY_MS);
+  } finally {
+    now.mockRestore();
+  }
 });

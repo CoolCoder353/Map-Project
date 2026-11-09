@@ -1,5 +1,6 @@
 /// <reference types="jest" />
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { useState } from 'react';
 import Plan from '../app/(tabs)/plan';
 import { takeRouteToNavigate } from '../src/lib/plannedStore';
 import { apiError, fake, place, renderScreen, resetFakes, route } from './fakes';
@@ -270,6 +271,8 @@ describe('saving a destination', () => {
     await renderScreen(<Plan />);
     await chooseDestination();
     await fireEvent.press(await screen.findByRole('button', { name: 'Other…' }));
+    // Starts with the place's own name, to keep or change.
+    expect(screen.getByLabelText('Name for this place')).toHaveDisplayValue('Gumdale State School');
     await fireEvent.changeText(screen.getByLabelText('Name for this place'), '  Gym ');
     await fireEvent.press(screen.getByRole('button', { name: 'Save' }));
     expect(await screen.findByText(/Saved as Gym/)).toBeOnTheScreen();
@@ -293,5 +296,55 @@ describe('saving a destination', () => {
     await fireEvent.press(await screen.findByText('Home'));
     await waitFor(() => expect(screen.getByLabelText('Destination')).toHaveDisplayValue('Home'));
     expect(screen.queryByRole('button', { name: 'Other…' })).toBeNull();
+  });
+});
+
+/** Plan inside a parent the test can re-render, as a new position or settings would. */
+let bump: () => void = () => undefined;
+function Host() {
+  const [, setN] = useState(0);
+  bump = () => setN((n) => n + 1);
+  return <Plan />;
+}
+
+describe('the 9 November phone run', () => {
+  it('moves “Your location” with you and plans again from where you are now (P14)', async () => {
+    await renderScreen(<Host />);
+    await chooseDestination();
+    await screen.findByText('Explore 1');
+    mockHere = [153.2, -27.52];
+    await act(async () => bump());
+    await waitFor(() => expect(fake.api.callsTo('POST api/routes/explore').at(-1)!.body).toMatchObject({ from: [153.2, -27.52] }));
+    expect(screen.getByLabelText('Starting point')).toHaveDisplayValue('Your location');
+  });
+
+  it('never offers to save “Your location” or a whole suburb (P81, P11)', async () => {
+    fake.api.on({ 'GET api/search': () => ({ results: [place({ id: 'sub', name: 'Mount Coot-tha', kind: 'suburb', typeLabel: 'Suburb', context: 'Brisbane QLD' })] }) });
+    await renderScreen(<Plan />);
+    const box = screen.getByLabelText('Destination');
+    await fireEvent(box, 'focus');
+    await fireEvent.changeText(box, 'coot');
+    await fireEvent.press(await screen.findByText('Mount Coot-tha'));
+    await waitFor(() => expect(screen.getByLabelText('Destination')).toHaveDisplayValue('Mount Coot-tha'));
+    expect(screen.queryByRole('button', { name: 'Other…' })).toBeNull();
+  });
+
+  it('takes a new extra-time default from Settings without a restart (P92)', async () => {
+    fake.user = user(true);
+    await renderScreen(<Host />);
+    await chooseDestination();
+    await screen.findByText('Explore 1');
+    fake.user = { ...fake.user!, settings: { ...fake.user!.settings, exploreBudgetMin: 30 } };
+    await act(async () => bump());
+    await waitFor(() => expect(fake.api.callsTo('POST api/routes/explore').at(-1)!.body).toMatchObject({ budgetMin: 30 }));
+  });
+
+  it('keeps Round trip’s travel mode to itself (P82)', async () => {
+    fake.api.on({ 'POST api/routes/roundtrip': () => ({ routes: [route({ id: 'loop1', kind: 'roundtrip' })] }) });
+    await renderScreen(<Plan />);
+    await fireEvent.press(screen.getByRole('radio', { name: 'Round trip' }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Walk' }));
+    await fireEvent.press(screen.getByRole('radio', { name: 'Directions' }));
+    expect(screen.getByRole('radio', { name: 'Drive' })).toBeChecked();
   });
 });

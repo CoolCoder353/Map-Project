@@ -32,7 +32,7 @@ class HomeScreenTest {
     assertTrue((screen.onGetTemplate() as PlaceListNavigationTemplate).isLoading)
     api.answer("status", Samples.status())
     val t = screen.onGetTemplate() as PlaceListNavigationTemplate
-    assertEquals(listOf("Search", "Planned routes", "Discover nearby", "Test drive"), t.itemList!!.items.map { (it as Row).title.text() })
+    assertEquals(listOf("Search", "Planned routes", "Discover nearby"), t.itemList!!.items.map { (it as Row).title.text() })
     assertEquals(MapScene.Overview(Samples.status().here), scenes.shown.last())
     assertNotNull(status)
   }
@@ -82,7 +82,7 @@ class HomeScreenTest {
     api.pushNav(Samples.nav().copy(remainingDistanceM = 3000.0))
     assertEquals("not redrawn on every fix", shown, controller.templatesReturned.size)
     api.pushNav(null)
-    assertEquals(listOf("Search", "Planned routes", "Discover nearby", "Test drive"), titles(controller.templatesReturned.last()))
+    assertEquals(listOf("Search", "Planned routes", "Discover nearby"), titles(controller.templatesReturned.last()))
   }
 
   @Test fun offersTheWayBackEvenWhenTheServerCantBeReached() {
@@ -110,20 +110,11 @@ class HomeScreenTest {
     assertEquals(listOf("status", "status"), api.calls)
     assertTrue("waits for the new answer", (screen.onGetTemplate() as PlaceListNavigationTemplate).isLoading)
     api.answer("status", Samples.status())
-    assertEquals(listOf("Search", "Planned routes", "Discover nearby", "Test drive"), titles(screen.onGetTemplate()))
+    assertEquals(listOf("Search", "Planned routes", "Discover nearby"), titles(screen.onGetTemplate()))
   }
 
-  @Test fun theTestDriveRowStartsAPretendTrip() {
-    var drives = 0
-    val home = HomeScreen(carContext, api, scenes, onTestDrive = { drives++ }) { }
-    ScreenController(home).moveToState(Lifecycle.State.STARTED)
-    api.answer("status", Samples.status())
-    ((home.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.items.last() as Row).click()
-    assertEquals(1, drives)
-  }
-
-  @Test fun noTestDriveRowWhileARealTripIsRunning() {
-    api.navigation = Samples.nav()
+  /** A pretend trip on a real dashboard confused drivers (C35); the car's auto drive still starts one. */
+  @Test fun noTestDriveRow() {
     open()
     api.answer("status", Samples.status())
     assertFalse("Test drive" in titles(screen.onGetTemplate()))
@@ -138,7 +129,7 @@ class HomeScreenTest {
     assertEquals(listOf(R.drawable.wf_navigation, R.drawable.wf_search, R.drawable.wf_route, R.drawable.wf_explore), during)
     api.pushNav(null)
     val after = (screen.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.items.map { (it as Row).image!!.icon!!.resId }
-    assertEquals(R.drawable.wf_car, after.last())
+    assertEquals(R.drawable.wf_explore, after.last())
     assertEquals("one icon each", after.size, after.toSet().size)
   }
 
@@ -146,9 +137,9 @@ class HomeScreenTest {
     open()
     api.answer("status", Samples.status(saved = listOf(Samples.saved("Home"), Samples.saved("Work"))))
     val t = screen.onGetTemplate() as PlaceListNavigationTemplate
-    assertEquals(listOf("Home", "Saved places", "Search", "Planned routes", "Discover nearby", "Test drive"), titles(t))
+    assertEquals(listOf("Home", "Saved places", "Search", "Planned routes", "Discover nearby"), titles(t))
     val home = t.itemList!!.items[0] as Row
-    assertEquals("12 Moselle Drive, Thornlands · 25 km away", home.texts.single().text())
+    assertEquals(Samples.saved("Home").detail, home.texts.single().text())
     assertEquals(R.drawable.wf_home, home.image!!.icon!!.resId)
     home.click()
     val pushed = carContext.getCarService(TestScreenManager::class.java).screensPushed.last()
@@ -160,17 +151,24 @@ class HomeScreenTest {
   @Test fun savedPlacesOpenAsAListToPickFrom() {
     open()
     api.answer("status", Samples.status(saved = listOf(Samples.saved("Gym"), Samples.saved("Work"))))
-    assertEquals("no Home saved: no Home row", listOf("Saved places", "Search", "Planned routes", "Discover nearby", "Test drive"), titles(screen.onGetTemplate()))
+    assertEquals("no Home saved: no Home row", listOf("Saved places", "Search", "Planned routes", "Discover nearby"), titles(screen.onGetTemplate()))
     ((screen.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.items[0] as Row).click()
     val list = carContext.getCarService(TestScreenManager::class.java).screensPushed.last()
     ScreenController(list).moveToState(Lifecycle.State.STARTED)
     assertEquals(listOf("Gym", "Work"), titles(list.onGetTemplate()))
   }
 
+  /** The phone says which saved place is Home, however it was written ("Home 🏠", "My house"). */
+  @Test fun findsHomeByWhatThePhoneSaysNotOnlyItsName() {
+    open()
+    api.answer("status", Samples.status(saved = listOf(Samples.saved("My house").copy(home = true), Samples.saved("Work"))))
+    assertEquals(listOf("My house", "Saved places", "Search", "Planned routes", "Discover nearby"), titles(screen.onGetTemplate()))
+  }
+
   @Test fun onlyHomeSavedNeedsNoSavedPlacesRow() {
     open()
     api.answer("status", Samples.status(saved = listOf(Samples.saved("home"))))
-    assertEquals(listOf("home", "Search", "Planned routes", "Discover nearby", "Test drive"), titles(screen.onGetTemplate()))
+    assertEquals(listOf("home", "Search", "Planned routes", "Discover nearby"), titles(screen.onGetTemplate()))
   }
 
   @Test fun neverMoreThanSixRowsDuringATrip() {

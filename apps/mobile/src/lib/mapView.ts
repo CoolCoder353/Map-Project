@@ -9,3 +9,8 @@ export function rememberMapView(bounds: [number, number, number, number], zoom: 
 }
 
 export const lastMapView = () => last;
+
+/** For tests: as if no map had been looked at yet. */
+export const forgetMapView = () => {
+  last = null;
+};

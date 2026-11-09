@@ -54,6 +54,16 @@ describe('Coverage', () => {
     expect(fake.api.callsTo('GET api/coverage')[0]!.query).toEqual({ bbox: '152.90000,-27.60000,180.00000,-27.30000', zoom: 12.5, format: 'geojson' });
   });
 
+  it('with tracking off, says so in the app’s own words and opens Settings (P38, P39)', async () => {
+    fake.user = { ...fake.user!, settings: { ...fake.user!.settings, trackingEnabled: false } };
+    fake.api.on({ 'GET api/coverage/stats': () => coverageStats(), 'GET api/coverage': () => ({ type: 'FeatureCollection', features: [] }) });
+    await renderScreen(<Coverage />);
+    expect(await screen.findByText(/Turn it on in Settings/)).toBeOnTheScreen();
+    expect(screen.queryByText(/Android app/)).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Open Settings' }));
+    expect(fake.router.navigate).toHaveBeenCalledWith('/settings');
+  });
+
   it('says when the roads on the map couldn’t be loaded, and tries again', async () => {
     let fail = true;
     fake.api.on({
@@ -134,8 +144,10 @@ describe('Discover', () => {
     await fireEvent.press(screen.getByRole('radio', { name: 'Walk' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Find places' }));
     expect(await screen.findByText('Mount Coot-tha Lookout')).toBeOnTheScreen();
-    expect(screen.getByText('80% unexplored area')).toBeOnTheScreen();
-    expect(screen.queryByText('10% unexplored area')).toBeNull();
+    expect(screen.getByText('80% of roads around it new to you')).toBeOnTheScreen();
+    expect(screen.queryByText('10% of roads around it new to you')).toBeNull();
+    // The chip speaks of roads: coverage is roads travelled.
+    expect(screen.queryByText(/unexplored area/)).toBeNull();
     expect(fake.api.callsTo('GET api/discover')[0]!.query).toEqual({ lon: 153.15, lat: -27.49, mode: 'foot', maxMinutes: 35, categories: 'viewpoint', limit: 25 });
     expect(fake.map.fitTo).toHaveBeenCalled();
     // A place found is somewhere to go: Plan works out the trip there, from the same start, walking.
@@ -237,7 +249,7 @@ describe('Trips', () => {
     await renderScreen(<Trips />);
     expect(await screen.findByText('3 new roads')).toBeOnTheScreen();
     expect(screen.getByText('1 new road')).toBeOnTheScreen();
-    expect(screen.getByText('Walk, navigated · 30 min')).toBeOnTheScreen();
+    expect(screen.getByText('Walk, with directions · 30 min')).toBeOnTheScreen();
     await fireEvent.press(screen.getAllByRole('button')[0]!);
     expect(fake.router.push).toHaveBeenCalledWith('/trip/t-1');
   });

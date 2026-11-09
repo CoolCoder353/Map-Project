@@ -63,7 +63,10 @@ service. The only outside download is the OpenStreetMap extract, fetched by the 
    way, in `pieces`, with each metre counted once in `length_m`), the snapped line in
    `trips.matched_geometry`, and roads new to the person in `trips.new_roads`. Oldest trips go
    first, so a road counts as new for the trip that first travelled it. Trips that can't be
-   matched (off-road) keep their raw line and count no road.
+   matched (off-road) keep their raw line and count no road, and so does a match more than 1.5
+   times the recorded line plus 300 m (`plausibleMatch`): sparse or jumping fixes let the engine
+   wander the street grid between them (a 1.6 km drive once matched 11.5 km and 185 roads). The
+   phone records no fix less sure than 50 m, nor a jump faster than 70 m/s (`navigationService.ts`).
 5. `GET /api/coverage` draws `visited_ways` in the map view; `GET /api/coverage/stats` counts
    kilometres of road.
 

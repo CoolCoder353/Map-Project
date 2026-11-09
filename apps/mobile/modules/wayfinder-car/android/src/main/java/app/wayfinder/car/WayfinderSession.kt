@@ -39,7 +39,9 @@ class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared))
     // Asked for now, not only by Home: a trip already running puts the driving screen over Home first.
     val styles = MapStyles(api, map::setStyles)
     styles.ensure()
-    val coordinator = NavigationCoordinator(carContext, api, map, ManeuverIcons(carContext), map, styles::ensure, map)
+    val coordinator = NavigationCoordinator(carContext, api, map, ManeuverIcons(carContext), map, styles::ensure, map) {
+      lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+    }
     openDirections = coordinator::openDirections
     // The car's own position, for when the phone's goes quiet (see CarLocation).
     // With no trip, the home screen's map follows the car on these, else on the phone's GPS.
@@ -67,7 +69,7 @@ class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared))
     requests = navigate
     // "Navigate to ..." that opened the app: once Home is on the stack, so the preview goes on top of it.
     Handler(Looper.getMainLooper()).post { navigate.handle(intent) }
-    return HomeScreen(carContext, api, map, onDrive = coordinator::showDrive, onTestDrive = coordinator::startTestDrive, fixes = idleFixes::listen, onStatus = styles::use)
+    return HomeScreen(carContext, api, map, onDrive = coordinator::showDrive, fixes = idleFixes::listen, onStatus = styles::use)
   }
 
   /** A tap on the navigation notification, or "Navigate to ..." while the car app is already open. */

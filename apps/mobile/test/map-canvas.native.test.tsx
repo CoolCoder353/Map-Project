@@ -2,13 +2,16 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
 import { createRef } from 'react';
-import { FOLLOW_ZOOM, MapCanvas, type MapCanvasHandle } from '../src/map/MapCanvas';
-import { lastMapView } from '../src/lib/mapView';
+import { FOLLOW_ZOOM, MAP_LABEL, MapCanvas, type MapCanvasHandle, MINE_ZOOM, NEARBY_ZOOM } from '../src/map/MapCanvas';
+import { forgetMapView, lastMapView } from '../src/lib/mapView';
 import { route } from './fakes';
 
 let mockServer = 'https://maps.example.test';
 jest.mock('../src/lib/server', () => ({ getServerUrl: async () => mockServer }));
-jest.mock('expo-location', () => ({ getForegroundPermissionsAsync: jest.fn(async () => ({ granted: false })) }));
+jest.mock('expo-location', () => ({
+  getForegroundPermissionsAsync: jest.fn(async () => ({ granted: false })),
+  getLastKnownPositionAsync: jest.fn(async () => ({ coords: { longitude: 153.25, latitude: -27.52 } })),
+}));
 const mockCamera = { fitBounds: jest.fn(), flyTo: jest.fn() };
 const mockSources: Record<string, { data: GeoJSON.FeatureCollection; onPress?: (e: unknown) => void }> = {};
 let mockMapProps: Record<string, unknown> = {};
@@ -222,4 +225,37 @@ it('treats a half-typed server address as no server', async () => {
   mockServer = 'https://';
   await render(<MapCanvas />);
   expect(await screen.findByText(/No server set/)).toBeOnTheScreen();
+});
+
+describe('finding yourself on a map that isn’t following you', () => {
+  it('opens on where you are rather than the whole country, with a plain label', async () => {
+    jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    forgetMapView();
+    try {
+      await render(<MapCanvas />);
+      await screen.findByTestId('native-map');
+      expect(mockMapProps.accessibilityLabel).toBe(MAP_LABEL);
+      // Only where no map has been looked at yet this run.
+      await waitFor(() => expect(mockCamera.flyTo).toHaveBeenCalledWith({ center: [153.25, -27.52], zoom: NEARBY_ZOOM, duration: 0 }));
+    } finally {
+      jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValue({ granted: false } as never);
+    }
+  });
+
+  it('has a button that goes to where you are', async () => {
+    jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValue({ granted: true } as never);
+    try {
+      await render(<MapCanvas routes={[route()]} />);
+      await fireEvent.press(await screen.findByRole('button', { name: 'Show my location' }));
+      await waitFor(() => expect(mockCamera.flyTo).toHaveBeenCalledWith({ center: [153.25, -27.52], zoom: MINE_ZOOM, duration: 600 }));
+    } finally {
+      jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValue({ granted: false } as never);
+    }
+  });
+
+  it('has none without location permission', async () => {
+    await render(<MapCanvas />);
+    await screen.findByTestId('native-map');
+    expect(screen.queryByRole('button', { name: 'Show my location' })).toBeNull();
+  });
 });

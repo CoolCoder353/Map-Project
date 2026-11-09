@@ -48,6 +48,13 @@ class NavigateIntentsTest {
     ).forEach { assertEquals(it, NavigateRequest.Malformed, parse(it)) }
   }
 
+  /** What many apps send for Google Maps (C76). */
+  @Test fun readsGoogleNavigationLinks() {
+    assertEquals(NavigateRequest.At(LngLat(lon = 153.03, lat = -27.47), null), parse("google.navigation:q=-27.47,153.03"))
+    assertEquals(NavigateRequest.Named("Mt Coot-tha Lookout"), parse("google.navigation:q=Mt+Coot-tha+Lookout&mode=d"))
+    assertEquals(NavigateRequest.Malformed, parse("google.navigation:mode=d"))
+  }
+
   @Test fun otherSchemesAndMissingDataAreMalformed() {
     assertEquals(NavigateRequest.Malformed, parse("https://example.com/-27.47,153.03"))
     assertEquals(NavigateRequest.Malformed, NavigateIntents.parse(Intent(CarContext.ACTION_NAVIGATE)))

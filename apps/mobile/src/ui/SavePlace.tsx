@@ -22,7 +22,8 @@ export function SavePlace({ place }: { place: ChosenPlace }) {
   const t = useTheme();
   const queries = useQueryClient();
   const [naming, setNaming] = useState(false);
-  const [name, setName] = useState('');
+  // Starts with the place's own name ("Bunnings Warehouse"), to keep or change.
+  const [name, setName] = useState(place.name);
   const [busy, setBusy] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedPlace | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -75,3 +76,11 @@ export function SavePlace({ place }: { place: ChosenPlace }) {
 
 /** A place chosen from search that is already one of your saved places. */
 export const isSavedPlace = (p: ChosenPlace) => p.description.startsWith('Saved place');
+
+const AREAS = new Set(['suburb', 'locality', 'city', 'town', 'village', 'hamlet', 'neighbourhood', 'state', 'region']);
+
+/**
+ * Whether to offer saving [p] as Home, Work or another place: not where the phone is ("Your
+ * location" moves with it), not one already saved, and not a whole suburb or town.
+ */
+export const canSavePlace = (p: ChosenPlace) => !p.current && !isSavedPlace(p) && !AREAS.has((p.description.split(' · ')[0] ?? '').trim().toLowerCase());
