@@ -110,6 +110,9 @@ Results are recorded in [live-stack-results.md](live-stack-results.md).
 
 ## Android Auto (Desktop Head Unit)
 
+To run these, use the device harness on a phone: the first run's steps are in
+[todo.md](todo.md#first-run-of-the-device-harness-on-a-phone-start-here-for-any-android-auto-check).
+
 **Not run yet.** The car app is built and its automated tests pass (`pnpm test:android`,
 `pnpm test:mobile`, `carModule.test.ts`), but no head unit or car was available, so nothing below
 has been ticked. Run it against a release APK on a real phone (build-android.md, "Trying it in a

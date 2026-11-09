@@ -5,6 +5,41 @@ picked then are done (see verification.md). Each has what users see today, where
 the code, and a rough size. Line numbers are as of that date. Take an item
 off this list when it ships, and record it in [verification.md](verification.md).
 
+## First run of the device harness on a phone (start here for any Android Auto check)
+
+- **Today:** `pnpm device` (development.md, "Device harness") is built, tested and documented, the
+  server has test accounts (deployed 2026-11-09) and app 0.6.1, which it needs, is on Play's
+  internal track. It has never run on a real phone or the head unit. Every Android Auto check below
+  waits on this.
+- **Needs from the phone's owner, before Claude starts:**
+  1. A Wayfinder account for Claude on `maps.coolcodertech.com`, made an admin, with **Test
+     account** switched on on its `/admin` user page. They sign it in; Claude never handles its
+     password.
+  2. The phone on Wayfinder 0.6.1 (versionCode 17) from internal testing, plugged in by USB with
+     USB debugging allowed, and Wayfinder signed in to that account.
+  3. In Android Auto on the phone: developer settings (tap the version ten times), **Unknown
+     sources** on, and **Start head unit server** from the ⋮ menu.
+- **Then, in order:**
+  1. `pnpm device devices`, `pnpm device register <serial>`, `pnpm device account <email>`,
+     `pnpm device up --car --window`. If anything refuses, follow its message; don't work round it.
+  2. Two things never checked on a phone. Phone GPS: `pnpm device gps 153.0251 -27.4698`, then
+     `pnpm device shot phone` shows the map at the Brisbane CBD; if the phone refuses
+     `cmd location providers`, make `gps` and `drive` move only the car on real phones (with a
+     test) and say so here. Car taps: `pnpm device car key navigation`, `pnpm device tap car 400 240`
+     works; with the dialler open on the car (opened by the person, in the DHU window),
+     `tap car` must refuse. If it doesn't, stop building on car taps and tell the user.
+  3. `pnpm device drive scripts/device/routes/brisbane-to-mt-coot-tha.geojson --speed 60`, taking
+     `shot car` and `shot phone` while it runs; `pnpm device logs` for crashes.
+  4. `pnpm device down`: says "Signed out of …"; `adb shell cmd location providers list` shows no
+     test provider; the head unit has quit. Tell the owner they can sign back in to their own
+     account.
+  5. Record the run in verification.md (date, phone, what passed), tick only the Android Auto
+     items actually seen working, then work through the rest of that checklist with the harness.
+- **Already checked (2026-11-09, emulator):** 0.6.1 opens with no crash and `pnpm device ui`
+  recognises the sign-in screen. Android Auto itself doesn't run on an emulator: Play refuses to
+  install it there (the spike is in docs/superpowers/specs/2026-11-09-device-harness-design.md).
+- **Size:** an hour with the phone. Car, phone.
+
 ## Android Auto with the phone locked: what's left
 
 - **Today:** with location allowed only while using the app, a trip started from the car while locked
