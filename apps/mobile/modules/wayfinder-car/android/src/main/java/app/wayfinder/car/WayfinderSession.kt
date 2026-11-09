@@ -28,6 +28,7 @@ class WayfinderSession(private val api: CarApi = BridgeCarApi(CarBridge.shared))
   private var openDirections: (() -> Unit)? = null
 
   override fun onCreateScreen(intent: Intent): Screen {
+    lifecycle.addObserver(CarVisibility())
     ReactBoot.ensureStarted(carContext)
     val map = CarMapRenderer(carContext)
     carContext.getCarService(AppManager::class.java).setSurfaceCallback(map)
