@@ -144,8 +144,8 @@ export async function recordSpeedSamples(db: DbClient, tripId: string, samples: 
  * Rebuild the typical speeds for each road, weekday or weekend, and hour (and for the whole day, hour
  * 24): each person's median, then the median of those, so everyone counts once however often they
  * drive it. Kept only where at least MIN_TRIPS trips from MIN_PEOPLE people agree. Only drives that
- * still stand count: not a trip deleted or since marked as a walk, nor a deleted or disabled
- * account's. Samples older than SAMPLE_DAYS are dropped.
+ * still stand count: not a trip deleted or since marked as a walk, nor a deleted, disabled
+ * or test account's. Samples older than SAMPLE_DAYS are dropped.
  */
 export async function rebuildRoadSpeeds(db: DbClient): Promise<{ roads: number; pruned: number }> {
   const pruned = await db.query(`DELETE FROM road_speed_samples WHERE observed_at < now() - make_interval(days => $1)`, [SAMPLE_DAYS]);
@@ -155,7 +155,7 @@ export async function rebuildRoadSpeeds(db: DbClient): Promise<{ roads: number; 
        SELECT s.way_id, s.day_kind, s.hour, s.kmh, s.trip_id, t.user_id
        FROM road_speed_samples s
        JOIN trips t ON t.id = s.trip_id AND t.deleted_at IS NULL AND t.mode = 'car'
-       JOIN users u ON u.id = t.user_id AND u.deleted_at IS NULL AND u.disabled_at IS NULL
+       JOIN users u ON u.id = t.user_id AND u.deleted_at IS NULL AND u.disabled_at IS NULL AND NOT u.test_account
      ),
      per_person AS (
        SELECT way_id, day_kind, hour, user_id, percentile_cont(0.5) WITHIN GROUP (ORDER BY kmh) AS kmh, count(DISTINCT trip_id) AS trips

@@ -106,7 +106,7 @@ routes; nothing user-facing shows them.
   (and the whole day): each person's median, then the median of those, wherever three or more
   trips from two or more people agree, from the last 180 days. So one person can't set a road's
   speed for everyone, and a road only one person drives keeps the engine's. Only drives that still
-  stand count: not deleted trips, trips since marked as walks, or deleted or disabled accounts. Where those say
+  stand count: not deleted trips, trips since marked as walks, or deleted, disabled or test accounts (an admin marks an account used for testing, so test drives never change anyone's routes). Where those say
   the fastest route is usually slow at this time, the routing engine's alternatives are asked for
   and the quickest by the same measure is offered, marked "Usually slow at this time" if it still
   is. With a small group most roads have no learned speed, and keep the engine's.
@@ -120,7 +120,7 @@ routes; nothing user-facing shows them.
   it moved off, less 1.5 s, and 1.5 s per car ahead) (`signal_passes`). The nightly `light-timings`
   job keeps, per set of lights, way through, weekday or weekend and hour (and the whole day, and
   every way through), how often drives stopped and the spread of their waits, wherever five passes
-  from two people agree, each person counting once (`signal_timings`). Where the changes to green
+  from two people agree, each person counting once, test accounts not at all (`signal_timings`). Where the changes to green
   from four or more days line up on one cycle (40–180 s), the cycle is kept too, but only if a
   cycle fitted without each day in turn predicts that day's drives better than how often drives
   stop there; most lights adjust to traffic and won't have one. The job's result also says how many

@@ -12,6 +12,7 @@ export interface UserRow {
   last_seen_at: Date | null;
   disabled_at: Date | null;
   deleted_at: Date | null;
+  test_account: boolean;
   password_changed_at: Date;
 }
 

@@ -159,6 +159,11 @@ describe('road speeds learned from drives', () => {
     expect(await rebuilt()).toBe(0);
     await t.db.query(`UPDATE users SET disabled_at = NULL WHERE id = ${neighbour}`);
     expect(await rebuilt()).toBe(1);
+    // A test account's drives (an admin's second account, the device harness) don't count either.
+    await t.db.query(`UPDATE users SET test_account = true WHERE id = ${neighbour}`);
+    expect(await rebuilt()).toBe(0);
+    await t.db.query(`UPDATE users SET test_account = false WHERE id = ${neighbour}`);
+    expect(await rebuilt()).toBe(1);
   });
 
   it('forgets old drives, and a deleted trip’s', async () => {
@@ -237,6 +242,11 @@ describe('how long lights hold drives', () => {
     expect(timing.waitS).toBeCloseTo(40, -1);
     expect(route.durationS).toBeCloseTo(3000 / SPEED + 0.75 * 40, -1);
 
+    // The second person a test account: their drives don't count, so one person is left.
+    await t.db.query('UPDATE users SET test_account = true WHERE id = $1', [b.id]);
+    expect(await lightTiming.rebuildLightTimings(t.db)).toMatchObject({ lights: 0 });
+    await t.db.query('UPDATE users SET test_account = false WHERE id = $1', [b.id]);
+    expect(await lightTiming.rebuildLightTimings(t.db)).toMatchObject({ lights: 1 });
     // The second person's drives deleted: one person alone doesn't set it.
     await t.db.query(`UPDATE trips SET deleted_at = now() WHERE user_id = $1`, [b.id]);
     expect(await lightTiming.rebuildLightTimings(t.db)).toMatchObject({ lights: 0 });

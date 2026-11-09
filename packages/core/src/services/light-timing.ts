@@ -387,7 +387,7 @@ export async function rebuildLightTimings(
             p.observed_at > now() - make_interval(days => $1) AS recent
      FROM signal_passes p
      JOIN trips t ON t.id = p.trip_id AND t.deleted_at IS NULL AND t.mode = 'car'
-     JOIN users u ON u.id = t.user_id AND u.deleted_at IS NULL AND u.disabled_at IS NULL`,
+     JOIN users u ON u.id = t.user_id AND u.deleted_at IS NULL AND u.disabled_at IS NULL AND NOT u.test_account`,
     [CHECK_DAYS],
   );
   const passes = r.rows.map((x) => ({
