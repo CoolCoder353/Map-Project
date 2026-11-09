@@ -31,7 +31,8 @@
     "bench:explore": "tsx --conditions=development scripts/bench-explore.ts",
     "verify:stack": "tsx --conditions=development scripts/verify-stack.ts",
     "verify:mobile": "tsx --conditions=development scripts/verify-mobile-contract.ts",
-    "play": "tsx scripts/play-publish.ts"
+    "play": "tsx scripts/play-publish.ts",
+    "device": "tsx --conditions=development scripts/device.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",

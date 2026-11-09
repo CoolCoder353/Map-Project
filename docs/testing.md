@@ -230,6 +230,7 @@ Each feature a person can use, and where its tests are. Paths are relative to th
 | Admin: users, roles, sessions, reset links | `admin.test.ts`, `admin-api.test.ts` | `admin-management.test.tsx` | — | `admin.spec.ts`, `account.spec.ts` |
 | Test accounts: their drives left out of learned speeds and light timings; marked by an admin in /admin | `road-facts.test.ts`, `admin.test.ts`, `admin-api.test.ts` | `admin-management.test.tsx` | — | — |
 | Recorded points stay with the account they were recorded on: uploaded only by that account, sent before signing out, older queued points sent as whoever is signed in | `apps/mobile/test/queue.test.ts` | — | `tracking.native.test.tsx` (SQLite queue, background task signed out), `device.native.test.tsx` (sign-out) | — |
+| Device harness (`pnpm device`): only safe commands on a phone, device choice, taps only in Wayfinder and never on Sign out, test-account and app-version guards, route replay, cleanup | `scripts/test/device/*.test.ts` | — | — | — |
 | Admin: invites, audit log, recently deleted | `admin.test.ts`, `admin-api.test.ts`, `cli.test.ts` | `admin-management.test.tsx` | — | `admin.spec.ts`, `admin-pages.spec.ts` |
 | Admin: health, performance, errors, jobs, usage | `metrics.test.ts`, `queue.test.ts` (core), `admin-api.test.ts`, `jobs.test.ts` | `admin-monitoring.test.tsx` | — | `admin-pages.spec.ts` |
 | Map tiles and style | `tiles-api.test.ts`, `app-api.test.ts` | `map-provider.test.tsx` | `map-canvas.native.test.tsx` | `planner.spec.ts` |

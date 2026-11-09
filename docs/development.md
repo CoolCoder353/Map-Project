@@ -107,7 +107,8 @@ infra/scripts/android-emulator.sh install
 
 `install` takes an APK path (default `dist/wayfinder.apk`) and opens the app; `stop` shuts the
 emulator down. The APK already includes x86_64 code, so the same file runs on phones and the
-emulator. Useful `adb` commands (`~/Android/Sdk/platform-tools/adb`):
+emulator. For screenshots, taps, typing and GPS use the [device harness](#device-harness); for
+anything it doesn't do, `adb` directly (`~/Android/Sdk/platform-tools/adb`):
 
 | To | Run |
 |---|---|
@@ -122,6 +123,63 @@ An APK built for `maps.coolcodertech.com` talks to the live server, which has re
 but don't sign in with a real account or create data there. To test against the local
 dev stack, build with `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000 ALLOW_HTTP=1` (`10.0.2.2` is this
 machine as the emulator sees it), and don't hand that APK to anyone.
+
+#### Device harness
+
+`pnpm device …` drives Wayfinder on a registered phone, with Google's Desktop Head Unit (DHU) for
+the Android Auto screen, or on the emulator: screenshots of both screens, taps by name or
+position, typing, the phone's and the car's GPS, and replaying a drive. It's for Claude and for
+people checking by eye; its own logic is tested in `scripts/test/device`. Android Auto doesn't
+run on an emulator (Play won't install it there), so the car side needs a real phone.
+
+One-off setup, in order:
+
+1. `sdkmanager "extras;google;auto"` for the DHU, and `libc++` (Arch: `sudo pacman -S libc++`;
+   Debian: `libc++1 libc++abi1`).
+2. A Wayfinder account for testing on the server, made an admin, with **Test account** switched
+   on in `/admin` (its drives then don't count towards learned speeds or light timings). The
+   person who owns the phone creates it; the harness never sees its password.
+3. `pnpm device account <that email>`, and for a phone `pnpm device register <serial>`
+   (`pnpm device devices` shows it). Both are kept in `.harness/config.json`, which git ignores.
+4. On the phone, by its owner: Android Auto's developer settings (tap its version ten times),
+   **Unknown sources** on, and **Start head unit server** from its ⋮ menu (again after each
+   restart).
+5. Before each session, sign Wayfinder in to the test account.
+
+| Command | Does |
+|---|---|
+| `up [--car] [--window] [--emulator]` | Checks Wayfinder is signed in to the test account; `--car` starts the head unit (`--window` to watch it) |
+| `shot phone\|car` | Screenshot to `.harness/shots/`; prints the path |
+| `ui` | What's on the phone's screen, and where to tap it |
+| `tap <text>`, `tap <x> <y>`, `tap car <x> <y>` | Tap by visible text or position |
+| `type <text>`, `key back\|home\|enter`, `swipe x1 y1 x2 y2` | Text and keys on the phone |
+| `gps <lon> <lat> [--phone\|--car]`, `gps reset` | Move the phone and the car (`[lon, lat]`, as everywhere) |
+| `drive <route.geojson\|.gpx> [--speed 50]` | Replay a route a fix a second; `scripts/device/routes/` has a rough one from the CBD to Mt Coot-tha |
+| `car day\|night`, `car key home\|back\|search\|navigation`, `car restrict on\|off` | The head unit's own controls |
+| `logs` | App and car logs since the last look |
+| `install <apk>` | Emulator only |
+| `down` | Sign the test account out, turn the test location off, stop the head unit |
+
+What it won't do, whatever it's asked:
+
+- Act on a phone that isn't registered, or pick one when several are attached and none is named.
+- Send anything to a phone but looking, tapping, typing, a test location and the head unit's
+  port: no installing, uninstalling, clearing data, deleting files, rebooting or changing settings
+  (`scripts/device/adb.ts` is the only place commands are built).
+- Tap outside Wayfinder (and its permission prompts), or tap Sign out or Delete account; tap the
+  car screen unless the car app's log says Wayfinder is showing.
+- Change anything unless Wayfinder is signed in to the test account; it stops if the sign-in
+  screen appears.
+- Move the GPS on an app older than versionCode 17, whose upload queue could send a test drive as
+  the next account to sign in.
+- Change anything in `/admin`: Claude looks there, and asks before changing anything on the
+  testers' server.
+
+`down` (and Ctrl-C during `drive`) undoes the phone changes. To undo them by hand:
+`adb shell cmd location providers remove-test-provider gps`,
+`adb shell appops set com.android.shell android:mock_location deny`, `adb forward --remove tcp:5277`,
+and on the phone Android Auto's ⋮, **Stop head unit server** (its developer settings can be turned
+off from the same menu).
 
 ## Tests
 

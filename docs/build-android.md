@@ -111,7 +111,7 @@ Without a car, use Google's Desktop Head Unit (DHU):
    ```
 
 Type `day` or `night` in the DHU console to switch modes. For a drive without driving, replay a
-GPX track with a mock-location app set in the phone's developer options.
+GPX track with the [device harness](development.md#device-harness) (`pnpm device drive`), which also takes screenshots and taps the car screen.
 
 ## Share it
 
