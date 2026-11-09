@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { run } from '../../device/cli.js';
-import { ROOT, TEST_EMAIL, planScreen, sent, settings, signIn, world } from './fakes.js';
+import { ROOT, TEST_EMAIL, dump, node, planScreen, sent, settings, signIn, world } from './fakes.js';
 
 const logged = (w: ReturnType<typeof world>) => {
   const lines: string[] = [];
@@ -232,5 +232,136 @@ describe('the emulator', () => {
     const emu = world({ devices: 'List of devices attached\nemulator-5554\tdevice\n' });
     expect(await run(['install', '/a.apk'], emu.deps)).toBe(0);
     expect(sent(emu)).toContain('install -r /a.apk');
+  });
+});
+
+describe('the rest of the commands', () => {
+  const up = async (args: string[] = ['up', '--car'], over: Parameters<typeof world>[0] = {}) => {
+    const w = world({ screens: [settings(), dump(node({ text: 'Search', b: [40, 200, 1040, 300] }))], ...over });
+    expect(await run(args, w.deps)).toBe(0);
+    return w;
+  };
+
+  it('lists devices and whether each may be used', async () => {
+    const w = world({ devices: 'List of devices attached\nR5CT1234\tdevice\nSTRANGER\tdevice\nemulator-5554\tdevice\n' });
+    const lines = logged(w);
+    expect(await run(['devices'], w.deps)).toBe(0);
+    expect(lines).toEqual(['R5CT1234\tdevice\tmay be used', 'STRANGER\tdevice\tnot registered', 'emulator-5554\tdevice\tmay be used']);
+  });
+
+  it('starts the emulator when asked and none is running, and shuts it down again', async () => {
+    const w = world({ devices: 'List of devices attached\n' });
+    w.deps.startEmulator = async () => void (w.devices = 'List of devices attached\nemulator-5554\tdevice\n');
+    expect(await run(['up', '--emulator'], w.deps)).toBe(0);
+    expect(session(w)).toMatchObject({ serial: 'emulator-5554', startedEmulator: true });
+    w.screens = [settings(), signIn()];
+    expect(await run(['down'], w.deps)).toBe(0);
+    expect(sent(w)).toContain('emu kill');
+  });
+
+  it('refuses to start without a test account, twice over, or when signed out', async () => {
+    const none = world();
+    none.files.set(`${ROOT}/.harness/config.json`, JSON.stringify({ phones: ['R5CT1234'] }));
+    expect(await run(['up'], none.deps)).toBe(1);
+    const twice = await up(['up']);
+    expect(await run(['up'], twice.deps)).toBe(1);
+    const out = world({ screens: [signIn()] });
+    const lines = logged(out);
+    expect(await run(['up'], out.deps)).toBe(1);
+    expect(lines.join('\n')).toContain('Wayfinder is signed out');
+  });
+
+  it('refuses without a session, and car commands without a head unit', async () => {
+    const w = world();
+    expect(await run(['tap', '1', '2'], w.deps)).toBe(1);
+    expect(await run(['down'], w.deps)).toBe(0);
+    const phoneOnly = await up(['up']);
+    expect(await run(['car', 'day'], phoneOnly.deps)).toBe(1);
+    expect(await run(['shot', 'car'], phoneOnly.deps)).toBe(1);
+    expect(await run(['shot', 'tv'], phoneOnly.deps)).toBe(1);
+    expect(await run(['shot', 'phone', '--out', '/a b.png'], phoneOnly.deps)).toBe(1);
+  });
+
+  it('sends the head unit its own controls, and nothing else', async () => {
+    const w = await up();
+    for (const args of [['day'], ['night'], ['key', 'home'], ['restrict', 'on'], ['restrict', 'off']]) expect(await run(['car', ...args], w.deps)).toBe(0);
+    expect(w.dhuLines.slice(-5)).toEqual(['day', 'night', 'keycode home', 'restrict all', 'restrict none']);
+    expect(await run(['car', 'key', 'call'], w.deps)).toBe(1);
+    expect(await run(['tap', 'car', 'x', '2'], w.deps)).toBe(1);
+  });
+
+  it('lists the screen, presses keys and swipes, in Wayfinder only', async () => {
+    const w = await up(['up']);
+    const lines = logged(w);
+    expect(await run(['ui'], w.deps)).toBe(0);
+    expect(lines).toContain('"Search" @ 540,250');
+    expect(await run(['key', 'back'], w.deps)).toBe(0);
+    expect(await run(['key', 'power'], w.deps)).toBe(1);
+    expect(await run(['swipe', '540', '1800', '540', '600'], w.deps)).toBe(0);
+    expect(sent(w)).toEqual(expect.arrayContaining(['shell input keyevent KEYCODE_BACK', 'shell input swipe 540 1800 540 600 300']));
+  });
+
+  it('shows logs since the last look', async () => {
+    const w = await up(['up']);
+    expect(await run(['logs'], w.deps)).toBe(0);
+    expect(sent(w).some((c) => c.startsWith('logcat -d -v epoch -T '))).toBe(true);
+    w.screens = [settings(), signIn()];
+    expect(await run(['down'], w.deps)).toBe(0);
+    expect(await run(['logs'], w.deps)).toBe(0); // no session: the last five minutes
+  });
+
+  it('turns the test location off on request, and only moves one side when asked', async () => {
+    const w = await up();
+    expect(await run(['gps', '153.02', '-27.47', '--car'], w.deps)).toBe(0);
+    expect(sent(w).some((c) => c.includes('set-test-provider-location'))).toBe(false);
+    expect(await run(['gps', '153.02', '-27.47', '--phone'], w.deps)).toBe(0);
+    expect(await run(['gps', 'reset'], w.deps)).toBe(0);
+    expect(sent(w)).toContain('shell cmd location providers remove-test-provider gps');
+    expect(await run(['gps', 'reset'], w.deps)).toBe(0); // nothing left to undo
+  });
+
+  it('says when a route can’t be read, and undoes everything when a drive fails part-way', async () => {
+    const w = await up();
+    expect(await run(['drive', '/missing.geojson'], w.deps)).toBe(1);
+    w.files.set('/r.geojson', JSON.stringify({ type: 'LineString', coordinates: [[153, -27.5], [153.001, -27.5]] }));
+    const adb = w.deps.adb;
+    w.deps.adb = async (args) => (args.join(' ').includes('set-test-provider-location') ? { code: 1, out: Buffer.from(''), err: 'device offline' } : adb(args));
+    w.screens = [settings(), signIn()];
+    const lines = logged(w);
+    expect(await run(['drive', '/r.geojson'], w.deps)).toBe(1);
+    expect(lines.join('\n')).toContain('device offline');
+    expect(session(w)).toBeNull();
+  });
+
+  it('scrolls Settings to find Sign out, and kills a head unit that won’t quit', async () => {
+    const w = await up();
+    w.deps.sendDhu = async (_f, line) => void w.dhuLines.push(line); // ignores quit
+    w.screens = [settings().replace(/<node[^>]*content-desc="Sign out"[^>]*\/>/, ''), settings(), signIn()];
+    expect(await run(['down'], w.deps)).toBe(0);
+    expect(sent(w).some((c) => c.startsWith('shell input swipe'))).toBe(true);
+    expect(w.dhuAlive).toBe(false);
+  });
+
+  it('leaves an already signed-out app alone, and waits for the car screenshot', async () => {
+    const w = await up();
+    const send = w.deps.sendDhu;
+    let polls = 0;
+    w.deps.exists = async (p) => ++polls > 2 && w.binary.has(p);
+    expect(await run(['shot', 'car'], w.deps)).toBe(0);
+    w.deps.sendDhu = async (f, l) => (l.startsWith('screenshot') ? undefined : send(f, l));
+    w.deps.exists = async () => false;
+    expect(await run(['shot', 'car'], w.deps)).toBe(1);
+    w.deps.sendDhu = send;
+    w.screens = [signIn()];
+    expect(await run(['down'], w.deps)).toBe(0);
+  });
+
+  it('reports a failed adb command', async () => {
+    const w = await up(['up']);
+    const adb = w.deps.adb;
+    w.deps.adb = async (args) => (args[0] === '-s' ? { code: 1, out: Buffer.from(''), err: '' } : adb(args));
+    const lines = logged(w);
+    expect(await run(['shot', 'phone'], w.deps)).toBe(1);
+    expect(lines.join('\n')).toContain('exit 1');
   });
 });
