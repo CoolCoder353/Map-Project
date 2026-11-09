@@ -3,35 +3,45 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 
 type MockRow = Record<string, unknown>;
+const mine = (r: MockRow, account: unknown) => r.account_id === account || r.account_id == null;
 const mockDb: {
   rows: MockRow[];
   nextId: number;
+  version: number;
   [fn: string]: unknown;
 } = {
   rows: [] as MockRow[],
   nextId: 1,
-  execAsync: jest.fn(async () => undefined),
+  version: 0,
+  execAsync: jest.fn(async (sql: string) => {
+    if (sql.includes('user_version = 1')) mockDb.version = 1;
+  }),
   withTransactionAsync: jest.fn(async (fn: () => Promise<void>) => fn()),
   runAsync: jest.fn(async (sql: string, ...args: unknown[]) => {
     if (sql.startsWith('INSERT')) {
-      const [ts, lon, lat, accuracy_m, speed_mps, heading_deg, source, mode, session_id] = args;
-      mockDb.rows.push({ id: mockDb.nextId++, ts, lon, lat, accuracy_m, speed_mps, heading_deg, source, mode, session_id, batch_id: null });
+      const [ts, lon, lat, accuracy_m, speed_mps, heading_deg, source, mode, session_id, account_id] = args;
+      mockDb.rows.push({ id: mockDb.nextId++, ts, lon, lat, accuracy_m, speed_mps, heading_deg, source, mode, session_id, account_id, batch_id: null });
     } else if (sql.startsWith('UPDATE')) {
-      const [id, from, to] = args as [string, number, number];
-      for (const r of mockDb.rows) if ((r.id as number) >= from && (r.id as number) <= to) r.batch_id = id;
+      const [id, from, to, account] = args as [string, number, number, string];
+      for (const r of mockDb.rows) if ((r.id as number) >= from && (r.id as number) <= to && r.batch_id === null && mine(r, account)) r.batch_id = id;
     } else if (sql.startsWith('DELETE')) {
       mockDb.rows = mockDb.rows.filter((r: MockRow) => r.batch_id !== args[0]);
     }
   }),
-  getFirstAsync: jest.fn(async (sql: string): Promise<object | null> => {
-    if (sql.includes('count(*)')) return { n: mockDb.rows.length };
-    const r = mockDb.rows.find((x: MockRow) => x.batch_id !== null);
+  getFirstAsync: jest.fn(async (sql: string, ...args: unknown[]): Promise<object | null> => {
+    if (sql.includes('user_version')) return { user_version: mockDb.version };
+    if (sql.includes('count(*)')) return { n: args.length ? mockDb.rows.filter((r) => mine(r, args[0])).length : mockDb.rows.length };
+    const r = mockDb.rows.find((x: MockRow) => x.batch_id !== null && mine(x, args[0]));
     return r ? { batch_id: r.batch_id } : null;
   }),
-  getAllAsync: jest.fn(async (sql: string, arg: unknown) =>
-    sql.includes('WHERE batch_id') ? mockDb.rows.filter((r: MockRow) => r.batch_id === arg) : mockDb.rows.slice(0, arg as number),
+  getAllAsync: jest.fn(async (sql: string, ...args: unknown[]) =>
+    sql.includes('WHERE batch_id = ?')
+      ? mockDb.rows.filter((r: MockRow) => r.batch_id === args[0])
+      : mockDb.rows.filter((r: MockRow) => r.batch_id === null && mine(r, args[0])).slice(0, args[1] as number),
   ),
 };
+let mockAccount: string | null = 'u1';
+jest.mock('../src/lib/account', () => ({ currentAccountId: async () => mockAccount, cachedAccountId: () => mockAccount }));
 jest.mock('expo-sqlite', () => ({ openDatabaseAsync: jest.fn(async () => mockDb) }));
 jest.mock('expo-task-manager', () => ({ defineTask: jest.fn() }));
 jest.mock('expo-location', () => ({
@@ -75,30 +85,52 @@ beforeEach(() => {
   mockDb.rows = [];
   mockConnected = true;
   mockApi.hasAccessToken = true;
+  mockAccount = 'u1';
   jest.clearAllMocks();
 });
 
 describe('the on-phone queue', () => {
   it('batches points of one kind together, keeps a claimed batch until it is sent, then removes it', async () => {
-    await sqliteQueueStore.append([point(1), point(2), point(3, { source: 'navigation', mode: 'car', sessionId: 's1' })]);
-    await sqliteQueueStore.append([]);
+    await sqliteQueueStore.append([point(1), point(2), point(3, { source: 'navigation', mode: 'car', sessionId: 's1' })], 'u1');
+    await sqliteQueueStore.append([], 'u1');
     expect(await sqliteQueueStore.count()).toBe(3);
-    const first = await sqliteQueueStore.claim(10, () => 'b1');
+    const first = await sqliteQueueStore.claim(10, () => 'b1', 'u1');
     expect(first!.batchId).toBe('b1');
     expect(first!.points.map((p) => p.ts)).toEqual([1, 2]);
     // Retrying before it is sent returns the same batch, so the server can drop a duplicate.
-    expect((await sqliteQueueStore.claim(10, () => 'b2'))!.batchId).toBe('b1');
+    expect((await sqliteQueueStore.claim(10, () => 'b2', 'u1'))!.batchId).toBe('b1');
     await sqliteQueueStore.complete('b1');
-    const next = await sqliteQueueStore.claim(10, () => 'b3');
+    const next = await sqliteQueueStore.claim(10, () => 'b3', 'u1');
     expect(next!.points).toEqual([point(3, { source: 'navigation', mode: 'car', sessionId: 's1' })]);
     await sqliteQueueStore.complete('b3');
-    expect(await sqliteQueueStore.claim(10, () => 'b4')).toBeNull();
+    expect(await sqliteQueueStore.claim(10, () => 'b4', 'u1')).toBeNull();
+  });
+
+  it('adds the account column once, and keeps each account’s points to itself', async () => {
+    // A point from before the upgrade has no account.
+    mockDb.rows.push({ id: mockDb.nextId++, ts: 1, lon: 153, lat: -27, accuracy_m: null, speed_mps: null, heading_deg: null, source: 'background', mode: null, session_id: null, account_id: null, batch_id: null });
+    await sqliteQueueStore.append([point(2)], 'test-account');
+    expect(mockDb.version).toBe(1);
+    expect(await sqliteQueueStore.count('owner')).toBe(1); // only the old, unowned one
+    const forOwner = await sqliteQueueStore.claim(10, () => 'b-owner', 'owner');
+    expect(forOwner!.points).toHaveLength(1);
+    await sqliteQueueStore.complete('b-owner');
+    expect(await sqliteQueueStore.claim(10, () => 'b-none', 'owner')).toBeNull();
+    expect((await sqliteQueueStore.claim(10, () => 'b-test', 'test-account'))!.points).toHaveLength(1);
+  });
+
+  it('records nothing from the background, and sends nothing, while nobody is signed in', async () => {
+    mockAccount = null;
+    await mockTask({ data: { locations: [loc(1000)] } });
+    expect(mockDb.rows).toHaveLength(0);
+    expect(await syncQueue()).toBeNull();
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });
 
 describe('uploading', () => {
   it('uploads everything queued when online, and shares one run between callers', async () => {
-    await sqliteQueueStore.append([point(1000), point(2000)]);
+    await sqliteQueueStore.append([point(1000), point(2000)], 'u1');
     const [a, b] = await Promise.all([syncQueue(), syncQueue()]);
     expect(a).toBe(b);
     expect(a).toMatchObject({ uploaded: 2, remaining: 0 });
@@ -108,14 +140,14 @@ describe('uploading', () => {
 
   it('waits while offline', async () => {
     mockConnected = false;
-    await sqliteQueueStore.append([point(1000)]);
+    await sqliteQueueStore.append([point(1000)], 'u1');
     expect(await syncQueue()).toBeNull();
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it('restores the session first when woken in the background', async () => {
     mockApi.hasAccessToken = false;
-    await sqliteQueueStore.append([point(1000)]);
+    await sqliteQueueStore.append([point(1000)], 'u1');
     await syncQueue();
     expect(mockApi.refresh).toHaveBeenCalled();
   });

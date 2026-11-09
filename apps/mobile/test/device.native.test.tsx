@@ -20,6 +20,8 @@ jest.mock('expo-contacts/legacy', () => ({
 }));
 jest.mock('expo-location', () => ({ getForegroundPermissionsAsync: jest.fn(), getLastKnownPositionAsync: jest.fn() }));
 const mockReconcile = jest.fn(async (_on: boolean, _name: string) => undefined);
+const mockSync = jest.fn(async () => null as unknown);
+jest.mock('../src/tracking/sync', () => ({ syncQueue: () => mockSync() }));
 jest.mock('../src/tracking/background', () => ({ reconcileTracking: (on: boolean, name: string) => mockReconcile(on, name) }));
 // The session's API client: refresh() restores `mockSaved`, logout() signs out.
 let mockSaved: unknown = null;
@@ -291,5 +293,17 @@ describe('session', () => {
     await show();
     expect(await screen.findByText('anonymous:-')).toBeOnTheScreen();
     expect(mockReconcile).not.toHaveBeenCalled();
+  });
+
+  it('uploads what the leaving account recorded before signing out, and signs out even when that fails', async () => {
+    mockSaved = auth;
+    await show();
+    expect(await screen.findByText('authenticated:sam@example.test')).toBeOnTheScreen();
+    mockSync.mockClear();
+    mockSync.mockRejectedValueOnce(new Error('offline'));
+    await act(async () => signOut());
+    expect(mockSync).toHaveBeenCalledTimes(1);
+    expect(mockReconcile).toHaveBeenLastCalledWith(false, 'Roamer');
+    expect(await screen.findByText('anonymous:-')).toBeOnTheScreen();
   });
 });

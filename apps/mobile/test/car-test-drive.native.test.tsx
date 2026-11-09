@@ -19,6 +19,7 @@ jest.mock('expo-location', () => ({
   watchPositionAsync: () => mockWatch(),
 }));
 const mockAppend = jest.fn(async (_p: unknown[]) => undefined);
+jest.mock('../src/lib/account', () => ({ currentAccountId: async () => 'u1', cachedAccountId: () => 'u1' }));
 jest.mock('../src/tracking/sqliteStore', () => ({ sqliteQueueStore: { append: (p: unknown[]) => mockAppend(p) } }));
 const mockSync = jest.fn(async () => null);
 jest.mock('../src/tracking/sync', () => ({ syncQueue: () => mockSync() }));

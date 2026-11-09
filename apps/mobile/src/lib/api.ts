@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import type { AuthResponse } from '@wayfinder/shared/schemas';
+import { setCurrentAccountId } from './account';
 import { createApiClient } from './apiClient';
 import { getServerUrl } from './server';
 
@@ -24,7 +25,10 @@ export const api = createApiClient({
       else await SecureStore.deleteItemAsync(REFRESH_KEY);
     },
   },
-  onSession: (auth) => listeners.forEach((l) => l(auth)),
+  onSession: (auth) => {
+    void setCurrentAccountId(auth?.user.id ?? null);
+    listeners.forEach((l) => l(auth));
+  },
 });
 
 /** Whether a sign-in is saved on this phone, even if the server can't be reached to use it. */

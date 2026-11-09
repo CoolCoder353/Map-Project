@@ -10,6 +10,7 @@ import { api } from '../lib/api';
 import { timerHold } from '../lib/keepTimers';
 import { askForNotifications } from '../lib/notifications';
 import { setNavigationRecording } from '../tracking/navigationRecording';
+import { cachedAccountId } from '../lib/account';
 import { sqliteQueueStore } from '../tracking/sqliteStore';
 import { syncQueue } from '../tracking/sync';
 import { setNavigationFixHandler, startNavigationLocation, stopNavigationLocation } from './navigationLocation';
@@ -363,18 +364,23 @@ export function createNavigationService(): NavigationService {
       void reroute([lon, lat], pending.to, pending.via, pending.kind);
     }
     if (simulated) return;
+    const account = cachedAccountId();
+    if (!account) return;
     void sqliteQueueStore
-      .append([
-        {
-          ...fix,
-          accuracyM: fix.accuracyM ?? null,
-          speedMps: fix.speedMps ?? null,
-          headingDeg: fix.headingDeg ?? null,
-          source: 'navigation',
-          mode: nav.mode,
-          sessionId,
-        },
-      ])
+      .append(
+        [
+          {
+            ...fix,
+            accuracyM: fix.accuracyM ?? null,
+            speedMps: fix.speedMps ?? null,
+            headingDeg: fix.headingDeg ?? null,
+            source: 'navigation',
+            mode: nav.mode,
+            sessionId,
+          },
+        ],
+        account,
+      )
       .catch(() => undefined);
   }
 

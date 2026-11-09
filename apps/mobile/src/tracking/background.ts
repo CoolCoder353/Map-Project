@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import { currentAccountId } from '../lib/account';
 import { askForNotifications } from '../lib/notifications';
 import { isNavigationRecording } from './navigationRecording';
 import { sqliteQueueStore } from './sqliteStore';
@@ -12,6 +13,8 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(BACKGROUND_TASK
   if (error || !data?.locations?.length) return;
   // A navigated trip is recording these same moments itself.
   if (isNavigationRecording()) return;
+  const account = await currentAccountId();
+  if (!account) return; // signed out: these points would belong to nobody
   try {
     await sqliteQueueStore.append(
       data.locations
@@ -27,8 +30,9 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(BACKGROUND_TASK
           mode: null,
           sessionId: null,
         })),
+      account,
     );
-    if ((await sqliteQueueStore.count()) >= 50) await syncQueue();
+    if ((await sqliteQueueStore.count(account)) >= 50) await syncQueue();
   } catch {
     // Storage or upload failed while the app was in the background; the next wake-up retries.
   }

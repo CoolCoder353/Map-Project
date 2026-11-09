@@ -21,13 +21,16 @@ export interface ClaimedBatch {
 /**
  * Durable point queue. A batch id is assigned when points are claimed and kept until the
  * upload succeeds, so retries reuse the same id and the server de-duplicates them.
+ * Each point belongs to the account signed in when it was recorded, and only that account
+ * uploads it: points recorded on one account are never sent as another's after a switch.
  */
 export interface QueueStore {
-  append(points: QueuedPoint[]): Promise<void>;
-  /** Return the pending claimed batch, or claim up to `limit` points sharing one group key. */
-  claim(limit: number, newBatchId: () => string): Promise<ClaimedBatch | null>;
+  append(points: QueuedPoint[], accountId: string): Promise<void>;
+  /** Return this account's pending claimed batch, or claim up to `limit` of its points sharing one group key. */
+  claim(limit: number, newBatchId: () => string, accountId: string): Promise<ClaimedBatch | null>;
   complete(batchId: string): Promise<void>;
-  count(): Promise<number>;
+  /** Points waiting: this account's, or everyone's. */
+  count(accountId?: string): Promise<number>;
 }
 
 export const groupKey = (p: Pick<QueuedPoint, 'source' | 'sessionId' | 'mode'>) => `${p.source}|${p.sessionId ?? ''}|${p.mode ?? ''}`;
@@ -71,6 +74,7 @@ export async function flushQueue(
   store: QueueStore,
   upload: (req: TrackBatchRequest) => Promise<void>,
   newBatchId: () => string,
+  accountId: string,
   opts: { batchSize?: number; maxBatches?: number } = {},
 ): Promise<FlushResult> {
   const batchSize = opts.batchSize ?? 1000;
@@ -80,7 +84,7 @@ export async function flushQueue(
   let dropped = 0;
   let error: unknown = null;
   while (batches < maxBatches) {
-    const batch = await store.claim(batchSize, newBatchId);
+    const batch = await store.claim(batchSize, newBatchId, accountId);
     if (!batch || batch.points.length === 0) break;
     const req = toBatchRequest(batch);
     dropped += batch.points.length - req.points.length;
@@ -107,30 +111,37 @@ export async function flushQueue(
     uploaded += req.points.length;
     batches++;
   }
-  return { uploaded, batches, remaining: await store.count(), dropped, error };
+  return { uploaded, batches, remaining: await store.count(accountId), dropped, error };
 }
 
-/** In-memory store (tests and fallback). */
+/** In-memory store (tests and fallback). A null account is a point queued before accounts were kept. */
 export class MemoryQueueStore implements QueueStore {
-  private rows: Array<QueuedPoint & { seq: number; batchId: string | null }> = [];
+  private rows: Array<QueuedPoint & { seq: number; batchId: string | null; accountId: string | null }> = [];
   private seq = 0;
 
-  async append(points: QueuedPoint[]) {
-    for (const p of points) this.rows.push({ ...p, seq: this.seq++, batchId: null });
+  /** Test helper: points queued by a version that didn't record the account. */
+  async appendUnowned(points: QueuedPoint[]) {
+    for (const p of points) this.rows.push({ ...p, seq: this.seq++, batchId: null, accountId: null });
   }
 
-  async claim(limit: number, newBatchId: () => string): Promise<ClaimedBatch | null> {
-    const pending = this.rows.find((r) => r.batchId !== null);
+  async append(points: QueuedPoint[], accountId: string) {
+    for (const p of points) this.rows.push({ ...p, seq: this.seq++, batchId: null, accountId });
+  }
+
+  async claim(limit: number, newBatchId: () => string, accountId: string): Promise<ClaimedBatch | null> {
+    const mine = this.rows.filter((r) => r.accountId === accountId || r.accountId === null);
+    const pending = mine.find((r) => r.batchId !== null);
     if (pending) {
       const id = pending.batchId!;
-      return { batchId: id, points: this.rows.filter((r) => r.batchId === id).map(strip) };
+      return { batchId: id, points: mine.filter((r) => r.batchId === id).map(strip) };
     }
-    const first = this.rows[0];
+    const free = mine.filter((r) => r.batchId === null);
+    const first = free[0];
     if (!first) return null;
     const key = groupKey(first);
     const id = newBatchId();
     const picked: typeof this.rows = [];
-    for (const r of this.rows) {
+    for (const r of free) {
       if (groupKey(r) !== key) break; // keep batches contiguous in time
       picked.push(r);
       if (picked.length >= limit) break;
@@ -143,8 +154,8 @@ export class MemoryQueueStore implements QueueStore {
     this.rows = this.rows.filter((r) => r.batchId !== batchId);
   }
 
-  async count() {
-    return this.rows.length;
+  async count(accountId?: string) {
+    return accountId === undefined ? this.rows.length : this.rows.filter((r) => r.accountId === accountId || r.accountId === null).length;
   }
 }
 

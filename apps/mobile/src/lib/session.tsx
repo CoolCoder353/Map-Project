@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { reconcileTracking } from '../tracking/background';
+import { syncQueue } from '../tracking/sync';
 import { api, hasSavedSession, onSession } from './api';
 import { useAppConfig } from './appConfig';
 
@@ -75,6 +76,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       signIn: async (email, password) => void (await api.login(email, password)),
       register: async (code, email, password) => void (await api.register(code, email, password)),
       signOut: async () => {
+        // Send what this account recorded while there's signal; anything left waits for it to sign in again.
+        await syncQueue().catch(() => undefined);
         await reconcileTracking(false, config.appName).catch(() => undefined);
         await api.logout().catch(() => undefined);
         qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'config' });
