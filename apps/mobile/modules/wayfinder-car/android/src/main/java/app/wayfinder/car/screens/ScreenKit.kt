@@ -2,6 +2,8 @@ package app.wayfinder.car.screens
 
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
+import androidx.car.app.model.Action
+import androidx.car.app.model.ActionStrip
 import androidx.car.app.model.CarColor
 import androidx.car.app.model.CarIcon
 import androidx.car.app.model.Row
@@ -66,3 +68,23 @@ fun Screen.whenStarted(block: () -> Unit) =
 fun Screen.show(map: MapScenes, scene: MapScene) {
   if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) map.show(scene)
 }
+
+/** Names longer than this are cut with an ellipsis in car lists, so each row stays on one line and more fit (C93). */
+const val SHORT_NAME = 30
+
+fun shortName(name: String, max: Int = SHORT_NAME): String {
+  val n = name.trim()
+  if (n.length <= max) return n
+  val cut = n.take(max - 1)
+  val word = cut.lastIndexOf(' ').takeIf { it >= max / 2 } ?: cut.length
+  return cut.take(word).trimEnd(' ', ',', '-', '·') + "…"
+}
+
+/** The way back to a running trip's directions, from screens reached during one (C98). */
+class BackToDirections(val navigating: () -> Boolean, val open: () -> Unit)
+
+const val DIRECTIONS = "Directions"
+
+/** An action strip with "Directions" while a trip runs; null otherwise. */
+fun directionsStrip(back: BackToDirections?): ActionStrip? =
+  back?.takeIf { it.navigating() }?.let { b -> ActionStrip.Builder().addAction(Action.Builder().setTitle(DIRECTIONS).setOnClickListener { b.open() }.build()).build() }

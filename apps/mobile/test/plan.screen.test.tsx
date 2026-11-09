@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { useState } from 'react';
-import Plan from '../app/(tabs)/plan';
+import Plan, { loopNote } from '../app/(tabs)/plan';
 import { takeRouteToNavigate } from '../src/lib/plannedStore';
 import { apiError, fake, place, renderScreen, resetFakes, route } from './fakes';
 import { user } from './mocks';
@@ -18,14 +18,16 @@ jest.mock('../src/lib/useApproxLocation', () => ({ useApproxLocation: () => mock
 jest.mock('expo-location', () => ({ requestForegroundPermissionsAsync: jest.fn(), getCurrentPositionAsync: jest.fn(), Accuracy: { Balanced: 3 } }));
 jest.mock('expo-linking', () => ({ openURL: jest.fn(async () => true) }));
 
-const explore = route({ id: 'r-exp', kind: 'explore', extraDurationS: 420, novelty: { totalKm: 14, newKm: 6.2, noveltyPct: 44 } });
+// Routes from where the phone is, as the server gives them.
+const fromHere = (over: Parameters<typeof route>[0] = {}) => route({ geometry: [[153.02, -27.47], [153.15, -27.49]], ...over });
+const explore = fromHere({ id: 'r-exp', kind: 'explore', extraDurationS: 420, novelty: { totalKm: 14, newKm: 6.2, noveltyPct: 44 } });
 
 beforeEach(() => {
   resetFakes();
   mockHere = [153.02, -27.47];
   fake.api.on({
     'GET api/search': () => ({ results: [place()] }),
-    'POST api/routes/explore': () => ({ fastest: route(), explore: [explore] }),
+    'POST api/routes/explore': () => ({ fastest: fromHere(), explore: [explore] }),
     'GET api/saved-places': () => ({ items: [] }),
   });
 });
@@ -53,8 +55,8 @@ it('compares the fastest route with explore routes and starts navigation on one'
   expect(screen.getByText('Fastest')).toBeOnTheScreen();
   expect(fake.api.callsTo('POST api/routes/explore')[0]!.body).toEqual({ from: [153.02, -27.47], to: [153.15, -27.49], mode: 'car', budgetMin: 15 });
   expect(fake.map.fitTo).toHaveBeenCalled();
+  // "Your location" is the blue dot already, so it gets no second marker (P15).
   expect(fake.map.props.markers).toEqual([
-    { id: 'from', lngLat: [153.02, -27.47], kind: 'start', label: 'Your location' },
     { id: 'to', lngLat: [153.15, -27.49], kind: 'end', label: 'Gumdale State School' },
   ]);
   (fake.map.props.onRoutePress as (id: string) => void)('r-exp');
@@ -71,7 +73,7 @@ it('re-plans for walking and a bigger budget', async () => {
   await screen.findByText('Explore 1');
   await fireEvent.press(screen.getByRole('radio', { name: 'Walk' }));
   await waitFor(() => expect(fake.api.callsTo('POST api/routes/explore').at(-1)!.body).toMatchObject({ mode: 'foot' }));
-  await fireEvent.press(screen.getByRole('button', { name: '+' }));
+  await fireEvent.press(screen.getByRole('button', { name: /^More:/ }));
   await waitFor(() => expect(fake.api.callsTo('POST api/routes/explore').at(-1)!.body).toMatchObject({ budgetMin: 20 }));
   expect(screen.getByText('Up to 20 min extra')).toBeOnTheScreen();
 });
@@ -81,7 +83,7 @@ it('asks for routes once quick taps on the extra time stop, not for each one', a
   await chooseDestination();
   await screen.findByText('Explore 1');
   const before = fake.api.callsTo('POST api/routes/explore').length;
-  for (let i = 0; i < 3; i++) await fireEvent.press(screen.getByRole('button', { name: '+' }));
+  for (let i = 0; i < 3; i++) await fireEvent.press(screen.getByRole('button', { name: /^More:/ }));
   expect(screen.getByText('Up to 30 min extra')).toBeOnTheScreen();
   await waitFor(() => expect(fake.api.callsTo('POST api/routes/explore')).toHaveLength(before + 1));
   expect(fake.api.callsTo('POST api/routes/explore').at(-1)!.body).toMatchObject({ budgetMin: 30 });
@@ -112,7 +114,7 @@ it('makes round trips from the start', async () => {
   await renderScreen(<Plan />);
   await fireEvent.press(screen.getByRole('radio', { name: 'Round trip' }));
   expect(screen.queryByLabelText('Destination')).toBeNull();
-  await fireEvent.press(screen.getAllByRole('button', { name: '+' })[0]!);
+  await fireEvent.press(screen.getAllByRole('button', { name: /^More:/ })[0]!);
   await fireEvent.press(screen.getByRole('button', { name: 'Make loops' }));
   expect(await screen.findByText('Loop 2')).toBeOnTheScreen();
   expect(fake.api.callsTo('POST api/routes/roundtrip')[0]!.body).toEqual({ start: [153.02, -27.47], mode: 'car', targetMin: 75 });
@@ -347,4 +349,51 @@ describe('the 9 November phone run', () => {
     await fireEvent.press(screen.getByRole('radio', { name: 'Directions' }));
     expect(screen.getByRole('radio', { name: 'Drive' })).toBeChecked();
   });
+});
+
+// A route from somewhere else would say "You've arrived" or "Off route" at once (P83).
+it('asks before starting a route that begins somewhere else, and can plan it from here instead', async () => {
+  fake.api.on({ 'POST api/routes/explore': () => ({ fastest: route(), explore: [] }) });
+  await renderScreen(<Plan />);
+  await chooseDestination();
+  await screen.findByText('Fastest');
+  await fireEvent.press(screen.getByRole('button', { name: 'Start' }));
+  expect(fake.router.push).not.toHaveBeenCalled();
+  expect(screen.getByText(/This route starts at Your location, .* from where you are/)).toBeOnTheScreen();
+  await fireEvent.press(screen.getByRole('button', { name: 'Start anyway' }));
+  expect(fake.router.push).toHaveBeenCalledWith('/navigate');
+});
+
+// Starting another trip ends the one running: said before Start is tapped (C14).
+it('says when directions are already running', async () => {
+  const { navigation } = jest.requireActual<typeof import('../src/nav/navigationService')>('../src/nav/navigationService');
+  const snap = jest.spyOn(navigation, 'getSnapshot').mockReturnValue({ ...navigation.getSnapshot(), active: true, destinationName: 'Coot-tha Place' });
+  try {
+    await renderScreen(<Plan />);
+    expect(screen.getByText('Directions to Coot-tha Place are running. Starting a route here ends them.')).toBeOnTheScreen();
+  } finally {
+    snap.mockRestore();
+  }
+});
+
+it('makes the map bigger and back (P12)', async () => {
+  await renderScreen(<Plan />);
+  await fireEvent.press(screen.getByRole('button', { name: 'Bigger map' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'Smaller map' }));
+  expect(screen.getByRole('button', { name: 'Bigger map' })).toBeOnTheScreen();
+});
+
+it('says when a loop runs over the time asked for (P69)', () => {
+  expect(loopNote(route({ durationS: 64 * 60 }), 60)).toBe('4 min longer than the 1 h you asked for');
+  expect(loopNote(route({ durationS: 61 * 60 }), 60)).toBeNull();
+});
+
+// "Navigating to Gumdale State School" in the notification and the car, not just "Navigating" (P91).
+it('names where a trip goes when it starts', async () => {
+  const { destinationToNavigate } = jest.requireActual<typeof import('../src/lib/plannedStore')>('../src/lib/plannedStore');
+  await renderScreen(<Plan />);
+  await chooseDestination();
+  await screen.findByText('Fastest');
+  await fireEvent.press(screen.getByRole('button', { name: 'Start' }));
+  expect(destinationToNavigate()).toBe('Gumdale State School');
 });

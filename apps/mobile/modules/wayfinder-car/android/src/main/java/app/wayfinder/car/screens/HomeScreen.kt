@@ -1,5 +1,7 @@
 package app.wayfinder.car.screens
 
+import android.os.Handler
+import android.os.Looper
 import androidx.car.app.CarContext
 import androidx.car.app.Screen
 import androidx.car.app.model.Action
@@ -41,10 +43,24 @@ class HomeScreen(
   private var status: Result<CarStatus>? = null
   private val idle = IdleDrive(api)
   private var stopFollowing: (() -> Unit)? = null
+  private val handler = Handler(Looper.getMainLooper())
+  /** Asks again while Home shows, so a place saved on the phone appears without leaving Home (C78). */
+  private val refresh = object : Runnable {
+    override fun run() {
+      if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return
+      load(quiet = true)
+      handler.postDelayed(this, REFRESH_MS)
+    }
+  }
+  private val back = BackToDirections({ api.navigation != null }, { onDrive() })
 
   init {
     // Each time Home is back on top: check the account again and show the overview.
-    whenStarted { load() }
+    whenStarted {
+      load()
+      handler.removeCallbacks(refresh)
+      handler.postDelayed(refresh, REFRESH_MS)
+    }
     // Redrawn only when a trip starts or ends, not on every fix.
     lifecycle.addObserver(object : DefaultLifecycleObserver {
       private var off: (() -> Unit)? = null
@@ -58,7 +74,10 @@ class HomeScreen(
           }
         }
       }
-      override fun onStop(owner: LifecycleOwner) = unfollow()
+      override fun onStop(owner: LifecycleOwner) {
+        handler.removeCallbacks(refresh)
+        unfollow()
+      }
       override fun onDestroy(owner: LifecycleOwner) {
         off?.invoke()
       }
@@ -81,15 +100,18 @@ class HomeScreen(
 
   private val backToDirections get() = api.navigation != null
 
-  private fun load() {
+  /** [quiet]: a refresh, which leaves the map alone (it may be following the car) and keeps what's shown if it fails. */
+  private fun load(quiet: Boolean = false) {
     api.status { r ->
+      if (quiet && r.isFailure) return@status
+      val changed = r.getOrNull() != status?.getOrNull()
       status = r
       r.getOrNull()?.let {
         onStatus(it)
-        show(map, MapScene.Overview(it.here))
+        if (!quiet) show(map, MapScene.Overview(it.here))
       }
       follow()
-      invalidate()
+      if (!quiet || changed) invalidate()
     }
   }
 
@@ -113,9 +135,10 @@ class HomeScreen(
           ItemList.Builder()
             .apply { if (backToDirections) addItem(row("Back to directions", browsable = true, icon = icon(R.drawable.wf_navigation)) { onDrive() }) }
             .apply { savedRows(s.saved).forEach { addItem(it) } }
-            .addItem(row("Search", browsable = true, icon = icon(R.drawable.wf_search)) { screenManager.push(SearchScreen(carContext, api, map, s.searchHint, s.saved)) })
-            .addItem(row("Planned routes", browsable = true, icon = icon(R.drawable.wf_route)) { screenManager.push(PickScreens.planned(carContext, api, map)) })
-            .addItem(row("Discover nearby", browsable = true, icon = icon(R.drawable.wf_explore)) { screenManager.push(PickScreens.discover(carContext, api, map)) })
+            .addItem(row("Search", browsable = true, icon = icon(R.drawable.wf_search)) { screenManager.push(SearchScreen(carContext, api, map, s.searchHint, s.saved, back)) })
+            .addItem(row("Discover nearby", browsable = true, icon = icon(R.drawable.wf_explore)) { screenManager.push(PickScreens.discover(carContext, api, map, back)) })
+            // Only when there are some: a row that always said "nothing planned" pushed the rest off a small screen (C4).
+            .apply { if (s.plannedRoutes != 0) addItem(row("Planned routes", browsable = true, icon = icon(R.drawable.wf_route)) { screenManager.push(PickScreens.planned(carContext, api, map)) }) }
             .build(),
         )
         .build()
@@ -135,6 +158,10 @@ class HomeScreen(
       home?.let { h -> row(h.name, h.detail, browsable = true, icon = icon(R.drawable.wf_home)) { screenManager.push(RoutePreviewScreen.forPlace(carContext, api, map, h)) } },
       others.takeIf { it.isNotEmpty() }?.let { row("Saved places", browsable = true, icon = icon(R.drawable.wf_bookmark)) { screenManager.push(PickScreens.saved(carContext, api, map, saved)) } },
     )
+  }
+
+  companion object {
+    const val REFRESH_MS = 30_000L
   }
 
   private fun message(text: String): Template =

@@ -7,7 +7,7 @@ import { formatDistanceShort, formatDuration } from '../lib/format';
 import { space, useTheme } from '../lib/theme';
 import { Button, Card, NewBadge } from './kit';
 
-export function RouteCard({ route, title, selected, onSelect, onStart }: { route: Route; title: string; selected: boolean; onSelect(): void; onStart(): void }) {
+export function RouteCard({ route, title, note, selected, onSelect, onStart }: { route: Route; title: string; note?: string | null; selected: boolean; onSelect(): void; onStart(): void }) {
   const t = useTheme();
   const { copy } = useAppConfig();
   const fastest = route.kind === 'fastest';
@@ -24,6 +24,7 @@ export function RouteCard({ route, title, selected, onSelect, onStart }: { route
             <Text style={{ color: t.text2, fontSize: 13 }}>{formatDistanceShort(route.distanceM)}</Text>
             {route.novelty.newKm > 0.05 ? <NewBadge text={copy.newKm(route.novelty.newKm)} /> : null}
           </View>
+          {note ? <Text style={{ color: t.text2, fontSize: 13 }}>{note}</Text> : null}
           {route.usuallySlow ? <Text style={{ color: t.warning, fontSize: 13, fontWeight: '600' }}>{USUALLY_SLOW_TEXT}</Text> : null}
         </View>
         <View style={{ alignItems: 'flex-end' }}>

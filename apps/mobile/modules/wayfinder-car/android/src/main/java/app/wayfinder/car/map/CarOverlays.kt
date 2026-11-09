@@ -17,6 +17,25 @@ object SpeedReadout {
   fun shown(limitKmh: Int?, speedKmh: Int?) = limitKmh != null || speedKmh != null
 
   fun over(limitKmh: Int?, speedKmh: Int?) = limitKmh != null && speedKmh != null && speedKmh >= limitKmh + OVER_BY_KMH
+
+  /** The speed box: dark, or all red while over the limit, so it shows at a glance (C69). */
+  fun boxColour(limitKmh: Int?, speedKmh: Int?): Int = if (over(limitKmh, speedKmh)) OVER_RED else 0xE6202124.toInt()
+
+  const val OVER_RED = 0xFFC5221F.toInt()
+}
+
+/**
+ * One short chime each time the car goes over the limit, not again until it has been back under
+ * it: only the digits turning red was easy to miss (C69). Never while directions are muted.
+ */
+class OverLimitChime(private val chime: () -> Unit) {
+  private var over = false
+
+  fun update(limitKmh: Int?, speedKmh: Int?, muted: Boolean) {
+    val now = SpeedReadout.over(limitKmh, speedKmh)
+    if (now && !over && !muted) chime()
+    over = now
+  }
 }
 
 /**
@@ -62,9 +81,9 @@ class SpeedView(context: Context) : View(context) {
     }
     speedKmh?.let { speed ->
       val top = (SIGN_DP + GAP_DP) * d
-      fill.color = 0xE6202124.toInt()
+      fill.color = SpeedReadout.boxColour(limitKmh, speed)
       canvas.drawRoundRect(RectF(0f, top, size, top + SPEED_DP * d), 8 * d, 8 * d, fill)
-      text.color = if (SpeedReadout.over(limitKmh, speed)) 0xFFFF6B6B.toInt() else Color.WHITE
+      text.color = Color.WHITE
       text.textSize = 18 * d
       canvas.drawText(speed.toString(), size / 2, top + 19 * d, text)
       text.textSize = 10 * d

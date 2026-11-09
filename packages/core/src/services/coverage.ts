@@ -109,7 +109,7 @@ export function coverageToGeoJson(cov: CoverageResponse) {
     type: 'FeatureCollection' as const,
     features: cov.roads.map((r) => ({
       type: 'Feature' as const,
-      properties: { wayId: r.wayId, recent: r.recent, modes: r.modes },
+      properties: { wayId: r.wayId, recent: r.recent, modes: r.modes, firstAt: r.firstAt ?? null, lastAt: r.lastAt ?? null },
       geometry: { type: 'LineString' as const, coordinates: r.geometry },
     })),
   };

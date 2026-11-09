@@ -18,6 +18,8 @@ export const CarPlaceSchema = z.object({
   saved: z.boolean().optional(),
   /** The saved place that is Home, however it was written ("Home 🏠", "My house"). */
   home: z.boolean().optional(),
+  /** Its address or suburb, to name it beside a saved name like "Home" (C99). */
+  address: z.string().nullable().optional(),
 });
 
 export const CarStatusSchema = z.object({
@@ -29,11 +31,14 @@ export const CarStatusSchema = z.object({
   here: LngLatSchema.nullable(),
   /** Your saved places, Home first then the nearest, for one tap from the car's home screen. */
   saved: z.array(CarPlaceSchema),
+  /** How many routes are planned for driving: Home offers them only when there are some (C4). */
+  plannedRoutes: z.number().int().nonnegative().nullable().optional(),
 });
 
 /** The limit where the car is, with no trip: `kmh` null where none is known. */
 export const CarSpeedLimitSchema = z.object({ kmh: z.number().nullable(), estimated: z.boolean(), road: z.string().nullable() });
 export const CarPlacesSchema = z.object({ places: z.array(CarPlaceSchema) });
+export const CarLookupSchema = z.object({ place: CarPlaceSchema.nullable() });
 
 export const CarRouteOptionSchema = z.object({
   routeId: z.string(),
@@ -96,6 +101,8 @@ export const CarNavSchema = z.object({
 export const CarParams = {
   search: z.object({ q: z.string().trim().min(1).max(200) }),
   plan: z.object({ to: LngLatSchema }),
+  /** What is at a point: for a destination sent with no name (C75). */
+  lookup: z.object({ at: LngLatSchema }),
   routeLine: z.object({ routeId: z.string() }),
   start: z.object({ routeId: z.string(), destinationName: z.string().max(200) }),
   mute: z.object({ muted: z.boolean() }),

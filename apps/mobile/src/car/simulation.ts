@@ -3,8 +3,9 @@
  * on): a short simulated trip that feeds made-up fixes to the same navigation session a real trip
  * uses, so the car shows real directions without anyone driving.
  *
- * Which route it follows: the trip already running, else a built-in demo route that starts where
- * the phone is (or in central Brisbane when the phone can't say). The demo route needs no server.
+ * Which route it follows: the trip already running, else a real route on the roads to somewhere
+ * about two kilometres away (see handlers.ts), else, with no server, a built-in demo route that
+ * starts where the phone is (or in central Brisbane when the phone can't say).
  * A test drive is marked `simulated` in the navigation service, which records nothing, uploads
  * nothing and starts no location service, so it can never become a trip in someone's coverage.
  */
@@ -18,12 +19,28 @@ export const DEMO_ORIGIN: LngLat = [153.0251, -27.4698];
 export const DEMO_DESTINATION_NAME = 'Test drive';
 /** Real seconds between simulated fixes. */
 const TICK_MS = 1000;
-/** A test drive should take about this many ticks, whatever the route's length. */
-const TARGET_TICKS = 90;
-const MIN_SPEED_MPS = 14;
-const MAX_SPEED_MPS = 60;
+/**
+ * How fast a test drive goes: the route's own average, as a car would drive it, never faster than
+ * this. It was the route's length over 90 seconds, so a long trip "drove" at 216 km/h past 60 signs,
+ * red for speeding the whole way (C86).
+ */
+export const MAX_TEST_SPEED_MPS = 25;
+const MIN_SPEED_MPS = 5;
 
-/** About two kilometres: east, then a left turn north, then arrive. */
+/** The speed a test drive along [route] goes at. */
+export function testDriveSpeed(route: Pick<Route, 'distanceM' | 'durationS'>): number {
+  const average = route.durationS > 0 ? route.distanceM / route.durationS : MAX_TEST_SPEED_MPS;
+  return Math.min(MAX_TEST_SPEED_MPS, Math.max(MIN_SPEED_MPS, average));
+}
+
+/** Where a test drive with no trip heads: this far, east of where you are, on real roads. */
+export const TEST_DRIVE_M = 2000;
+export const testDriveTarget = (origin: LngLat = DEMO_ORIGIN): LngLat => destination(origin, 90, TEST_DRIVE_M);
+
+/**
+ * About two kilometres: east, then a left turn north, then arrive. Straight lines, which cross
+ * whatever is there (C84): only when the server can't give a real route.
+ */
 export function demoRoute(origin: LngLat = DEMO_ORIGIN): Route {
   const corner = destination(origin, 90, 1200);
   const end = destination(corner, 0, 800);
@@ -74,7 +91,7 @@ export function startTestDrive(
   cancelTestDrive();
   const now = opts.now ?? Date.now;
   const timers: Timers = opts.timers ?? { setInterval: (fn, ms) => setInterval(fn, ms), clearInterval: (h) => clearInterval(h as ReturnType<typeof setInterval>) };
-  const speedMps = Math.min(MAX_SPEED_MPS, Math.max(MIN_SPEED_MPS, lineLengthM(route.geometry) / TARGET_TICKS));
+  const speedMps = testDriveSpeed(route);
   const fixes = simulateFixes(route.geometry, { speedMps, intervalS: TICK_MS / 1000, startTs: now() });
 
   nav.start(route, { destinationName: destinationName ?? undefined, simulated: true });

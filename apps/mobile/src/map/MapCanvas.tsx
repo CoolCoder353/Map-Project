@@ -31,6 +31,10 @@ interface Props {
   routes?: Route[];
   selectedRouteId?: string | null;
   onRoutePress?: (id: string) => void;
+  /** A road on the coverage map tapped: what the server says about it (when it was travelled, P99). */
+  onCoveragePress?: (road: Record<string, unknown>) => void;
+  /** A marker tapped: its id (Discover's pins lead to their cards, P47). */
+  onMarkerPress?: (id: string) => void;
   markers?: MapMarker[];
   coverage?: GeoJSON.FeatureCollection | null;
   track?: LngLat[] | null;
@@ -43,7 +47,18 @@ interface Props {
    * selected route's lights with a known timing are marked as if setting off now.
    */
   lights?: ReadonlyArray<{ at: LngLat; state: LightState }>;
+  /**
+   * With [followUser]: where navigation says you are and which way you're going. The map follows
+   * this, turned to your direction, and marks it, rather than relying on the phone's own location
+   * layer, which showed nothing and stayed north up when navigation followed the car (P27, P85).
+   */
+  follow?: { at: LngLat; headingDeg: number | null } | null;
+  /** The map for directions: no buildings, place dots or light markers, and the route in one colour (P21, P28, P86). */
+  driving?: boolean;
 }
+
+/** Route lines sit under this layer of the server's style, so place names stay readable over them (P7). */
+export const ROUTES_BELOW = 'place-suburb';
 
 /** Red and green as the lights themselves are, the same in light and dark. */
 export const LIGHT_COLOURS: Record<LightState, string> = { red: '#d93025', green: '#188038' };
@@ -88,7 +103,7 @@ export function boundsOf(coords: LngLat[]): [number, number, number, number] | n
 }
 
 export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
-  { style, routes = [], selectedRouteId = null, onRoutePress, markers = [], coverage, track, showUser = true, followUser = false, onPress, onRegionChange, lights },
+  { style, routes = [], selectedRouteId = null, onRoutePress, onMarkerPress, onCoveragePress, markers = [], coverage, track, showUser = true, followUser = false, onPress, onRegionChange, lights, follow, driving = false },
   ref,
 ) {
   const t = useTheme();
@@ -98,16 +113,26 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
   const [canShowUser, setCanShowUser] = useState(false);
   // Following you until the map is dragged away; Re-centre picks it up again.
   const [following, setFollowing] = useState(true);
-  const tracking = followUser && following;
+  // Following a position navigation gives is done here; only without one does the native map follow the phone.
+  const tracking = followUser && following && follow === undefined;
+  const followAt = followUser && following && follow && isLngLat(follow.at) ? follow : null;
+  // By value, not the object: a new one comes with every navigation update.
+  const followLon = followAt?.at[0];
+  const followLat = followAt?.at[1];
+  const followHeading = followAt?.headingDeg ?? null;
+  useEffect(() => {
+    if (followLon === undefined || followLat === undefined || !styleUrl) return;
+    camera.current?.easeTo({ center: [followLon, followLat], ...(followHeading != null ? { bearing: followHeading } : {}), duration: 800 });
+  }, [followLon, followLat, followHeading, styleUrl]);
 
   useEffect(() => {
     void getServerUrl()
       .catch(() => '')
       .then((u) => {
         // A relative style URL (no server set yet) crashes the native map.
-        setStyleUrl(isServerUrl(u) ? `${u}/map/style.json?theme=${t.dark ? 'dark' : 'light'}` : '');
+        setStyleUrl(isServerUrl(u) ? `${u}/map/style.json?theme=${t.dark ? 'dark' : 'light'}${driving ? '&driving=1' : ''}` : '');
       });
-  }, [t.dark]);
+  }, [t.dark, driving]);
 
   // The user-location layer asks Android for updates; rendering it without permission can take
   // the native map down, so it only appears once permission is granted.
@@ -164,13 +189,14 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
     type: 'FeatureCollection',
     features: ordered.map((r) => ({
       type: 'Feature',
-      properties: { id: r.id, kind: r.kind, selected: r.id === selectedRouteId },
+      // Driving, the route is the one line to follow, drawn as the car draws it whatever its kind.
+      properties: { id: r.id, kind: driving ? 'fastest' : r.kind, selected: r.id === selectedRouteId },
       geometry: { type: 'LineString', coordinates: r.geometry },
     })),
   };
   const markerData: GeoJSON.FeatureCollection = {
     type: 'FeatureCollection',
-    features: markers.map((m) => ({ type: 'Feature', properties: { kind: m.kind, label: m.label ?? '' }, geometry: { type: 'Point', coordinates: m.lngLat } })),
+    features: markers.map((m) => ({ type: 'Feature', properties: { id: m.id, kind: m.kind, label: m.label ?? '' }, geometry: { type: 'Point', coordinates: m.lngLat } })),
   };
   // Following starts close up on where the trip starts, so the map is already zoomed in before
   // the first position fix arrives; the country overview is for maps with nothing to follow.
@@ -205,6 +231,11 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       logo={false}
       compass={false}
       onPress={onPress ? (e) => onPress(e.nativeEvent.lngLat as LngLat) : undefined}
+      onRegionWillChange={follow !== undefined ? (e) => {
+        // Dragged away while following: left there until Re-centre.
+        if (e.nativeEvent.userInteraction) setFollowing(false);
+      } : undefined}
+      attributionPosition={{ bottom: 20, left: 8 }}
       onRegionDidChange={(e) => {
         const { bounds, zoom } = e.nativeEvent;
         if (!Array.isArray(bounds) || bounds.length !== 4 || !bounds.every(Number.isFinite) || !Number.isFinite(zoom)) return;
@@ -220,9 +251,17 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         onTrackUserLocationChange={followUser ? (e) => setFollowing(e.nativeEvent.trackUserLocation !== null) : undefined}
       />
       {coverage ? (
-        <GeoJSONSource id="coverage" data={coverage}>
+        <GeoJSONSource
+          id="coverage"
+          data={coverage}
+          onPress={onCoveragePress ? (e) => {
+            const props = (e.nativeEvent as unknown as { features?: GeoJSON.Feature[] }).features?.[0]?.properties;
+            if (props) onCoveragePress(props);
+          } : undefined}
+        >
           <Layer
             id="coverage-roads"
+            beforeId={ROUTES_BELOW}
             type="line"
             layout={{ 'line-cap': 'round', 'line-join': 'round' }}
             paint={{ 'line-color': ['case', ['get', 'recent'], t.exploreLine, t.accent], 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.5, 15, 5], 'line-opacity': 0.9 }}
@@ -230,7 +269,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         </GeoJSONSource>
       ) : null}
       <GeoJSONSource id="track" data={trackData}>
-        <Layer id="track-line" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': t.accent, 'line-width': 5 }} />
+        <Layer id="track-line" beforeId={ROUTES_BELOW} type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': t.accent, 'line-width': 5 }} />
       </GeoJSONSource>
       <GeoJSONSource
         id="routes"
@@ -240,9 +279,11 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
           if (id) onRoutePress(id);
         } : undefined}
       >
-        <Layer id="routes-casing" type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': t.surface, 'line-width': ['case', ['get', 'selected'], 11, 8] }} />
-        <Layer id="routes-fastest" type="line" filter={['==', ['get', 'kind'], 'fastest']} layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': t.accent, 'line-width': ['case', ['get', 'selected'], 7, 5], 'line-opacity': ['case', ['get', 'selected'], 1, 0.6] }} />
-        <Layer id="routes-explore" type="line" filter={['!=', ['get', 'kind'], 'fastest']} layout={{ 'line-join': 'round' }} paint={{ 'line-color': t.exploreLine, 'line-width': ['case', ['get', 'selected'], 7, 5], 'line-opacity': ['case', ['get', 'selected'], 1, 0.65], 'line-dasharray': [2, 1] }} />
+        <Layer id="routes-casing" beforeId={ROUTES_BELOW} type="line" layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': t.surface, 'line-width': ['case', ['get', 'selected'], 11, 8] }} />
+        <Layer id="routes-fastest" beforeId={ROUTES_BELOW} type="line" filter={['==', ['get', 'kind'], 'fastest']} layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': t.accent, 'line-width': ['case', ['get', 'selected'], 7, 5], 'line-opacity': ['case', ['get', 'selected'], 1, 0.6] }} />
+        <Layer id="routes-explore" beforeId={ROUTES_BELOW} type="line" filter={['==', ['get', 'kind'], 'explore']} layout={{ 'line-join': 'round' }} paint={{ 'line-color': t.exploreLine, 'line-width': ['case', ['get', 'selected'], 7, 5], 'line-opacity': ['case', ['get', 'selected'], 1, 0.65], 'line-dasharray': [2, 1] }} />
+        {/* Loops overlap: the chosen one solid and on top, the others grey and thin, so each can be told apart (P68). */}
+        <Layer id="routes-loop" beforeId={ROUTES_BELOW} type="line" filter={['==', ['get', 'kind'], 'roundtrip']} layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': ['case', ['get', 'selected'], t.exploreLine, t.text2], 'line-width': ['case', ['get', 'selected'], 7, 3], 'line-opacity': ['case', ['get', 'selected'], 1, 0.5] }} />
       </GeoJSONSource>
       <GeoJSONSource id="route-lights" data={lightData}>
         <Layer
@@ -257,7 +298,14 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
           }}
         />
       </GeoJSONSource>
-      <GeoJSONSource id="markers" data={markerData}>
+      <GeoJSONSource
+        id="markers"
+        data={markerData}
+        onPress={onMarkerPress ? (e) => {
+          const id = (e.nativeEvent as unknown as { features?: GeoJSON.Feature[] }).features?.[0]?.properties?.id as string | undefined;
+          if (id) onMarkerPress(id);
+        } : undefined}
+      >
         <Layer id="markers-circle" type="circle" paint={{ 'circle-radius': 8, 'circle-color': ['match', ['get', 'kind'], 'end', t.danger, 'poi', t.exploreLine, 'position', t.accent, t.surface], 'circle-stroke-color': ['match', ['get', 'kind'], 'start', t.text, t.surface], 'circle-stroke-width': 3 }} />
         <Layer id="markers-label" type="symbol" filter={['!=', ['get', 'label'], '']} layout={{ 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Bold'], 'text-size': 13, 'text-offset': [0, 1.3], 'text-anchor': 'top', 'text-optional': true }} paint={{ 'text-color': t.text, 'text-halo-color': t.surface, 'text-halo-width': 1.5 }} />
       </GeoJSONSource>

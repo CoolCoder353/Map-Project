@@ -103,4 +103,50 @@ class SceneLayoutTest {
       MapScene.Following(line, null, null),
     ).forEach { assertEquals(it.toString(), 0, SceneLayout.moveMs(SceneLayout.camera(it))) }
   }
+
+  /** No position yet: where the car or phone last was, not all of Australia (C67). */
+  @Test fun homeOpensWhereYouLastWereBeforeAnyPosition() {
+    assertEquals(CameraSpec.Center(here, SceneLayout.HOME_ZOOM), SceneLayout.camera(MapScene.Overview(null), remembered = here))
+  }
+
+  /** Search results show where you are among them (C66). */
+  @Test fun placesShowWhereYouAre() {
+    assertEquals(here, SceneLayout.drawing(MapScene.Places(listOf(Samples.place()), here)).position)
+  }
+
+  /** A chosen route is marked where it starts, before Go (C13, C34). */
+  @Test fun theChosenRouteIsMarkedWhereItStarts() {
+    val a = Samples.option("a")
+    assertEquals(a.geometry.first(), SceneLayout.drawing(MapScene.Routes(listOf(a), 0)).start)
+    assertNull(SceneLayout.drawing(MapScene.Routes(listOf(a), MapScene.Routes.NONE)).start)
+  }
+
+  /** Pins on top of each other share one badge with both numbers (C30). */
+  @Test fun pinsThatWouldOverlapShareABadge() {
+    val near = LngLat(here.lon + 0.0001, here.lat)
+    val far = LngLat(here.lon + 0.2, here.lat - 0.2)
+    val pins = SceneLayout.grouped(listOf(Pin(here, "1"), Pin(far, "2"), Pin(near, "3")))
+    assertEquals(listOf(Pin(here, "1·3"), Pin(far, "2")), pins)
+    assertEquals(listOf(Pin(here, "1")), SceneLayout.grouped(listOf(Pin(here, "1"))))
+  }
+
+  /** Only following the car is tilted and turned; every other map is flat and north up (C5, C27). */
+  @Test fun browsingMapsAreFlatAndNorthUp() {
+    val follow = CameraSpec.Follow(here, 90.0)
+    assertEquals(SceneLayout.FOLLOW_TILT, SceneLayout.tilt(follow), 0.0)
+    assertEquals(90.0, SceneLayout.bearing(follow), 0.0)
+    for (spec in listOf(CameraSpec.Center(here, 13.0), CameraSpec.Fit(listOf(here)))) {
+      assertEquals(0.0, SceneLayout.tilt(spec), 0.0)
+      assertEquals(0.0, SceneLayout.bearing(spec), 0.0)
+    }
+  }
+
+  /** The speed readout keeps a column to the left; the car is centred in what's left (C2, C88). */
+  @Test fun theCarIsCentredClearOfTheSpeedReadout() {
+    val column = SceneLayout.speedColumn(60, 12, shown = true)
+    assertEquals(84, column)
+    assertEquals(0, SceneLayout.speedColumn(60, 12, shown = false))
+    val (x, _) = SceneLayout.followPoint(300, 0, 800, 480, column)
+    assertEquals((300 + 84 + 800) / 2f, x, 0f)
+  }
 }

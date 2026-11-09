@@ -167,7 +167,10 @@ async function byPostcode(db: DbClient, postcode: string, near: LngLat | null, l
 
 const HOUSE_NUMBER = /^(?:\S+\/)?(\d+[a-z]?)\s+/i;
 
-/** Places named like the address (or its street) in the suburb or postcode it gives, best first. */
+/**
+ * Places named like the address (or its street) in the suburb or postcode it gives, best first.
+ * "Brisbane" also means the suburb Brisbane City, as people say it (P73).
+ */
 async function findInLocality(db: DbClient, a: { name: string; locality: string | null; postcode: string | null }, near: LngLat | null): Promise<PlaceRow[]> {
   const full = expandAbbreviations(a.name).toLowerCase();
   // "3/12 Smith Street" is unit 3 at number 12; addresses are mapped by the number on the street.
@@ -177,12 +180,12 @@ async function findInLocality(db: DbClient, a: { name: string; locality: string 
   const rows = (
     await db.query<PlaceRow>(
       `SELECT ${COLUMNS}, 1 AS sim FROM places
-       WHERE lower(name) = ANY($1::text[]) AND (lower(suburb) = $2 OR postcode = $3) LIMIT 50`,
+       WHERE lower(name) = ANY($1::text[]) AND (lower(suburb) = $2 OR lower(suburb) = $2 || ' city' OR postcode = $3) LIMIT 50`,
       [names, a.locality, a.postcode],
     )
   ).rows;
   const rank = (r: PlaceRow) =>
-    (lowerName(r) === street && street !== full ? 2 : 0) + (a.locality && r.suburb?.toLowerCase() !== a.locality ? 1 : 0) + (a.postcode && r.postcode !== a.postcode ? 0.5 : 0);
+    (lowerName(r) === street && street !== full ? 2 : 0) + (a.locality && r.suburb?.toLowerCase() !== a.locality && r.suburb?.toLowerCase() !== `${a.locality} city` ? 1 : 0) + (a.postcode && r.postcode !== a.postcode ? 0.5 : 0);
   const dist = (r: PlaceRow) => (near ? haversineM(near, [r.lon, r.lat]) : 0);
   const sorted = rows.sort((x, y) => rank(x) - rank(y) || dist(x) - dist(y));
   // One street, mapped as several pieces, is one suggestion.

@@ -151,4 +151,16 @@ class RoutePreviewScreenTest {
     screen.go()
     assertEquals(2, starts())
   }
+
+  /** "Home" alone doesn't say which: its address goes with it (C99). */
+  @Test fun aSavedPlaceIsTitledWithItsAddress() {
+    val home = Samples.saved("Home").copy(saved = true, address = "12 Moselle Drive, Thornlands")
+    assertEquals("Home · 12 Moselle Drive, Thornlands", RoutePreviewScreen.titleFor(home))
+    assertEquals("Mt Coot-tha Lookout", RoutePreviewScreen.titleFor(Samples.place()))
+    // The trip is still named Home.
+    val preview = RoutePreviewScreen.forPlace(carContext, api, scenes, home).also { ScreenController(it).moveToState(Lifecycle.State.STARTED) }
+    api.answer("plan", PlanResult(options, null))
+    preview.go()
+    assertEquals("start r-fast Home", api.calls.last())
+  }
 }

@@ -27,7 +27,7 @@ const mockSend = jest.fn(async (_where: unknown) => 'Thanks. We’ll check the l
 jest.mock('../src/nav/speedLimitReport', () => ({ sendSpeedLimitReport: (where: unknown) => mockSend(where) }));
 jest.mock('../src/lib/plannedStore', () => {
   let r: unknown = null;
-  return { setRouteToNavigate: (x: unknown) => (r = x), takeRouteToNavigate: () => r };
+  return { setRouteToNavigate: (x: unknown) => (r = x), takeRouteToNavigate: () => r, destinationToNavigate: () => 'Gumdale State School' };
 });
 
 type AlertButtons = Array<{ text?: string; onPress?: () => void }>;
@@ -68,6 +68,7 @@ it('goes to Plan when there is nothing to go back to', async () => {
   fake.router.canGoBack.mockReturnValueOnce(false);
   await renderScreen(<Navigate />);
   await fireEvent.press(screen.getByRole('button', { name: 'End' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'End trip' }));
   expect(mockNav.stop).toHaveBeenCalled();
   expect(fake.router.replace).toHaveBeenCalledWith('/plan');
   expect(fake.router.back).not.toHaveBeenCalled();
@@ -165,6 +166,7 @@ it('mutes the voice and ends navigation', async () => {
   await fireEvent.press(screen.getByRole('button', { name: 'Mute voice' }));
   expect(mockNav.setMuted).toHaveBeenCalledWith(true);
   await fireEvent.press(screen.getByRole('button', { name: 'End' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'End trip' }));
   expect(mockNav.stop).toHaveBeenCalled();
   expect(fake.router.back).toHaveBeenCalled();
 });
@@ -260,25 +262,41 @@ it('closes by itself when the trip ends without it (arrived, or ended in the car
   expect(mockNav.stop).not.toHaveBeenCalled();
 });
 
+// Asked in the app's own bar, not Android's dialog with capitalised buttons (P22).
 it('asks before ending a trip that hasn’t arrived, and ends at once when it has', async () => {
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   mockNav.state = { status: 'navigating', nextInstruction: { sign: 0, text: 'Continue' }, distanceToNextManeuverM: 900, remainingDurationS: 600, remainingDistanceM: 5400, speedLimitKmh: null };
   const view = await render(<Navigate />);
   await fireEvent.press(screen.getByRole('button', { name: 'End' }));
-  expect(alert.mock.calls[0]![0]).toBe('End this trip?');
-  const buttons = alert.mock.calls[0]![2] as AlertButtons;
-  // Keep going: nothing stops.
-  expect(buttons[0]).toMatchObject({ text: 'Keep going', style: 'cancel' });
+  expect(screen.getByText('End this trip?')).toBeOnTheScreen();
+  expect(alert).not.toHaveBeenCalled();
+  // Keep going: nothing stops, and End is back.
+  await fireEvent.press(screen.getByRole('button', { name: 'Keep going' }));
   expect(mockNav.stop).not.toHaveBeenCalled();
-  await act(async () => buttons.find((b) => b.text === 'End trip')!.onPress!());
+  await fireEvent.press(screen.getByRole('button', { name: 'End' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'End trip' }));
   expect(mockNav.stop).toHaveBeenCalledTimes(1);
-  // Arrived, Done ends it without asking.
-  alert.mockClear();
+  // Arrived, Done ends it without asking, and the bar says where you are, not "0 min".
   mockNav.state = { ...(mockNav.state as object), status: 'arrived' };
   await view.rerender(<Navigate />);
+  expect(screen.queryByText('0 m to go')).toBeNull();
   await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
-  expect(alert).not.toHaveBeenCalled();
+  expect(screen.queryByText('End this trip?')).toBeNull();
   expect(mockNav.stop).toHaveBeenCalledTimes(2);
+});
+
+// The map shows where navigation has you and turns with you, and keeps the destination marked (P27, P84, P85).
+it('marks where you are and the destination, and follows navigation’s position', async () => {
+  Object.assign(mockNav, { position: [153.01, -27.47], headingDeg: 80 });
+  try {
+    await renderScreen(<Navigate />);
+    const props = fake.map.props as { markers: Array<{ kind: string }>; follow: unknown; driving: boolean };
+    expect(props.markers.map((m) => m.kind)).toEqual(['end', 'position']);
+    expect(props.follow).toEqual({ at: [153.01, -27.47], headingDeg: 80 });
+    expect(props.driving).toBe(true);
+  } finally {
+    Object.assign(mockNav, { position: null, headingDeg: null });
+  }
 });
 
 it('draws the turn as the car does: keep left as keep left, a roundabout with its exit', async () => {

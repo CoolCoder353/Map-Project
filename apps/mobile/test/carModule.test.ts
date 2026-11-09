@@ -33,12 +33,15 @@ describe('Android Auto module', () => {
   });
 
   it('waits for the phone longer than the phone waits for the server and a position', () => {
-    // Otherwise a weak signal reads, in the car, as the phone not answering.
+    // Otherwise a weak signal reads, in the car, as the phone not answering. And not much longer:
+    // 45 s of spinner read as a hang (C65).
     const ms = (src: string, re: RegExp) => Number(re.exec(src)![1]!.replaceAll('_', ''));
-    const car = ms(readFileSync(join(moduleDir, 'src/main/java/app/wayfinder/car/bridge/CarBridge.kt'), 'utf8'), /timeoutMs: Long = ([\d_]+)/);
-    const server = ms(readFileSync(join(__dirname, '../src/lib/apiClient.ts'), 'utf8'), /const DEFAULT_TIMEOUT_MS = ([\d_]+)/);
-    const position = ms(readFileSync(join(__dirname, '../src/car/handlers.ts'), 'utf8'), /PHONE_FIX_WAIT_MS = ([\d_]+)/);
+    const car = ms(readFileSync(join(moduleDir, 'src/main/java/app/wayfinder/car/bridge/CarBridge.kt'), 'utf8'), /const val TIMEOUT_MS = ([\d_]+)L/);
+    const handlers = readFileSync(join(__dirname, '../src/car/handlers.ts'), 'utf8');
+    const server = ms(handlers, /CAR_SERVER_TIMEOUT_MS = ([\d_]+)/);
+    const position = ms(handlers, /PHONE_FIX_WAIT_MS = ([\d_]+)/);
     expect(car).toBeGreaterThan(server + position);
+    expect(car).toBeLessThanOrEqual(30_000);
   });
 
   it('handles navigate requests from Google Assistant and other apps (geo: links)', () => {

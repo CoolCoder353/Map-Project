@@ -16,6 +16,11 @@ export const CoveredRoadSchema = z.object({
   recent: z.boolean(),
   /** bit 1 = car, bit 2 = foot */
   modes: z.number().int(),
+  /** When it was first and last travelled, for a tap on the map (P99). Absent from older servers. */
+  firstAt: z.string().optional(),
+  lastAt: z.string().optional(),
+  /** Its name, where it has one. Absent from older servers. */
+  name: z.string().nullable().optional(),
 });
 export type CoveredRoad = z.infer<typeof CoveredRoadSchema>;
 

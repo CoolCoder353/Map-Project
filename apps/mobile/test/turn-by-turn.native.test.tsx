@@ -92,9 +92,13 @@ it('keeps the screen awake, follows GPS, speaks, and records the trip as navigat
   expect(mockAppend.mock.calls[0]![0]).toEqual([
     { ts: 1000, lon: 153, lat: -27.4, accuracyM: 5, speedMps: 10, headingDeg: 90, source: 'navigation', mode: 'foot', sessionId: 'session-1' },
   ]);
+  // Leaving the screen lets the screen sleep but keeps the trip (C63); End stops it.
   await unmount();
-  expect(mockRemove).toHaveBeenCalled();
   expect(deactivateKeepAwake).toHaveBeenCalledWith('wayfinder-navigation');
+  expect(mockRemove).not.toHaveBeenCalled();
+  expect(navigation.getSnapshot().active).toBe(true);
+  await act(async () => navigation.stop());
+  expect(mockRemove).toHaveBeenCalled();
   expect(mockSync).toHaveBeenCalled();
 });
 
@@ -158,9 +162,9 @@ it('explains a route too short to follow instead of crashing', async () => {
 it('stops GPS at once if navigation ends while it was still starting', async () => {
   let started: (sub: { remove(): void }) => void = () => undefined;
   jest.mocked(Location.watchPositionAsync).mockImplementationOnce(() => new Promise((resolve) => (started = resolve as never)));
-  const { unmount } = await renderHook(() => useTurnByTurn(route()));
+  await renderHook(() => useTurnByTurn(route()));
   await waitFor(() => expect(Location.watchPositionAsync).toHaveBeenCalled());
-  await unmount();
+  await act(async () => navigation.stop());
   const late = { remove: jest.fn() };
   await act(async () => started(late));
   expect(late.remove).toHaveBeenCalled();

@@ -28,6 +28,8 @@ class RoutePreviewScreen(
   private val map: MapScenes,
   private val destinationName: String,
   private val load: ((Result<PlanResult>) -> Unit) -> Unit,
+  /** What the screen is headed, when more than the name (a saved place's address). */
+  private val title: String = destinationName,
 ) : Screen(carContext) {
   private var result: Result<PlanResult>? = null
   private var selected = 0
@@ -42,6 +44,11 @@ class RoutePreviewScreen(
     load { r ->
       result = r
       showOnMap()
+      // Only the chosen row shows Go: say once that the others can be chosen too (C95).
+      if (r.getOrNull()?.options.orEmpty().size > 1 && !hinted) {
+        hinted = true
+        CarToast.makeText(carContext, PICK_HINT, CarToast.LENGTH_LONG).show()
+      }
       invalidate()
     }
   }
@@ -83,7 +90,7 @@ class RoutePreviewScreen(
   }
 
   override fun onGetTemplate(): Template {
-    val b = RoutePreviewNavigationTemplate.Builder().setTitle(destinationName).setHeaderAction(Action.BACK)
+    val b = RoutePreviewNavigationTemplate.Builder().setTitle(title).setHeaderAction(Action.BACK)
     val r = result ?: return b.setLoading(true).build()
     val plan = r.getOrElse { return problem(it.message ?: "Couldn’t plan a route. Try again.", canRetry = true) }
     if (plan.options.isEmpty()) return problem("No route found to $destinationName.")
@@ -121,16 +128,24 @@ class RoutePreviewScreen(
 
   private fun problem(text: String, canRetry: Boolean = false): Template =
     MessageTemplate.Builder(text)
-      .setTitle(destinationName)
+      .setTitle(title)
       .setHeaderAction(Action.BACK)
       .apply { if (canRetry) addAction(Action.Builder().setTitle("Try again").setOnClickListener { retry() }.build()) }
       .build()
 
   companion object {
+    const val PICK_HINT = "Tap a route to choose it, then Go."
+    /** Said once per car connection: drivers learn it the first time. */
+    private var hinted = false
+
+    /** A saved name like "Home" with its address, so the driver can tell which Home it is (C99). */
+    fun titleFor(place: CarPlace): String =
+      if (place.saved && !place.address.isNullOrBlank() && !place.address.equals(place.name, ignoreCase = true)) "${place.name} · ${place.address}" else place.name
+
     fun forPlace(carContext: CarContext, api: CarApi, map: MapScenes, place: CarPlace) =
-      RoutePreviewScreen(carContext, api, map, place.name) { done -> api.plan(place, done) }
+      RoutePreviewScreen(carContext, api, map, place.name, { done -> api.plan(place, done) }, titleFor(place))
 
     fun forPlanned(carContext: CarContext, api: CarApi, map: MapScenes, item: PlannedItem) =
-      RoutePreviewScreen(carContext, api, map, item.name) { done -> done(Result.success(PlanResult(listOf(item.option), null))) }
+      RoutePreviewScreen(carContext, api, map, item.name, load = { done -> done(Result.success(PlanResult(listOf(item.option), null))) })
   }
 }

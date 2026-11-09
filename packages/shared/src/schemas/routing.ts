@@ -166,6 +166,12 @@ export const DiscoverItemSchema = z.object({
   category: PoiCategorySchema,
   location: LngLatSchema,
   distanceM: z.number(),
+  /**
+   * How long getting there takes, as the smallest of a few time bands it falls inside ("within 10
+   * min" of a 30 min search): straight-line distance alone said nothing about the drive (P43).
+   * Absent from older servers.
+   */
+  withinMinutes: z.number().int().positive().optional(),
   areaUnexploredPct: z.number(),
   score: z.number(),
 });

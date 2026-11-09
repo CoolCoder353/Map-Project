@@ -3,7 +3,7 @@ import type { LngLat } from '@wayfinder/shared/geo';
 import type { Place } from '@wayfinder/shared/schemas';
 import * as Location from 'expo-location';
 import { LocateFixed, MapPin, Search, UserRound, X } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Text, TextInput, View } from 'react-native';
 import { api, errorMessage } from '../lib/api';
 import { type ContactMatch, findContacts } from '../lib/contacts';
@@ -22,7 +22,7 @@ export interface ChosenPlace {
 /** What a chosen place keeps: its type and suburb (distance depends on where you start). */
 const chosen = (p: Place): ChosenPlace => ({ name: p.name, description: placeDetail({ ...p, distanceM: undefined }, formatDistanceShort), location: p.location });
 
-export function PlaceSearch({ label, placeholder, value, onChange, near, allowCurrentLocation, tone = 'search' }: {
+export function PlaceSearch({ label, placeholder, value, onChange, near, allowCurrentLocation, tone = 'search', onFocusChange }: {
   label: string;
   placeholder: string;
   value: ChosenPlace | null;
@@ -30,10 +30,18 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
   near?: LngLat | undefined;
   allowCurrentLocation?: boolean;
   tone?: 'search' | 'start' | 'end';
+  /**
+   * Typing starts or stops: a screen with a map over the field gives the field and its suggestions
+   * the room, so the keyboard doesn't cover them (P4).
+   */
+  onFocusChange?: (focused: boolean) => void;
 }) {
   const t = useTheme();
   const [text, setText] = useState(value?.name ?? '');
   const [focused, setFocused] = useState(false);
+  const focusChange = useRef(onFocusChange);
+  focusChange.current = onFocusChange;
+  useEffect(() => focusChange.current?.(focused), [focused]);
   const [results, setResults] = useState<Place[]>([]);
   const [contacts, setContacts] = useState<ContactMatch[]>([]);
   const [error, setError] = useState<string | null>(null);

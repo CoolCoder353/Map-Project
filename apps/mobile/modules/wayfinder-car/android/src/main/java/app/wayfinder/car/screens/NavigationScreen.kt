@@ -39,6 +39,8 @@ class NavigationScreen(
   private val controls: MapControls? = null,
   private val onShown: () -> Unit = {},
   private val pictures: MapPictures? = null,
+  /** Ends the trip (the coordinator's, so it knows the car asked). */
+  private val onStop: () -> Unit = { api.stop() },
 ) : Screen(carContext) {
   private var nav: CarNav? = api.navigation
   private var line: List<LngLat> = emptyList()
@@ -88,6 +90,8 @@ class NavigationScreen(
       api.routeLine(id) { r ->
         if (lineFor == id) {
           line = r.getOrDefault(emptyList())
+          // Directions still come; say why the map has no line rather than leave it blank (C58).
+          if (r.isFailure && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) CarToast.makeText(carContext, NO_LINE, CarToast.LENGTH_LONG).show()
           showMap()
         }
       }
@@ -143,7 +147,7 @@ class NavigationScreen(
    */
   internal fun end() {
     if (nav?.status == app.wayfinder.car.bridge.NavStatus.ARRIVED || confirmingEnd) {
-      api.stop()
+      onStop()
       return
     }
     confirmingEnd = true
@@ -174,6 +178,7 @@ class NavigationScreen(
 
   companion object {
     const val PICTURE_WAIT_MS = 1_500L
+    const val NO_LINE = "Can’t draw this route on the map. The directions still work."
     const val END_CONFIRM_MS = 5_000L
   }
 }

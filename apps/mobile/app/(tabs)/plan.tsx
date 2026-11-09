@@ -2,13 +2,14 @@ import { ExploreRouteResponseSchema, type Mode, type Route, RoundTripResponseSch
 import { useQuery } from '@tanstack/react-query';
 import * as Linking from 'expo-linking';
 import { router, useFocusEffect } from 'expo-router';
-import { ArrowUpDown, Briefcase, Car, ExternalLink, Footprints, Home, Repeat, Star } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowUpDown, Briefcase, Car, ExternalLink, Footprints, Home, Maximize2, Minimize2, Repeat, Star } from 'lucide-react-native';
+import { haversineM } from '@wayfinder/shared/geo';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../../src/lib/api';
 import { useAppConfig } from '../../src/lib/appConfig';
-import { formatDuration } from '../../src/lib/format';
+import { exploreTitles, formatDistanceShort, formatDuration } from '../../src/lib/format';
 import { googleMapsUrl } from '../../src/lib/googleMaps';
 import { setRouteToNavigate, takeTripToPlan } from '../../src/lib/plannedStore';
 import { splitStyles, useLayout } from '../../src/lib/layout';
@@ -18,8 +19,10 @@ import { MapCanvas, type MapCanvasHandle } from '../../src/map/MapCanvas';
 import { type ChosenPlace, PlaceSearch } from '../../src/ui/PlaceSearch';
 import { RouteCard } from '../../src/ui/RouteCard';
 import { canSavePlace, SavePlace } from '../../src/ui/SavePlace';
-import { Body, Button, Empty, Heading, Loading, MIN_TARGET, Notice, Press, Segmented, Small } from '../../src/ui/kit';
+import { navigation } from '../../src/nav/navigationService';
+import { Body, Button, Empty, Heading, Loading, MIN_TARGET, Notice, Press, Segmented, Small, Stepper } from '../../src/ui/kit';
 import { useApproxLocation } from '../../src/lib/useApproxLocation';
+import { useTopEdges } from '../../src/ui/NavigatingBanner';
 
 type Tab = 'directions' | 'loop';
 
@@ -28,16 +31,34 @@ export const FIT_PADDING = { top: 70, bottom: 60, left: 90, right: 90 };
 /** The round trip length last chosen, kept while the app runs. */
 let lastLoopMinutes = 60;
 
+/** A route that starts further than this from where you are asks before it starts (P83). */
+export const FAR_START_M = 500;
+/** How much of the screen the map takes, normally and made bigger (P12). */
+export const MAP_SHARE = { normal: '38%', big: '65%' } as const;
+
 /** How long the extra-time stepper waits for taps to stop before asking for routes. */
 const EXPLORE_WAIT_MS = 400;
 
 export default function Plan() {
+  const topEdges = useTopEdges();
   const here = useApproxLocation();
   const t = useTheme();
   const { user } = useSession();
   const { copy } = useAppConfig();
   const map = useRef<MapCanvasHandle>(null);
-  const split = splitStyles(useLayout().sideBySide, '38%');
+  const [bigMap, setBigMap] = useState(false);
+  // Typing a place: the map steps aside so the keyboard leaves the suggestions in view (P4).
+  const [searching, setSearching] = useState(false);
+  const { sideBySide } = useLayout();
+  const split = splitStyles(sideBySide, searching && !sideBySide ? '0%' : bigMap ? MAP_SHARE.big : MAP_SHARE.normal);
+  const panel = useRef<ScrollView>(null);
+  // A trip already running: starting one here replaces it, so say so (C14).
+  const running = useSyncExternalStore(navigation.subscribe, () => {
+    const n = navigation.getSnapshot();
+    return n.active ? (n.destinationName ?? 'your destination') : null;
+  });
+  // A route that starts somewhere else, waiting for "Start anyway" (P83).
+  const [farStart, setFarStart] = useState<Route | null>(null);
   const [tab, setTab] = useState<Tab>('directions');
   const [mode, setMode] = useState<Mode>(user?.settings.defaultMode ?? 'car');
   // Round trip keeps its own: a walk planned there doesn't turn Directions into walking.
@@ -94,6 +115,8 @@ export default function Plan() {
       setMode(trip.mode);
       if (trip.from) setFrom(trip.from);
       setTo(trip.to);
+      // From the top, so the Directions switch and the start aren't left scrolled off (P50).
+      panel.current?.scrollTo({ y: 0, animated: false });
     }, []),
   );
   // Every request takes a number; an answer that arrives after a newer request (or after the
@@ -168,21 +191,46 @@ export default function Plan() {
     void Linking.openURL(googleMapsUrl(from, to, mode)).catch(() => setError('Couldn’t open Google Maps. Is it or a browser installed?'));
   };
 
-  const start = (r: Route) => {
-    setRouteToNavigate(r);
+  const go = (r: Route) => {
+    setFarStart(null);
+    setRouteToNavigate(r, r.kind === 'roundtrip' ? 'Round trip' : (to?.name ?? null));
     router.push('/navigate');
+  };
+  // Directions follow you from where you are: a route from somewhere else would say "You've
+  // arrived" or "Off route" straight away, so ask first.
+  const start = (r: Route) => {
+    const begins = r.geometry[0];
+    if (here && begins && haversineM(here, begins) > FAR_START_M) setFarStart(r);
+    else go(r);
   };
 
   const markers = [
-    ...(from ? [{ id: 'from', lngLat: from.location, kind: 'start' as const, label: from.name }] : []),
+    // "Your location" is the blue dot already: a second marker there read as two of you (P15).
+    ...(from && !from.current ? [{ id: 'from', lngLat: from.location, kind: 'start' as const, label: from.name }] : []),
     ...(to && tab === 'directions' ? [{ id: 'to', lngLat: to.location, kind: 'end' as const, label: to.name }] : []),
   ];
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: t.bg }}>
+    <SafeAreaView edges={topEdges} style={{ flex: 1, backgroundColor: t.bg }}>
       <View style={split.container}>
-      <MapCanvas ref={map} style={split.map} routes={routes ?? []} selectedRouteId={selected} onRoutePress={setSelected} markers={markers} />
-      <ScrollView style={[split.panel, { backgroundColor: t.surface }]} contentContainerStyle={{ padding: space[4], gap: space[3], ...split.content }} keyboardShouldPersistTaps="handled">
+      <View testID="map-area" style={split.map}>
+        <MapCanvas ref={map} style={{ flex: 1 }} routes={routes ?? []} selectedRouteId={selected} onRoutePress={setSelected} markers={markers} />
+        <MapSizeButton big={bigMap} onPress={() => setBigMap((b) => !b)} />
+      </View>
+      <ScrollView ref={panel} style={[split.panel, { backgroundColor: t.surface }]} contentContainerStyle={{ padding: space[4], gap: space[3], ...split.content }} keyboardShouldPersistTaps="handled">
+        {running ? <Notice tone="info">{`Directions to ${running} are running. Starting a route here ends them.`}</Notice> : null}
+        {farStart && from ? (
+          <View style={{ gap: space[2] }}>
+            <Notice tone="warning">{`This route starts at ${from.name}, ${formatDistanceShort(haversineM(here!, farStart.geometry[0]!))} from where you are. Directions follow you from here.`}</Notice>
+            <View style={{ flexDirection: 'row', gap: space[2], flexWrap: 'wrap' }}>
+              <Button label="From here instead" compact onPress={() => {
+                setFarStart(null);
+                setFrom({ name: 'Your location', description: '', location: here!, current: true });
+              }} />
+              <Button label="Start anyway" kind="secondary" compact onPress={() => go(farStart)} />
+            </View>
+          </View>
+        ) : null}
         <Segmented<Tab>
           label="Planning mode"
           value={tab}
@@ -199,9 +247,9 @@ export default function Plan() {
         />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[1] }}>
           <View style={{ flex: 1, gap: space[3] }}>
-            <PlaceSearch label="Starting point" placeholder="Choose starting point" tone="start" value={from} onChange={setFrom} allowCurrentLocation near={to?.location ?? here} />
+            <PlaceSearch label="Starting point" placeholder="Choose starting point" tone="start" value={from} onChange={setFrom} allowCurrentLocation near={to?.location ?? here} onFocusChange={setSearching} />
             {tab === 'directions' ? (
-              <PlaceSearch label="Destination" placeholder={copy.searchPlaceholder} tone="end" value={to} onChange={setTo} near={from?.location ?? here} />
+              <PlaceSearch label="Destination" placeholder={copy.searchPlaceholder} tone="end" value={to} onChange={setTo} near={from?.location ?? here} onFocusChange={setSearching} />
             ) : null}
           </View>
           {/* Only with both chosen: a field left empty keeps showing what was typed in it. */}
@@ -217,7 +265,6 @@ export default function Plan() {
           ) : null}
         </View>
         {tab === 'directions' && !to && saved.data?.items.length ? <SavedShortcuts places={saved.data.items} onChoose={setTo} /> : null}
-        {tab === 'directions' && to && canSavePlace(to) ? <SavePlace key={`${to.location[0]},${to.location[1]}`} place={to} /> : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[3], flexWrap: 'wrap' }}>
            <Segmented<Mode> label="Travel mode" value={tab === 'loop' ? loopMode : mode} onChange={tab === 'loop' ? setLoopMode : setMode} options={[{ value: 'car', label: 'Drive', icon: Car }, { value: 'foot', label: 'Walk', icon: Footprints }]} />
           {tab === 'directions' ? (
@@ -241,8 +288,8 @@ export default function Plan() {
               <RouteCard route={routes[0]!} title="Fastest" selected={selected === routes[0]!.id} onSelect={() => setSelected(routes[0]!.id)} onStart={() => start(routes[0]!)} />
               <Heading>{copy.exploreHeading}</Heading>
               {routes.length > 1 ? (
-                routes.slice(1).map((r, i) => (
-                  <RouteCard key={r.id} route={r} title={`Explore ${i + 1}`} selected={selected === r.id} onSelect={() => setSelected(r.id)} onStart={() => start(r)} />
+                routes.slice(1).map((r, i, all) => (
+                  <RouteCard key={r.id} route={r} title={exploreTitles(all, routes[0]!)[i]!} selected={selected === r.id} onSelect={() => setSelected(r.id)} onStart={() => start(r)} />
                 ))
               ) : (
                 <Small>{fastestNew >= 90 ? copy.allNewAlready : `No explore routes fit within ${budget} extra minutes.`}</Small>
@@ -250,12 +297,14 @@ export default function Plan() {
             </>
             ) : null
           ) : routes.length ? (
-            routes.map((r, i) => <RouteCard key={r.id} route={r} title={`Loop ${i + 1}`} selected={selected === r.id} onSelect={() => setSelected(r.id)} onStart={() => start(r)} />)
+            routes.map((r, i) => <RouteCard key={r.id} route={r} title={`Loop ${i + 1}`} note={loopNote(r, loopMinutes)} selected={selected === r.id} onSelect={() => setSelected(r.id)} onStart={() => start(r)} />)
           ) : (
             <Small>{copy.noRoundTrips}</Small>
           )
         ) : null}
         {!loading && !routes && tab === 'directions' ? <Empty icon={Car} text="Choose where you’re going to compare the fastest route with ways you haven’t been." /> : null}
+        {/* After the routes, so Start is in view without scrolling (P5). */}
+        {tab === 'directions' && to && canSavePlace(to) ? <SavePlace key={`${to.location[0]},${to.location[1]}`} place={to} /> : null}
         {tab === 'directions' && to ? <Button label="Open in Google Maps" kind="ghost" icon={ExternalLink} onPress={openInGoogleMaps} style={{ alignSelf: 'flex-start' }} /> : null}
       </ScrollView>
       </View>
@@ -287,13 +336,24 @@ function SavedShortcuts({ places, onChoose }: { places: SavedPlace[]; onChoose(p
   );
 }
 
-function Stepper({ label, onMinus, onPlus }: { label: string; onMinus(): void; onPlus(): void }) {
+/** A loop that runs over the time asked for says by how much, rather than leave it to be noticed (P69). */
+export function loopNote(r: Route, targetMinutes: number): string | null {
+  const over = Math.round(r.durationS / 60) - targetMinutes;
+  return over >= 3 ? `${formatDuration(over * 60)} longer than the ${formatDuration(targetMinutes * 60)} you asked for` : null;
+}
+
+/** Makes the map take more of the screen, or less (P12). */
+function MapSizeButton({ big, onPress }: { big: boolean; onPress(): void }) {
   const t = useTheme();
+  const Icon = big ? Minimize2 : Maximize2;
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
-      <Button label="−" kind="secondary" compact onPress={onMinus} style={{ minWidth: 48 }} />
-      <Small color={t.text}>{label}</Small>
-      <Button label="+" kind="secondary" compact onPress={onPlus} style={{ minWidth: 48 }} />
-    </View>
+    <Press
+      accessibilityRole="button"
+      accessibilityLabel={big ? 'Smaller map' : 'Bigger map'}
+      onPress={onPress}
+      style={({ hovered }) => ({ position: 'absolute', right: 12, top: 68, minWidth: MIN_TARGET, minHeight: MIN_TARGET, borderRadius: MIN_TARGET / 2, alignItems: 'center', justifyContent: 'center', backgroundColor: hovered ? t.surface2 : t.surface, elevation: 3 })}
+    >
+      <Icon size={22} color={t.text} />
+    </Press>
   );
 }

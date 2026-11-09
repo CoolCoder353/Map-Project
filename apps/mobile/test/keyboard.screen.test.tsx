@@ -71,8 +71,8 @@ describe('touch targets are at least 48 dp', () => {
     await fireEvent.changeText(screen.getByLabelText('Destination'), 'gum');
     expect(styleOf(screen.getByRole('button', { name: 'Clear destination' }))).toMatchObject({ minHeight: 48, minWidth: 48 });
     expect(styleOf(screen.getByRole('button', { name: 'Back to directions' })).minHeight).toBeGreaterThanOrEqual(48);
-    const stepper = screen.getByRole('button', { name: '+' });
-    expect(styleOf(stepper)).toMatchObject({ minHeight: 48, minWidth: 48 });
+    const stepper = screen.getByRole('button', { name: /^More:/ });
+    expect(styleOf(stepper)).toMatchObject({ height: 48, width: 48 });
   });
 });
 

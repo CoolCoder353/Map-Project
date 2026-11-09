@@ -873,3 +873,21 @@ it('waits longer each time a new route can’t be had, so a long outage isn’t 
     now.mockRestore();
   }
 });
+
+// What a trip came to, kept after it ends for the summary and Resume (P23, P63, P97).
+it('keeps a summary of the trip that ended, until it is dismissed or another starts', async () => {
+  navigation.start(route({ id: 'r1' }), { destinationName: 'Coot-tha Place' });
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  mockOnFix!(fix(153, -27.4, 1000));
+  mockOnFix!(fix(153.01, -27.4, 60_000));
+  navigation.stop();
+  const ended = navigation.getSnapshot().ended!;
+  expect(ended).toMatchObject({ route: { id: 'r1' }, destinationName: 'Coot-tha Place', arrived: false });
+  expect(ended.distanceM).toBeGreaterThan(900);
+  expect(navigation.getSnapshot().active).toBe(false);
+  navigation.dismissEnded();
+  expect(navigation.getSnapshot().ended).toBeNull();
+  navigation.start(route({ id: 'r2' }), { simulated: true });
+  navigation.stop();
+  expect(navigation.getSnapshot().ended).toBeNull(); // a test drive leaves no summary
+});

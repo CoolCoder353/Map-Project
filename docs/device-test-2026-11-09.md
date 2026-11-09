@@ -67,34 +67,76 @@ app ones a new build to internal testing.
   app re-logs "car screen shown" every 15 s), H16 (measured 1.16 scale; taps off the screen
   refused). H1 is documented: use wireless debugging.
 
-## Not fixed, and why
+## Fixed later on 10 November
 
-- **Needs the phone or head unit to find the cause:** C2/C88 (where the host draws the speed box),
-  C5/C24/C27 (map tilt and rotation on idle screens), C16 (the host formats its own duration),
-  C44 (the code already shows a running trip on reconnecting; not reproduced), C62, C63 (a trip
-  that ended by itself: no log of why), C71, C82, C83, P24, P25, P85.
-- **Layout and look, to do with the design notes:** P4, P5, P7, P12, P15, P20, P21, P22, P27,
-  P28, P35, P45, P47, P48, P50, P56, P57, P66, P68, P70, P86, P96, P99, P100, C4, C17, C18, C30,
-  C49, C70, C77, C89, C91, C92, C93.
-- **Features, not fixes; each needs a decision:** P10/C94 (naming a route by where it goes), P23
-  (a trip summary), P32 (the path driven on the trip map), P33 (the destination on a trip), P36,
-  P43 (drive times in Discover), P54/P58 (voice and route settings), P63 (resume after arriving),
-  P69, P72 (loop shapes), P83/P84 (starting away from the start), P89/P91 (actions and the next
-  turn in the "Navigating" notification, which expo-location owns), P97, C13/C34 (a start
-  marker), C14/C45 (the phone and car showing one plan), C26, C31/C53 (Discover choices on the
-  car), C58, C65/C97 (the car waits 45 s because the phone waits 30 s for the server), C66, C67
-  (no position: the car still opens on Australia), C69, C72/C75 (choosing among Assistant
-  results; looking up an unnamed point), C78, C84/C86 (the test drive's route and speed, now only
-  started by the car's auto drive), C90 (lane guidance), C95, C98, C99, C100/P30 (route numbers
-  as shields).
+Also in code with tests, `pnpm check` passing, and not yet seen on a device. Server changes (route
+names come from the routes themselves, but drive-time bands, where trips ended, road dates, the
+driving map style, search and loop shapes are the server's) need a deploy; the rest a new build.
+
+- **Found from the code, to check on the device:** C2/C88 (the speed readout keeps a column at the
+  left of the map and the car is centred in the rest), C5/C24/C27 (every map but the one following
+  the car is flat and north up), C16 (the car's minutes are rounded as the phone's), C62 (a tap
+  isn't a drag: the map keeps following), C63 (leaving the Navigate screen ended the trip; now only
+  End or arriving does, and the car says when directions stopped on the phone), C71 (same
+  message), C82 (Search offers your saved places and keeps what you typed), P24/P25 (the banner has
+  the status bar and a light status bar; the screens under it leave the top to it), P85 (the
+  driving map marks where navigation has you and follows it).
+- **Layout and look:** P4 (the map steps aside while you type a place), P5 (Save this place comes
+  after the routes), P7 (routes under place names), P12 (a bigger-map button), P15 (no second
+  marker for Your location), P20 (place dots only where their names show), P21/P86 (the route and
+  turn banner are blue on every trip, as in the car), P22 (End asks in the app's own bar), P27 (the
+  driving map turns with you), P28/C18/C92 (no bus stops anywhere; no buildings, place dots or
+  light markers while driving), P35 (the back button sits on the trip map), P45 (one round − and +
+  everywhere), P47/C30 (pins numbered as their cards, a tap goes to the card; overlapping car pins
+  share one badge), P48 (more room round Discover's results), P50 (Plan scrolls to the top for a
+  trip from Discover), P56 (Sign out beside the account), P57 (a shorter budget line), P68 (only
+  the chosen loop is green), P96/P99 (a key on Coverage; a tapped road says when you travelled
+  it), P100/C77 (the map credit moved clear), C4 (Planned routes only when there are some), C17
+  (the road driven is the route's blue, faded), C49 (the search key shows results on the map), C70
+  (night colours for the car's own drawing), C89 (a short "then" line), C91 (bigger, lighter
+  street names), C93 (long names cut to one line).
+- **Features, done with the obvious choice:** P10/C94 (explore routes named by the road that sets
+  them apart, "Via Moggill Road"), P23/P63/P97 (a summary when a trip ends, with Resume, and a note
+  when nothing was recorded), P32 (the trip map draws the GPS as recorded), P33 (where each trip
+  ended), P36 (start and end times in the list), P43 (drive-time bands in Discover, phone and car),
+  P54 (a Voice directions switch in Settings), P69 (a loop over time says by how much), P72 (walks
+  keep off main roads; out-and-back loops only when nothing better), P83/P84 (a route starting
+  elsewhere asks first; arriving shows where you are, not "0 min"), C13/C34 (a start marker),
+  C14 (Plan says when directions are running), C45 (a phone trip keeps what the car was showing),
+  C26, C31/C53 (car Discover uses the phone's time and kinds of place), C58, C65/C97 (the car waits
+  25 s, the phone 15 s for the server), C66, C67 (the car map opens where you last were), C69 (the
+  speed box turns red, with one chime), C72/C75 (a choice when the Assistant's name fits several
+  places; an unnamed point is looked up), C78 (Home asks again every 30 s), C84/C86 (the test drive
+  follows a real route at the route's own speed), C95 (a hint, once, that other routes can be
+  chosen), C98 (Directions from Search and Discover), C99 (a saved place's address in the title),
+  C100/P30 ("take route 32", "take the M3").
+- **Search:** P73 ("1 George St Brisbane" finds the city's George Street first), P79 (one name for
+  hardware shops).
+- **Harness:** H17 (`car scroll up|down` and `car select` on the rotary controller).
+
+## Still not fixed, and why
+
+- **C90 (lane guidance):** left out, as asked.
+- **P58, in part:** voice and light/dark map colours are in Settings. Not done: avoiding tolls and
+  unsealed roads (the routing graph has no toll or surface data until it is rebuilt with them),
+  avoiding motorways (it would take the fastest route off its fast path, too slow for the small
+  server), and units (Australia uses kilometres only).
+- **P89/P91, in part:** End and Mute are on the turn notification while the car is connected. A
+  phone-only trip's notification is the location service's, which can't carry buttons or change
+  once started; it now says where the trip goes.
+- **C16, in part:** the minutes now match; "hr" against "h" is how Android Auto writes durations.
+- **H10, in part:** this PC has no sound device, so the head unit still plays nothing; each spoken
+  direction is in `pnpm device logs` instead.
+- **Checked, no change:** C44 (a trip running when the car connects goes straight to its
+  directions; not reproduced), C83 (Android Auto's own panel; the harness's taps now land where
+  aimed), P66 (TalkBack lists a scroll view's hidden rows and scrolls to one before using it; a
+  plain tap there is on the map, as it should be), P70 (the place names cut at the map's edge are
+  the map's own; no padding avoids them).
 - **By design, kept:** P9 ("1 h"), P13, P17, P18/C3 (the grey ring marks an estimate; the
   screen-reader label says so), P49 (Discover's reach is a drive-time area, a route's time can be a
   minute over), P51, P52, P71, P87 (the foreground service needs its own notification), C7/C8
   (the car's search rows now carry distance first; ranking is the server's, improved for P78),
   C20, C25, C61 (the ✕ on the time card is Android Auto's own).
-- **Search:** P73 ("1 George St Brisbane": a locality without a comma isn't split off yet); P79 ("Hardware" and "Hardware store" come from how each shop is tagged in OpenStreetMap).
-- **Harness:** H10 (no audio from DHU 2.0 on this PC), H17 (the head unit's console has no swipe,
-  so car lists can't be scrolled).
 
 ## Phone app (100)
 

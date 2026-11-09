@@ -27,4 +27,15 @@ class FollowCameraTest {
     assertFalse(c.panned)
     assertFalse("already following", c.recentre())
   }
+
+  /** A tap arrives as a tiny scroll: it mustn't stop the map following the car (C62). */
+  @Test fun aTapIsNotADrag() {
+    val c = FollowCamera()
+    assertFalse(c.drag(3f, 4f))
+    assertFalse(c.drag(10f, 0f))
+    assertTrue("adds up to a real drag", c.drag(20f, 0f))
+    c.pan()
+    c.recentre()
+    assertFalse("counts afresh after re-centring", c.drag(5f, 0f))
+  }
 }

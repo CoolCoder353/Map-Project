@@ -37,7 +37,7 @@ class PickScreenTest {
   @Test fun plannedSaysWhenThereAreNone() {
     val screen = PickScreens.planned(carContext, api, scenes).also { ScreenController(it).moveToState(Lifecycle.State.STARTED) }
     api.answer("planned", emptyList<PlannedItem>())
-    assertEquals("Nothing planned for driving. Send a route from the website.", (screen.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.noItemsMessage.text())
+    assertEquals("Nothing planned for driving. Use Search to find somewhere, or plan a route on your phone when it’s safe.", (screen.onGetTemplate() as PlaceListNavigationTemplate).itemList!!.noItemsMessage.text())
   }
 
   @Test fun plannedGoesStraightToItsRoute() {
@@ -73,5 +73,27 @@ class PickScreenTest {
     assertSame(numberIcon(1), rows[0].image)
     assertSame(numberIcon(2), rows[1].image)
     assertEquals("none chosen yet", MapScene.Routes(routes.map { it.option }, MapScene.Routes.NONE), scenes.shown.last())
+  }
+
+  /** Long names are cut to one line, so more places fit (C93). */
+  @Test fun longNamesAreCutToOneLine() {
+    assertEquals("Mt Coot-tha Lookout", shortName("Mt Coot-tha Lookout"))
+    val cut = shortName("Brisbane Koala Bushlands Wildlife Sanctuary and Picnic Area")
+    assertTrue(cut.length <= SHORT_NAME)
+    assertTrue(cut.endsWith("…"))
+  }
+
+  /** During a trip, "Directions" leads back to them from Discover (C98). */
+  @Test fun offersTheWayBackToDirectionsDuringATrip() {
+    var navigating = true
+    var opened = 0
+    val back = BackToDirections({ navigating }, { opened++ })
+    val screen = PickScreens.discover(carContext, api, scenes, back).also { ScreenController(it).moveToState(Lifecycle.State.STARTED) }
+    api.answer("discover", listOf(Samples.place()))
+    val action = (screen.onGetTemplate() as PlaceListNavigationTemplate).actionStrip!!.actions.single()
+    assertEquals(DIRECTIONS, action.title!!.text())
+    action.onClickDelegate!!.sendClick(object : androidx.car.app.OnDoneCallback {})
+    navigating = false
+    assertNull((screen.onGetTemplate() as PlaceListNavigationTemplate).actionStrip)
   }
 }

@@ -28,7 +28,14 @@ import app.wayfinder.car.bridge.NavStatus
  * with the [DIRECTIONS] link, which the session answers by showing the driving screen. Without it
  * the app came forward on whatever screen it was last on (Search, say), not the directions tapped.
  */
-class NavNotifications(private val carContext: CarContext, private val icons: ManeuverIcons) {
+class NavNotifications(
+  private val carContext: CarContext,
+  private val icons: ManeuverIcons,
+  /** End, from the notification (P89). */
+  private val onEnd: () -> Unit = {},
+  /** Mute or unmute, from the notification (P89). */
+  private val onMute: () -> Unit = {},
+) {
   private val manager get() = NotificationManagerCompat.from(carContext)
   private var lastTitle: String? = null
   private var lastText: String? = null
@@ -55,11 +62,17 @@ class NavNotifications(private val carContext: CarContext, private val icons: Ma
       carContext, 0, Intent(ACTION_OPEN_APP).setPackage(carContext.packageName), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
     val small = icons.resFor(nav.maneuver?.type ?: "straight")
+    fun action(name: String) = PendingIntent.getBroadcast(
+      carContext, name.hashCode(), Intent(name).setPackage(carContext.packageName), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
     val notification = NotificationCompat.Builder(carContext, CHANNEL_ID)
       .setSmallIcon(small)
       .setContentTitle(title)
       .setContentText(text)
       .setContentIntent(openApp)
+      // Stop or quieten directions without opening the app (P89).
+      .addAction(0, actionLabels(nav).first, action(ACTION_MUTE))
+      .addAction(0, actionLabels(nav).second, action(ACTION_END))
       .setOngoing(true)
       .setOnlyAlertOnce(true)
       .setCategory(NotificationCompat.CATEGORY_NAVIGATION)
@@ -121,10 +134,18 @@ class NavNotifications(private val carContext: CarContext, private val icons: Ma
     if (receiver != null) return
     val r = object : BroadcastReceiver() {
       override fun onReceive(context: Context, intent: Intent) {
-        carContext.startCarApp(Intent(Intent.ACTION_VIEW, DIRECTIONS).setComponent(ComponentName(carContext, WayfinderCarAppService::class.java)))
+        when (intent.action) {
+          ACTION_END -> onEnd()
+          ACTION_MUTE -> onMute()
+          else -> carContext.startCarApp(Intent(Intent.ACTION_VIEW, DIRECTIONS).setComponent(ComponentName(carContext, WayfinderCarAppService::class.java)))
+        }
       }
     }
-    ContextCompat.registerReceiver(carContext, r, IntentFilter(ACTION_OPEN_APP), ContextCompat.RECEIVER_NOT_EXPORTED)
+    val filter = IntentFilter(ACTION_OPEN_APP).apply {
+      addAction(ACTION_END)
+      addAction(ACTION_MUTE)
+    }
+    ContextCompat.registerReceiver(carContext, r, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     receiver = r
   }
 
@@ -134,6 +155,12 @@ class NavNotifications(private val carContext: CarContext, private val icons: Ma
     /** The first channel, high importance, which made a heads-up on the phone for every turn. */
     const val OLD_CHANNEL_ID = "wayfinder_navigation"
     const val ACTION_OPEN_APP = "app.wayfinder.car.action.OPEN_APP"
+    const val ACTION_END = "app.wayfinder.car.action.END"
+    const val ACTION_MUTE = "app.wayfinder.car.action.MUTE"
+
+    /** The notification's buttons: mute (or unmute) and end, or done once arrived. */
+    fun actionLabels(nav: CarNav): Pair<String, String> =
+      (if (nav.muted) "Unmute" else "Mute") to (if (nav.status == NavStatus.ARRIVED) "Done" else "End")
 
     /** The link a tap on the notification opens the car app with: "show the directions". */
     val DIRECTIONS: Uri = Uri.fromParts("wayfinder", "directions", null)

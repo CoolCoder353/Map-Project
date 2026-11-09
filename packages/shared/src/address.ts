@@ -40,11 +40,13 @@ export function splitAddress(raw: string): AddressQuery | null {
   const parts = text.split(',').map((p) => p.trim()).filter(Boolean);
   if (parts.length === 0) return null;
   if (parts.length > 1) return { name: parts[0]!, locality: parts[1]!.toLowerCase(), postcode };
-  if (!state && !postcode) return null;
   // "12 Wellington St Cleveland": the suburb follows the street type.
   const words = parts[0]!.split(/\s+/);
   const expanded = expandAbbreviations(parts[0]!).toLowerCase().split(/\s+/);
   const typeAt = expanded.findLastIndex((w, i) => i > 0 && i < expanded.length - 1 && STREET_TYPES.has(w));
+  // With no comma, state or postcode, only a house number and words after the street type make it
+  // an address ("1 George St Brisbane", P73); "Woolworths Cleveland" and "12 Lonsdale St" search as names.
+  if (!state && !postcode && !(typeAt >= 0 && /^\d+[a-z]?(\/\d+[a-z]?)?\s/i.test(parts[0]!))) return null;
   if (typeAt < 0) return { name: parts[0]!, locality: null, postcode };
   return { name: words.slice(0, typeAt + 1).join(' '), locality: words.slice(typeAt + 1).join(' ').toLowerCase(), postcode };
 }

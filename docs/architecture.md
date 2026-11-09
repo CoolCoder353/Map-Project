@@ -137,8 +137,12 @@ routes; nothing user-facing shows them.
   Only drives that still stand count, as for speeds; passes go with their trip and after 180 days.
 - **Round trip:** loops through unexplored areas around the start. Driving loops that need a
   U-turn aren't offered, so when the first six directions leave fewer than three loops, the other
-  six are tried, then the 15° directions between them.
+  six are tried, then the 15° directions between them. A loop that goes back over more than 15% of
+  itself the other way (an out-and-back spur, `doubledBackShare`) is only offered when there is
+  nothing better, and walks keep off trunk, primary and secondary roads where they can
+  (`QUIETER_WALKING`).
 - **Discover:** an isochrone for the time budget, then places in areas the person hasn't reached.
+  Two nearer isochrones (a third and two thirds of the time) give each place its `withinMinutes`.
 
 ### Place search
 
@@ -234,7 +238,11 @@ pinned by fixtures both test suites read. Another test (`carModule.test.ts`) che
 request `BridgeCarApi.kt` sends has a handler in `src/car/handlers.ts`.
 
 Navigation is one session for the whole app (`src/nav/navigationService.ts`), followed by the
-phone's Navigate screen and the car alike; a trip started on either shows on both. While it runs,
+phone's Navigate screen and the car alike; a trip started on either shows on both. Only End,
+arriving, or another trip ends it: leaving the Navigate screen doesn't, and the banner over the tabs
+leads back. Once one ends, the snapshot keeps `ended` (where to, how far, how long, arrived or not)
+for five minutes: the banner sums it up with Resume, and the car says "Directions stopped on your
+phone" when they ended without the car asking and before arriving. While it runs,
 a location foreground service keeps directions coming with the phone locked. It's refused with no app screen showing (a trip started from the car, phone locked), so it's tried again when one next shows; the module's listener below starts either way. With the phone locked, expo-location
 stops its watch and passes the service's fixes on through one background job each, which Android 16
 holds back under its job quota, so the module's own listener (`PhoneLocation.kt`, events `onPhoneFix`)

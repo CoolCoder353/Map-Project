@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../../src/lib/api';
 import { useAppConfig } from '../../src/lib/appConfig';
 import { CATEGORY_LABEL, kindOf } from '../../src/lib/categories';
+import { rememberDiscoverChoices } from '../../src/lib/discoverChoices';
 import { formatDistanceShort } from '../../src/lib/format';
 import { setTripToPlan } from '../../src/lib/plannedStore';
 import { splitStyles, useLayout } from '../../src/lib/layout';
@@ -15,20 +16,32 @@ import { useSession } from '../../src/lib/session';
 import { radius, space, useTheme } from '../../src/lib/theme';
 import { MapCanvas, type MapCanvasHandle } from '../../src/map/MapCanvas';
 import { type ChosenPlace, PlaceSearch } from '../../src/ui/PlaceSearch';
-import { Body, Button, Card, Empty, NewBadge, Notice, Press, Segmented, Small } from '../../src/ui/kit';
+import { Body, Button, Card, Empty, NewBadge, Notice, Press, Segmented, Small, Stepper } from '../../src/ui/kit';
 import { useApproxLocation } from '../../src/lib/useApproxLocation';
+import { useTopEdges } from '../../src/ui/NavigatingBanner';
 
 /** How long after the last change of a filter to search again: a few taps on + make one request. */
 export const REFILTER_PAUSE_MS = 500;
+export const DISCOVER_FIT = { top: 80, bottom: 50, left: 60, right: 70 };
+
+/** A place's line: what it is, how long to get there (P43) and how far. */
+export function discoverDetail(i: DiscoverItem, mode: Mode): string {
+  const time = i.withinMinutes ? `within ${i.withinMinutes} min ${mode === 'car' ? 'by car' : 'on foot'}` : null;
+  return [kindOf(i.category), time, `${formatDistanceShort(i.distanceM)} away`].filter(Boolean).join(' · ');
+}
 
 export default function Discover() {
+  const topEdges = useTopEdges();
   const here = useApproxLocation();
   const t = useTheme();
   const { user } = useSession();
   const { copy } = useAppConfig();
   const map = useRef<MapCanvasHandle>(null);
   const panel = useRef<ScrollView>(null);
-  const split = splitStyles(useLayout().sideBySide, '34%');
+  // Typing a place: the map steps aside so the keyboard leaves the suggestions in view (P4).
+  const [searching, setSearching] = useState(false);
+  const { sideBySide } = useLayout();
+  const split = splitStyles(sideBySide, searching && !sideBySide ? '0%' : '34%');
   const [origin, setOrigin] = useState<ChosenPlace | null>(null);
   // Start where you are, once a position is known, as Plan does; only the first time, so
   // clearing the field doesn't fill it in again.
@@ -51,6 +64,8 @@ export default function Discover() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const latest = useRef(0);
+  /** Where each card is in the list, to scroll to it from its pin. */
+  const cardAt = useRef(new Map<string, number>());
   /** A search has run from this start, so a change of filter searches again. */
   const searched = useRef(false);
   /** The search waiting for the filter taps to stop. */
@@ -71,6 +86,8 @@ export default function Discover() {
   // Places found for other filters don't fit either: they go at once, and the search runs again
   // for the new ones after a pause.
   const filters = `${mode} ${minutes} ${cats.join(',')}`;
+  // The car's Discover uses the same time and kinds of place.
+  useEffect(() => rememberDiscoverChoices({ minutes, categories: cats }), [minutes, cats]);
   const shown = useRef(filters);
   useEffect(() => {
     if (shown.current === filters || !searched.current) {
@@ -113,7 +130,8 @@ export default function Discover() {
       if (ticket !== latest.current) return;
       const found = res.items ?? [];
       setItems(found);
-      if (found.length) map.current?.fitTo([origin.location, ...found.map((i) => i.location)]);
+      // Room round the edges, so pins and the start aren't under the map's own labels and buttons (P48).
+      if (found.length) map.current?.fitTo([origin.location, ...found.map((i) => i.location)], DISCOVER_FIT);
     } catch (e) {
       if (ticket === latest.current) setError(errorMessage(e));
     } finally {
@@ -122,18 +140,23 @@ export default function Discover() {
   };
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: t.bg }}>
+    <SafeAreaView edges={topEdges} style={{ flex: 1, backgroundColor: t.bg }}>
       <View style={split.container}>
-      <MapCanvas ref={map} style={split.map} markers={[...(origin ? [{ id: 'o', lngLat: origin.location, kind: 'start' as const }] : []), ...(items ?? []).map((i) => ({ id: i.id, lngLat: i.location, kind: 'poi' as const }))]} />
+      <MapCanvas
+        ref={map}
+        style={split.map}
+        // Numbered as their cards are, and a tap on one goes to its card (P47).
+        markers={[...(origin && !origin.current ? [{ id: 'o', lngLat: origin.location, kind: 'start' as const }] : []), ...(items ?? []).map((i, n) => ({ id: i.id, lngLat: i.location, kind: 'poi' as const, label: String(n + 1) }))]}
+        onMarkerPress={(id) => {
+          const y = cardAt.current.get(id);
+          if (y != null) panel.current?.scrollTo({ y, animated: true });
+        }}
+      />
       <ScrollView ref={panel} style={[split.panel, { backgroundColor: t.surface }]} contentContainerStyle={{ padding: space[4], gap: space[3], ...split.content }} keyboardShouldPersistTaps="handled">
         <Body muted>{copy.discoverIntro}</Body>
-        <PlaceSearch label="Search from" placeholder="Where are you starting?" tone="start" value={origin} onChange={chooseOrigin} allowCurrentLocation near={here} />
+        <PlaceSearch label="Search from" placeholder="Where are you starting?" tone="start" value={origin} onChange={chooseOrigin} allowCurrentLocation near={here} onFocusChange={setSearching} />
         <Segmented<Mode> label="Travel mode" value={mode} onChange={setMode} options={[{ value: 'car', label: 'Drive', icon: Car }, { value: 'foot', label: 'Walk', icon: Footprints }]} />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
-          <Button label="−" kind="secondary" compact onPress={() => setMinutes((m) => Math.max(5, m - 5))} />
-          <Small color={t.text}>Within {minutes} min</Small>
-          <Button label="+" kind="secondary" compact onPress={() => setMinutes((m) => Math.min(180, m + 5))} />
-        </View>
+        <Stepper label={`Within ${minutes} min`} onMinus={() => setMinutes((m) => Math.max(5, m - 5))} onPlus={() => setMinutes((m) => Math.min(180, m + 5))} />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2] }} accessibilityRole="none" accessibilityLabel="Categories">
           {POI_CATEGORIES.map((c) => {
             const on = cats.includes(c);
@@ -153,13 +176,17 @@ export default function Discover() {
         <Button label="Find places" icon={Compass} onPress={() => void search()} busy={busy} disabled={!origin} />
         {error ? <Notice tone="error">{error}</Notice> : null}
         {items && items.length === 0 ? <Empty icon={Compass} text={copy.discoverEmpty} /> : null}
-        {items?.map((i) => (
-          <Card key={i.id} onPress={() => planTrip(i)}>
+        {items?.map((i, n) => (
+          <View key={i.id} onLayout={(e) => void cardAt.current.set(i.id, e.nativeEvent.layout.y)}>
+          <Card onPress={() => planTrip(i)}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+              <View style={{ width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: t.exploreSoft }}>
+                <Text style={{ color: t.explore, fontWeight: '700' }}>{n + 1}</Text>
+              </View>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: t.text, fontWeight: '700', fontSize: 16 }}>{i.name}</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2], alignItems: 'center', marginTop: 4 }}>
-                  <Small>{kindOf(i.category)} · {formatDistanceShort(i.distanceM)} away</Small>
+                  <Small>{discoverDetail(i, mode)}</Small>
                   {i.areaUnexploredPct >= 50 ? <NewBadge text={i.areaUnexploredPct >= 95 ? 'Roads around it are new to you' : `${i.areaUnexploredPct}% of roads around it new to you`} /> : null}
                 </View>
               </View>
@@ -167,6 +194,7 @@ export default function Discover() {
               <ChevronRight size={18} color={t.accent} />
             </View>
           </Card>
+          </View>
         ))}
       </ScrollView>
       </View>

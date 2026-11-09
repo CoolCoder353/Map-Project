@@ -14,6 +14,8 @@ import app.wayfinder.car.*
 import app.wayfinder.car.bridge.Account
 import app.wayfinder.car.map.MapScene
 import app.wayfinder.car.screens.MessageScreen
+import app.wayfinder.car.screens.PickScreen
+import androidx.car.app.navigation.model.PlaceListNavigationTemplate
 import app.wayfinder.car.screens.RoutePreviewScreen
 import org.junit.Assert.*
 import org.junit.Test
@@ -44,13 +46,33 @@ class NavigateRequestsTest {
     assertEquals("Story Bridge", previewTitle())
   }
 
-  @Test fun aNameIsSearchedThenTheFirstPlaceIsPreviewed() {
+  @Test fun aNameWithOnePlaceGoesStraightToItsPreview() {
     requests.handle(navigate("geo:0,0?q=Mt+Coot-tha"))
     api.answer("status", Samples.status())
     assertEquals("search Mt Coot-tha", api.calls.last())
-    api.answer("search", listOf(Samples.place("p1", "Mt Coot-tha Lookout"), Samples.place("p2", "Other")))
+    api.answer("search", listOf(Samples.place("p1", "Mt Coot-tha Lookout")))
     assertTrue(pushed().last() is RoutePreviewScreen)
     assertEquals("Mt Coot-tha Lookout", previewTitle())
+  }
+
+  /** More than one place by that name: the driver chooses, rather than going to whichever came first (C72). */
+  @Test fun aNameWithSeveralPlacesOffersThemToChooseFrom() {
+    requests.handle(navigate("geo:0,0?q=Bunnings"))
+    api.answer("status", Samples.status())
+    api.answer("search", listOf(Samples.place("p1", "Bunnings Cleveland"), Samples.place("p2", "Bunnings Capalaba")))
+    val pick = pushed().last()
+    assertTrue(pick is PickScreen<*>)
+    ScreenController(pick).moveToState(Lifecycle.State.STARTED)
+    assertEquals("Which Bunnings?", (pick.onGetTemplate() as PlaceListNavigationTemplate).title!!.text())
+  }
+
+  /** A point with no name: what is there, not "Chosen place" (C75). */
+  @Test fun aPointWithNoNameIsLookedUp() {
+    requests.handle(navigate("geo:-27.47,153.03"))
+    api.answer("status", Samples.status())
+    assertEquals("lookup 153.03,-27.47", api.calls.last())
+    api.answer("lookup", Samples.place("r1", "12 Moselle Drive"))
+    assertEquals("12 Moselle Drive", previewTitle())
   }
 
   @Test fun saysSoWhenNothingMatchesTheName() {
@@ -76,6 +98,7 @@ class NavigateRequestsTest {
     (pushed().last().onGetTemplate() as MessageTemplate).actions.single().onClickDelegate!!.sendClick(object : androidx.car.app.OnDoneCallback {})
     shadowOf(Looper.getMainLooper()).idle()
     api.answer("status", Samples.status())
+    api.answer("lookup", null)
     assertTrue("continues to the place once signed in", pushed().last() is RoutePreviewScreen)
   }
 
@@ -107,10 +130,12 @@ class NavigateRequestsTest {
     screens.push(MessageScreen(carContext, "Home stands in here"))
     requests.handle(navigate("geo:-27.47,153.03"))
     api.answer("status", Samples.status())
+    api.answer("lookup", null)
     // The host would have created the first preview by now; popping it needs that.
     ScreenController(pushed().last()).moveToState(Lifecycle.State.CREATED)
     requests.handle(navigate("geo:-27.50,153.00"))
     api.answer("status", Samples.status())
+    api.answer("lookup", null)
     assertEquals(2, pushed().count { it is RoutePreviewScreen })
     assertEquals("the start and only the newest preview", 2, screens.stackSize)
   }

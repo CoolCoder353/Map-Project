@@ -26,6 +26,18 @@ class ProtocolTest {
     assertNull(s.saved[1].distanceM)
     assertTrue(s.saved.all { it.saved })
     assertEquals(listOf(true, false), s.saved.map { it.home })
+    assertEquals(listOf("12 Moselle Drive, Thornlands", null), s.saved.map { it.address })
+    assertEquals(2, s.plannedRoutes)
+  }
+
+  @Test fun statusFromAnOlderPhoneAppDoesNotSayHowManyRoutesArePlanned() {
+    assertNull(Protocol.status(fixture("status.json").apply { remove("plannedRoutes") }).plannedRoutes)
+  }
+
+  @Test fun lookup() {
+    assertNull(Protocol.lookup(JSONObject("{\"place\":null}")))
+    val p = Protocol.lookup(JSONObject().put("place", fixture("places.json").getJSONArray("places").getJSONObject(1)))!!
+    assertEquals("Queen Street Mall", p.name)
   }
 
   @Test fun statusFromAnOlderPhoneAppHasNoSavedPlaces() {

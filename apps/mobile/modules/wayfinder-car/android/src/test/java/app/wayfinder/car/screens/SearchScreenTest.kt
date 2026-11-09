@@ -64,7 +64,8 @@ class SearchScreenTest {
   }
 
   @Test fun emptyingTheBoxClearsTheResults() {
-    screen.callback.onSearchSubmitted("coot")
+    screen.callback.onSearchTextChanged("coot")
+    pause()
     api.answer("search", listOf(Samples.place()))
     screen.callback.onSearchSubmitted("cootharaba")
     screen.callback.onSearchTextChanged("  ")
@@ -141,5 +142,13 @@ class SearchScreenTest {
 
   @Test fun saysWhatToDoWhenThereIsNothingYet() {
     assertEquals(SearchScreen.NOTHING_YET, template().itemList!!.noItemsMessage!!.text())
+  }
+
+  /** The keyboard's search key puts the results on a map, which the search screen has no room for (C49). */
+  @Test fun theSearchKeyShowsTheResultsOnTheMap() {
+    screen.callback.onSearchSubmitted("coot")
+    api.answer("search", listOf(Samples.place(), Samples.place("p2", "Coot Lane")))
+    val screens = carContext.getCarService(androidx.car.app.testing.TestScreenManager::class.java)
+    assertTrue(screens.screensPushed.last() is PickScreen<*>)
   }
 }

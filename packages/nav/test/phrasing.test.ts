@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { announcementText, formatDistanceShort, formatDuration, formatSpokenDistance } from '../src/phrasing.js';
+import { announcementText, exploreTitles, formatDistanceShort, formatDuration, formatSpokenDistance, VIA_MIN_M, viaRoad } from '../src/phrasing.js';
 
 describe('phrasing', () => {
   it('formats spoken distances', () => {
@@ -19,5 +19,26 @@ describe('phrasing', () => {
     expect(announcementText(ins, 200)).toBe('In 200 metres, turn right onto Main St');
     expect(announcementText(ins, null)).toBe('Turn right onto Main St');
     expect(announcementText({ ...ins, sign: 4 }, null)).toBe('You have arrived at your destination');
+  });
+});
+
+describe('naming explore routes by where they go', () => {
+  const ins = (streetName: string, distanceM: number) => ({ streetName, distanceM });
+  const fastest = { instructions: [ins('Moggill Road', 4000), ins('Western Freeway', 6000)] };
+
+  it('names the road the route drives furthest on that the fastest route never uses', () => {
+    expect(viaRoad({ instructions: [ins('Moggill Road', 1000), ins('Mount Coot-tha Road', 3000), ins('Sir Samuel Griffith Drive', 5000)] }, fastest)).toBe('Sir Samuel Griffith Drive');
+  });
+
+  it('names nothing when every road is shared, unnamed, or too short a stretch', () => {
+    expect(viaRoad({ instructions: [ins('Moggill Road', 9000), ins('', 4000), ins('Short Lane', VIA_MIN_M - 1)] }, fastest)).toBeNull();
+  });
+
+  it('titles each route by its road, and numbers two that would read the same', () => {
+    const a = { instructions: [ins('Bowman Parade', 2000)] };
+    const b = { instructions: [ins('Bowman Parade', 3000)] };
+    const c = { instructions: [ins('Jubilee Terrace', 2500)] };
+    expect(exploreTitles([a, b, c], fastest)).toEqual(['Explore 1', 'Explore 2', 'Via Jubilee Terrace']);
+    expect(exploreTitles([{ instructions: [] }], null)).toEqual(['Explore 1']);
   });
 });

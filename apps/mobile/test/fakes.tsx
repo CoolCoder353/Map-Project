@@ -23,6 +23,7 @@ export interface Init {
   method?: string;
   body?: unknown;
   query?: Record<string, unknown>;
+  timeoutMs?: number;
 }
 type Handler = (init: Init) => unknown;
 

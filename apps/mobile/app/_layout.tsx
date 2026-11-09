@@ -4,9 +4,12 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AppConfigProvider } from '../src/lib/appConfig';
+import { restoreAppearance } from '../src/lib/appearance';
 import { SessionProvider } from '../src/lib/session';
 import { useOrientationPolicy } from '../src/lib/orientation';
 import { useTheme } from '../src/lib/theme';
+
+void restoreAppearance();
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, staleTime: 30_000 } } });
 

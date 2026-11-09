@@ -67,7 +67,7 @@ exactly what each field is.
 | POST | `/api/routes/explore` | `ExploreRouteRequestSchema` (`budgetMin` defaults to the person's setting) → `{ fastest, explore: Route[] }`. `fastest` is the quickest by the finished times (lights and learned speeds included): an explore route that comes out quicker takes its place |
 | POST | `/api/routes/roundtrip` | `RoundTripRequestSchema` (`start`, `mode`, `targetMin`) → `{ routes }` |
 | GET | `/api/roads/speed-limit` | `SpeedLimitQuerySchema` (`lon`, `lat`, optional `heading`) → `SpeedLimitResponseSchema` `{ kmh, estimated, road }`: the limit on the road where a car is, for the car's map with no trip. Worked out as a 400 m route ahead the way the car is going, finished as any route is (signs, school zones in force, electronic signs, main-road estimates), and read at its start. `kmh` null where no limit is known or the point is more than 40 m from a road; `estimated` when it's the road's legal default, not a sign |
-| GET | `/api/discover` | `DiscoverQuerySchema` (`lon`, `lat`, `mode`, `maxMinutes`, `categories`) → `{ items }`. One place mapped twice ("Whites Hill", "Whites Hill Lookout") is listed once. The slow one: several seconds on a small server |
+| GET | `/api/discover` | `DiscoverQuerySchema` (`lon`, `lat`, `mode`, `maxMinutes`, `categories`) → `{ items }`. One place mapped twice ("Whites Hill", "Whites Hill Lookout") is listed once. Each item's `withinMinutes` is the smallest of three time bands (a third, two thirds and all of `maxMinutes`, rounded up to 5) it falls inside, from one isochrone per band. The slow one: several seconds on a small server |
 
 `mode` is `car` or `foot`. Each `Route` carries its geometry, turn instructions, `novelty`
 (new kilometres of road for this person) and `speedLimits`: `{ from, to, kmh }` runs of geometry
@@ -102,11 +102,11 @@ Newer servers add, each left out where empty:
 | Method | Path | Schema / notes |
 |---|---|---|
 | POST | `/api/tracks/batches` | `TrackBatchRequestSchema`: up to 5,000 points, `ts` in epoch ms. Re-sending a `batchId` returns `duplicate: true` |
-| GET | `/api/trips` | `limit`, `cursor` (the last trip's `startedAt`; anything else is a 400) → `TripListResponseSchema` (each trip has `newRoads`) |
-| GET | `/api/trips/:id` | `TripDetailSchema`, with the recorded points; `matchedGeometry`, the trip snapped to the roads it took (absent where it couldn't be matched); and `newRoadLines`, the stretches of the roads this trip was the first to travel (roads whose first visit is the trip's start) |
+| GET | `/api/trips` | `limit`, `cursor` (the last trip's `startedAt`; anything else is a 400) → `TripListResponseSchema` (each trip has `newRoads`, and `endedNear`, the name of the place nearest its last point, or null) |
+| GET | `/api/trips/:id` | `TripDetailSchema`, with the recorded points; `matchedGeometry`, the trip snapped to the roads it took (absent where it couldn't be matched); and `newRoadLines`, the stretches of the roads this trip was the first to travel (roads whose first visit is the trip's start); and `endedNear` as in the list |
 | PATCH | `/api/trips/:id` | `{ mode }`, which re-runs coverage |
 | DELETE | `/api/trips/:id` | Soft delete; an admin can restore it for 7 days |
-| GET | `/api/coverage` | `CoverageQuerySchema`: `bbox`, `zoom`, `format` (`roads` or `geojson`) → travelled roads in view. A road travelled in separate stretches comes as one entry per stretch, with the same `wayId` |
+| GET | `/api/coverage` | `CoverageQuerySchema`: `bbox`, `zoom`, `format` (`roads` or `geojson`) → travelled roads in view. A road travelled in separate stretches comes as one entry per stretch, with the same `wayId`. Each has `firstAt` and `lastAt`, when it was first and last travelled |
 | GET | `/api/coverage/stats` | `CoverageStatsSchema`: km of road, roads travelled, new this week/month, by mode, and `bounds` (`[w, s, e, n]` around nearly all of them, for framing the map; null with none, absent from older servers) |
 
 ## Feedback
@@ -121,7 +121,7 @@ Newer servers add, each left out where empty:
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/map/style.json` | MapLibre style; `?theme=dark` for dark. URLs are absolute, from `PUBLIC_ORIGIN` |
+| GET | `/map/style.json` | MapLibre style; `?theme=dark` for dark, `&driving=1` for the map under directions (no buildings, place dots or traffic-light markers). Bus stops are left off, and place dots only show from the zoom their names do. URLs are absolute, from `PUBLIC_ORIGIN` |
 | GET | `/tiles/tiles.json` | TileJSON |
 | GET | `/tiles/:z/:x/:y.mvt` | Vector tiles from the PMTiles file (plain MVT; Caddy compresses) |
 | GET | `/tiles/signals/:z/:x/:y.mvt` | Traffic lights from the database as one MVT layer, `traffic_signals`, each point with its `kind`. Zoom 14 to 16; `204` below 14 or where a tile has none |

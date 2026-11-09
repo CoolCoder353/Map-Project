@@ -20,6 +20,7 @@ import app.wayfinder.car.bridge.LngLat
 import app.wayfinder.car.bridge.NavStatus
 import app.wayfinder.car.map.MapScene
 import app.wayfinder.car.screens.HomeScreen
+import app.wayfinder.car.screens.MessageScreen
 import app.wayfinder.car.screens.NavigationScreen
 import org.junit.Assert.*
 import org.junit.Test
@@ -190,6 +191,51 @@ class NavigationCoordinatorTest {
     assertTrue(screens.top is NavigationScreen)
     coordinator.showDrive()
     assertEquals("not stacked twice", 2, screens.screensPushed.count { it is NavigationScreen })
+  }
+
+  /** A trip started on the phone goes over what the car shows, which is still there after (C45). */
+  @Test fun aTripFromThePhoneKeepsWhatTheCarWasShowing() {
+    coordinator.attach()
+    val typing = MessageScreen(carContext, "Searching")
+    screens.push(typing)
+    api.pushNav(Samples.nav())
+    assertTrue(screens.top is NavigationScreen)
+    driveScreen()
+    api.pushNav(null)
+    assertSame(typing, screens.top)
+  }
+
+  /** Directions gone without the car asking, before arriving: the driver is told why (C63, C71). */
+  @Test fun saysWhenTheDirectionsStoppedOnThePhone() {
+    val said = ArrayList<String>()
+    val c = NavigationCoordinator(carContext, api, RecordingScenes(), ManeuverIcons(carContext), say = { said += it })
+    c.attach()
+    api.pushNav(Samples.nav())
+    api.pushNav(null)
+    assertEquals(listOf(NavigationCoordinator.ENDED_ON_PHONE), said)
+    // Ended from the car, or arrived: nothing to explain.
+    api.pushNav(Samples.nav())
+    c.stop()
+    api.pushNav(null)
+    api.pushNav(Samples.nav(status = NavStatus.ARRIVED))
+    api.pushNav(null)
+    assertEquals(1, said.size)
+  }
+
+  /** Over the limit: one chime, not while muted (C69). */
+  @Test fun chimesOnceForGoingOverTheLimit() {
+    var chimes = 0
+    val c = NavigationCoordinator(carContext, api, RecordingScenes(), ManeuverIcons(carContext), chime = { chimes++ })
+    c.attach()
+    api.pushNav(Samples.nav().copy(speedLimitKmh = 60, speedKmh = 70))
+    api.pushNav(Samples.nav().copy(speedLimitKmh = 60, speedKmh = 72))
+    assertEquals(1, chimes)
+  }
+
+  /** End and Mute on the notification, without opening the app (P89). */
+  @Test fun theNotificationOffersMuteAndEnd() {
+    assertEquals("Mute" to "End", NavNotifications.actionLabels(Samples.nav()))
+    assertEquals("Unmute" to "Done", NavNotifications.actionLabels(Samples.nav(muted = true, status = NavStatus.ARRIVED)))
   }
 
   @Test fun noDriveToReturnToOnceTheTripHasEnded() {

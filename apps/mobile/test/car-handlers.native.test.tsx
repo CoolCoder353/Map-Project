@@ -3,7 +3,7 @@ import { timerHold } from '../src/lib/keepTimers';
 import { waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
 import { formatDistanceShort } from '@wayfinder/nav';
-import { carHandlers, carReportMessage, DISCOVER_MIN_M, isHomeName, NO_OTHER_WAYS, OFFERED_KEPT, PHONE_FIX_WAIT_MS, ROUTE_EXPIRED, REPORT_COOLDOWN_MS, REPORT_JUST_SENT, REPORT_LIMIT, REPORT_OFF, resetCarHandlers } from '../src/car/handlers';
+import { CAR_SERVER_TIMEOUT_MS, carHandlers, carReportMessage, DISCOVER_MIN_M, isHomeName, NO_OTHER_WAYS, OFFERED_KEPT, PHONE_FIX_WAIT_MS, ROUTE_EXPIRED, REPORT_COOLDOWN_MS, REPORT_JUST_SENT, REPORT_LIMIT, REPORT_OFF, resetCarHandlers } from '../src/car/handlers';
 import { ApiError } from '../src/lib/apiClient';
 import { getServerUrl } from '../src/lib/server';
 import { fake, place, resetFakes, route } from './fakes';
@@ -19,7 +19,8 @@ jest.mock('expo-location', () => ({
 const mockNavigation = { start: jest.fn(), stop: jest.fn(), handleFix: jest.fn(), setMuted: jest.fn(), getSnapshot: jest.fn(() => ({ route: null, active: true, error: null as string | null })) };
 // Read lazily: the handlers import this before the const above is initialised.
 jest.mock('../src/car/simulation', () => ({ ...jest.requireActual('../src/car/simulation'), startTestDrive: jest.fn() }));
-import { DEMO_DESTINATION_NAME, DEMO_ORIGIN, startTestDrive } from '../src/car/simulation';
+import { DEMO_DESTINATION_NAME, DEMO_ORIGIN, startTestDrive, testDriveTarget } from '../src/car/simulation';
+import { forgetDiscoverChoices, rememberDiscoverChoices } from '../src/lib/discoverChoices';
 jest.mock('../src/nav/navigationService', () => ({ get navigation() { return mockNavigation; } }));
 
 beforeEach(() => {
@@ -121,7 +122,14 @@ describe('status', () => {
       searchHint: 'Search places and addresses',
       here: [153.02, -27.47],
       saved: [],
+      plannedRoutes: null,
     });
+  });
+
+  // Home offers Planned routes only when there are some for driving (C4).
+  it('says how many routes are planned for driving', async () => {
+    fake.api.on({ 'GET api/planned-routes': () => ({ items: [{ id: 'a', name: 'A', createdAt: '2026-11-01T00:00:00Z', route: route({ mode: 'car' }) }, { id: 'w', name: 'W', createdAt: '2026-11-01T00:00:00Z', route: route({ mode: 'foot' }) }] }) });
+    expect(await carHandlers.status!({})).toMatchObject({ plannedRoutes: 1 });
   });
 
   it('brings your saved places, Home first, then the nearest, each a tap away from its routes', async () => {
@@ -197,7 +205,21 @@ describe('search', () => {
     fake.api.on({ 'GET api/search': () => ({ results: [place({ id: 'p1', name: 'Mt Coot-tha Lookout', context: 'Mount Coot-tha QLD', distanceM: 6200 })] }) });
     const res = await carHandlers.search!({ q: 'coot' });
     expect(fake.api.callsTo('GET api/search')[0]!.query).toMatchObject({ q: 'coot', lon: 153.02, lat: -27.47, limit: 6 });
-    expect(res).toEqual({ places: [{ id: 'p1', name: 'Mt Coot-tha Lookout', detail: 'Mount Coot-tha QLD · 6.2 km away', location: expect.any(Array), distanceM: 6200 }] });
+    expect(res).toEqual({ places: [{ id: 'p1', name: 'Mt Coot-tha Lookout', detail: 'Mount Coot-tha QLD · 6.2 km away', location: expect.any(Array), distanceM: 6200, address: 'Mount Coot-tha QLD' }] });
+    // The car says the phone can't reach the server well before it gives up on the phone (C65).
+    expect(fake.api.callsTo('GET api/search')[0]!.timeoutMs).toBe(CAR_SERVER_TIMEOUT_MS);
+  });
+
+  // "Navigate to" a point with no name: the preview says what's there (C75).
+  it('looks up what is at a point, keeping the point itself', async () => {
+    fake.api.on({ 'GET api/reverse': () => ({ place: place({ id: 'r1', name: '12 Moselle Drive', location: [153.2527, -27.5625] }) }) });
+    const res = (await carHandlers.lookup!({ at: [153.2526, -27.5624] })) as { place: { name: string; location: number[] } };
+    expect(fake.api.callsTo('GET api/reverse')[0]!.query).toMatchObject({ lon: 153.2526, lat: -27.5624 });
+    expect(res.place).toMatchObject({ name: '12 Moselle Drive', location: [153.2526, -27.5624] });
+    fake.api.on({ 'GET api/reverse': () => ({ place: null }) });
+    expect(await carHandlers.lookup!({ at: [153.2526, -27.5624] })).toEqual({ place: null });
+    fake.api.on({ 'GET api/reverse': () => { throw new Error('offline'); } });
+    expect(await carHandlers.lookup!({ at: [153.2526, -27.5624] })).toEqual({ place: null });
   });
 
   it('refuses an empty search', async () => {
@@ -215,6 +237,18 @@ describe('discover', () => {
     expect(res.places.map((p) => p.name)).toEqual(['near', 'far']);
     expect(res.places[0]!.detail).toBe('2.4 km away · Lookout');
     expect(DISCOVER_MIN_M).toBe(1000);
+  });
+
+  // The car's Discover is the phone's: same time limit, same kinds of place (C31, C53).
+  it('uses the time and kinds of place last chosen in Discover on the phone', async () => {
+    fake.api.on({ 'GET api/discover': () => ({ items: [] }) });
+    rememberDiscoverChoices({ minutes: 45, categories: ['viewpoint', 'cafe'] as never });
+    try {
+      await carHandlers.discover!({});
+      expect(fake.api.callsTo('GET api/discover')[0]!.query).toMatchObject({ maxMinutes: 45, categories: 'viewpoint,cafe' });
+    } finally {
+      forgetDiscoverChoices();
+    }
   });
 
   it('explains when it can’t tell where you are', async () => {
@@ -237,6 +271,14 @@ describe('plan and start', () => {
     expect(res.options.map((o) => [o.routeId, o.title])).toEqual([['r-fast', 'Fastest'], ['r-exp', 'Explore 1']]);
     expect(res.options[1]!.detail).toMatch(/^32 min \(7 min longer\) · /);
     expect(res.note).toBeNull();
+  });
+
+  // Named by where it goes, not "Explore 1" (P10, C94).
+  it('names an explore route by the road that sets it apart', async () => {
+    const via = { ...explore, id: 'r-via', instructions: [{ sign: 0, text: 'Continue onto Mount Coot-tha Road', streetName: 'Mount Coot-tha Road', distanceM: 4000, durationS: 300, interval: [0, 1] as [number, number] }] };
+    fake.api.on({ 'POST api/routes/explore': () => ({ fastest, explore: [via] }) });
+    const res = (await carHandlers.plan!({ to: [152.957, -27.4846] })) as { options: Array<{ title: string }> };
+    expect(res.options[1]!.title).toBe('Via Mount Coot-tha Road');
   });
 
   it('says why there are no other ways', async () => {
@@ -312,7 +354,17 @@ describe('test drive (auto drive)', () => {
     expect(startTestDrive).not.toHaveBeenCalled();
   });
 
-  it('with no trip, drives the built-in route from where the phone is', async () => {
+  // A real route on the roads, not straight lines across houses (C84).
+  it('with no trip, drives a real route from where the phone is', async () => {
+    const real = route({ id: 'r-real-roads' });
+    fake.api.on({ 'POST api/routes/fastest': () => real });
+    await carHandlers.simulate!({});
+    expect(fake.api.callsTo('POST api/routes/fastest')[0]!.body).toMatchObject({ from: [153.02, -27.47], to: testDriveTarget([153.02, -27.47]), mode: 'car' });
+    expect(jest.mocked(startTestDrive).mock.calls[0]![1].id).toBe('r-real-roads');
+  });
+
+  it('with no trip and no server, drives the built-in route from where the phone is', async () => {
+    fake.api.on({ 'POST api/routes/fastest': () => { throw new Error('offline'); } });
     await carHandlers.simulate!({});
     const [, demo, name] = jest.mocked(startTestDrive).mock.calls[0]!;
     expect(demo.id).toBe('test-drive');
@@ -326,9 +378,10 @@ describe('test drive (auto drive)', () => {
     expect(jest.mocked(startTestDrive).mock.calls[0]![1].geometry[0]).toEqual(DEMO_ORIGIN);
   });
 
-  it('never calls the server', async () => {
+  it('asks the server nothing without a position', async () => {
+    jest.mocked(Location.getForegroundPermissionsAsync).mockResolvedValueOnce({ granted: false } as never);
     await carHandlers.simulate!({});
-    expect(fake.api.calls).toHaveLength(0);
+    expect(fake.api.callsTo('POST api/routes/fastest')).toHaveLength(0);
   });
 });
 
@@ -525,12 +578,12 @@ describe('report limits', () => {
 
 describe('carReportMessage', () => {
   it('stamps the time in the phone’s own time zone, and names it', () => {
-    const msg = carReportMessage({ active: false, route: null, destinationName: null, state: null, rerouting: false, error: null, muted: false, position: null, headingDeg: null, speedMps: null, travelled: [], simulated: false }, new Date('2026-10-06T09:04:22Z'), 'Australia/Perth');
+    const msg = carReportMessage({ active: false, route: null, destinationName: null, state: null, rerouting: false, error: null, muted: false, position: null, headingDeg: null, speedMps: null, travelled: [], simulated: false, ended: null }, new Date('2026-10-06T09:04:22Z'), 'Australia/Perth');
     expect(msg).toContain('6 Oct 2026, 5:04:22 pm AWST');
   });
 
   it('says what was shown before the first position and while finding a new route', () => {
-    const msg = carReportMessage({ active: true, route: route({ kind: 'fastest' }), destinationName: null, state: null, rerouting: true, error: 'Still finding where you are.', muted: false, position: null, headingDeg: null, speedMps: null, travelled: [], simulated: false }, new Date('2026-10-06T09:04:22Z'), 'Australia/Brisbane');
+    const msg = carReportMessage({ active: true, route: route({ kind: 'fastest' }), destinationName: null, state: null, rerouting: true, error: 'Still finding where you are.', muted: false, position: null, headingDeg: null, speedMps: null, travelled: [], simulated: false, ended: null }, new Date('2026-10-06T09:04:22Z'), 'Australia/Brisbane');
     expect(msg).toContain('6 Oct 2026, 7:04:22 pm AEST');
     expect(msg).toContain('Trip: fastest route, waiting for the first position, finding a new route.');
     expect(msg).toContain('Speed limit shown: none. Speed: unknown.');

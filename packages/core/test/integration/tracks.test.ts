@@ -5,6 +5,7 @@ import * as tracks from '../../src/services/tracks.js';
 import * as coverage from '../../src/services/coverage.js';
 import * as roads from '../../src/services/roads.js';
 import * as admin from '../../src/services/admin.js';
+import * as places from '../../src/services/places.js';
 import { type TestDb, createTestDb } from '../helpers/db.js';
 import { FakeQueue } from '../helpers/fakes.js';
 import { makeUser } from '../helpers/users.js';
@@ -91,6 +92,7 @@ describe('track ingestion and coverage', () => {
     expect(trip.distanceM).toBeGreaterThan(1900);
     expect(trip.distanceM).toBeLessThan(2100);
     expect(trip.newRoads).toBe(2); // both roads the walk was matched onto were new
+    expect(trip.endedNear).toBeNull(); // no places known there yet
 
     const stats = await coverage.getCoverageStats(t.db, u.id);
     // Coverage counts roads travelled; the walk was matched onto two of them.
@@ -108,6 +110,11 @@ describe('track ingestion and coverage', () => {
     // Drawn along the roads it took, with the two it was first on.
     expect(detail.matchedGeometry).toHaveLength(walk.length);
     expect(detail.newRoadLines).toHaveLength(2);
+    // Says where it ended, from the places the server knows (P33).
+    const end = walk.at(-1)!;
+    await places.upsertPlaces(t.db, [{ id: 'end-1', name: '9 Finish Street', kind: 'address', category: null, description: 'Braddon', lon: end.lon + 0.0002, lat: end.lat, importance: 0 }]);
+    expect((await tracks.listTrips(t.db, u.id, 10)).items[0]!.endedNear).toBe('9 Finish Street');
+    expect((await tracks.getTrip(t.db, u.id, trip.id)).endedNear).toBe('9 Finish Street');
   });
 
   it('joins consecutive batches into one trip and splits after a long gap; mode by speed', async () => {
@@ -389,6 +396,9 @@ describe('track ingestion and coverage', () => {
 
     const geojson = coverage.coverageToGeoJson(view);
     expect(geojson.features[0]!.geometry.type).toBe('LineString');
+    // When each was travelled, for a tap on the map (P99).
+    expect(Date.parse(view.roads[0]!.firstAt!)).toBeLessThanOrEqual(Date.parse(view.roads[0]!.lastAt!));
+    expect(geojson.features[0]!.properties.firstAt).toBe(view.roads[0]!.firstAt);
 
     const elsewhere = await coverage.getCoverage(t.db, u.id, [140, -30, 140.1, -29.9], 15);
     expect(elsewhere.roads).toHaveLength(0);

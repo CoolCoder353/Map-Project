@@ -96,6 +96,7 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
     }
     surfaceSize = Rect(0, 0, container.width, container.height)
     dpi = container.dpi
+    LastPosition.load(carContext)
     if (visible.isEmpty) visible = Rect(surfaceSize)
   }
 
@@ -108,6 +109,8 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
   /** The driver dragging the map (in pan mode, or on a touch screen). */
   override fun onScroll(distanceX: Float, distanceY: Float) {
     val m = map ?: return
+    // A tap arrives as a tiny scroll: not enough to stop following the car (C62).
+    if (scene is MapScene.Following && !follow.drag(distanceX, distanceY)) return
     if (scene is MapScene.Following && follow.pan()) {
       applyScene() // the car's marker goes onto the map, which no longer follows it
       pannedListeners.toList().forEach { it(true) }
@@ -184,6 +187,7 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
   }
 
   override fun show(scene: MapScene) {
+    remember(scene)
     // Leaving the driving screen ends any panning: the next trip starts following again.
     if (scene !is MapScene.Following && follow.recentre()) pannedListeners.toList().forEach { it(false) }
     this.scene = scene
@@ -191,7 +195,16 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
     applyScene()
   }
 
+  private fun remember(scene: MapScene) {
+    when (scene) {
+      is MapScene.Overview -> LastPosition.remember(scene.here)
+      is MapScene.Following -> LastPosition.remember(scene.position)
+      else -> Unit
+    }
+  }
+
   fun release() {
+    if (mapView != null) LastPosition.save(carContext)
     mapView?.run { onPause(); onStop(); onDestroy() }
     presentation?.dismiss()
     display?.release()
@@ -205,16 +218,22 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
   }
 
   private fun addLayers(style: Style) {
+    val c = CarColours.of(carContext.isDarkMode)
+    // Street names bigger than on the phone: the car's screen is read at arm's length (C91).
+    (style.getLayer(CarMapLayers.ROAD_LABEL) as? SymbolLayer)?.setProperties(
+      textSize(Expression.interpolate(Expression.linear(), Expression.zoom(), Expression.stop(13, 10 * CarMapLayers.ROAD_LABEL_SCALE), Expression.stop(18, 14 * CarMapLayers.ROAD_LABEL_SCALE))),
+    )
+    style.addSource(GeoJsonSource(START))
     style.addSource(GeoJsonSource(OTHERS))
     style.addSource(GeoJsonSource(TRAVELLED))
     style.addSource(GeoJsonSource(SELECTED))
     style.addSource(GeoJsonSource(MARKERS))
     style.addSource(GeoJsonSource(POSITION))
     style.addSource(GeoJsonSource(LIGHTS))
-    style.addLayer(LineLayer(OTHERS, OTHERS).withProperties(lineColor(GREY), lineWidth(6f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
-    style.addLayer(LineLayer(TRAVELLED, TRAVELLED).withProperties(lineColor(TRAVELLED_COLOUR), lineWidth(6f), lineOpacity(0.85f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
+    style.addLayer(LineLayer(OTHERS, OTHERS).withProperties(lineColor(c.others), lineWidth(6f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
+    style.addLayer(LineLayer(TRAVELLED, TRAVELLED).withProperties(lineColor(c.travelled), lineWidth(6f), lineOpacity(0.85f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
     // A white edge keeps the chosen route clear of the roads and labels under it, day and night.
-    style.addLayer(LineLayer(CASING, SELECTED).withProperties(lineColor(WHITE), lineWidth(12f), lineOpacity(0.9f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
+    style.addLayer(LineLayer(CASING, SELECTED).withProperties(lineColor(c.casing), lineWidth(12f), lineOpacity(0.9f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
     style.addLayer(LineLayer(SELECTED, SELECTED).withProperties(lineColor(ACCENT), lineWidth(8f), lineCap(Property.LINE_CAP_ROUND), lineJoin(Property.LINE_JOIN_ROUND)))
     // Lights ahead on the route: red where the car will likely stop, green where not.
     style.addLayer(
@@ -223,6 +242,8 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
         circleRadius(7f), circleStrokeColor(WHITE), circleStrokeWidth(2.5f),
       ),
     )
+    // Where the chosen route starts, before Go (C13, C34).
+    style.addLayer(CircleLayer(START, START).withProperties(circleColor(WHITE), circleRadius(7f), circleStrokeColor(ACCENT), circleStrokeWidth(4f)))
     style.addLayer(CircleLayer(POSITION, POSITION).withProperties(circleColor(ACCENT), circleRadius(10f), circleStrokeColor(WHITE), circleStrokeWidth(3f)))
     // Numbered pins and the destination (MapPins), on top and never hidden for overlapping.
     style.addLayer(SymbolLayer(MARKERS, MARKERS).withProperties(iconImage(Expression.get(MapFeatures.IMAGE)), iconAllowOverlap(true), iconIgnorePlacement(true)))
@@ -244,6 +265,9 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
     MapPins.missing(d, style::getImage).forEach { style.addImage(it, MapPins.image(it, dpi)) }
     style.getSourceAs<GeoJsonSource>(MARKERS)?.setGeoJson(MapFeatures.markers(d))
     style.getSourceAs<GeoJsonSource>(LIGHTS)?.setGeoJson(MapFeatures.lights(d.lights))
+    style.getSourceAs<GeoJsonSource>(START)?.setGeoJson(MapFeatures.points(listOfNotNull(d.start)))
+    val clutter = if (CarMapLayers.hidden(scene)) Property.NONE else Property.VISIBLE
+    CarMapLayers.CLUTTER.forEach { id -> style.getLayer(id)?.setProperties(visibility(clutter)) }
     // Following the car, its marker is the fixed view over the map (no jumping from fix to fix).
     val onMap = d.position?.takeUnless { followingCar() }
     style.getSourceAs<GeoJsonSource>(POSITION)?.setGeoJson(MapFeatures.points(listOfNotNull(onMap)))
@@ -259,7 +283,7 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
       val on = s != null && map != null && followingCar()
       p.visibility = if (on) View.VISIBLE else View.GONE
       if (on && !visible.isEmpty) {
-        val (x, y) = SceneLayout.followPoint(visible.left, visible.top, visible.right, visible.bottom)
+        val (x, y) = SceneLayout.followPoint(visible.left, visible.top, visible.right, visible.bottom, speedColumn())
         p.translationX = x - p.sizePx / 2f
         p.translationY = y - p.sizePx / 2f
         p.pointing = s!!.headingDeg != null
@@ -273,16 +297,31 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
         v.translationY = visible.bottom - margin - v.heightPx
       }
     }
+    // The map's credit at the bottom of what can be seen, right of the speed readout, rather than
+    // under the list card (C77).
+    map?.uiSettings?.let { ui ->
+      if (visible.isEmpty) return@let
+      val margin = (8 * carContext.resources.displayMetrics.density).toInt()
+      ui.attributionGravity = android.view.Gravity.BOTTOM or android.view.Gravity.START
+      ui.setAttributionMargins(visible.left + speedColumn() + margin, 0, 0, surfaceSize.height() - visible.bottom + margin)
+    }
+  }
+
+  /** The left of the visible area kept for the speed readout while it shows. */
+  private fun speedColumn(): Int {
+    val v = speed ?: return 0
+    val following = scene is MapScene.Following && followingCar()
+    return SceneLayout.speedColumn(v.sizePx, (12 * v.resources.displayMetrics.density).toInt(), following && v.visibility == View.VISIBLE)
   }
 
   private fun applyCamera() {
     val m = map ?: return
     if (visible.isEmpty) return
-    val left = visible.left.toDouble()
+    val left = visible.left.toDouble() + speedColumn()
     val top = visible.top.toDouble()
     val right = (surfaceSize.width() - visible.right).toDouble().coerceAtLeast(0.0)
     val bottom = (surfaceSize.height() - visible.bottom).toDouble().coerceAtLeast(0.0)
-    val spec = SceneLayout.camera(scene)
+    val spec = SceneLayout.camera(scene, LastPosition.at)
     val move = { update: CameraUpdate ->
       val ms = SceneLayout.moveMs(spec)
       if (ms > 0) m.easeCamera(update, ms) else m.moveCamera(update)
@@ -294,7 +333,7 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
           CameraPosition.Builder()
             .target(spec.target.latLng())
             .zoom(follow.zoom)
-            .tilt(45.0)
+            .tilt(SceneLayout.tilt(spec))
             .apply { spec.bearing?.let { bearing(it) } }
             // Keep the car low in the view so more of the road ahead shows (see SceneLayout.followPoint).
             .padding(left, top + visible.height() * SceneLayout.FOLLOW_TOP_SHARE, right, bottom)
@@ -304,18 +343,23 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
       is CameraSpec.Fit -> {
         val distinct = spec.points.distinct()
         if (distinct.size == 1) {
-          move(CameraUpdateFactory.newLatLngZoom(distinct[0].latLng(), 15.0))
+          move(flat(distinct[0], 15.0))
         } else {
+          // Flat and north up, whatever the drive before left the camera at (C27).
           val bounds = LatLngBounds.Builder().includes(distinct.map { it.latLng() }).build()
-          move(CameraUpdateFactory.newLatLngBounds(bounds, (left + 40).toInt(), (top + 40).toInt(), (right + 40).toInt(), (bottom + 40).toInt()))
+          move(CameraUpdateFactory.newLatLngBounds(bounds, 0.0, 0.0, (left + 40).toInt(), (top + 40).toInt(), (right + 40).toInt(), (bottom + 40).toInt()))
         }
       }
-      is CameraSpec.Center -> move(CameraUpdateFactory.newLatLngZoom(spec.target.latLng(), spec.zoom))
+      is CameraSpec.Center -> move(flat(spec.target, spec.zoom))
       CameraSpec.Keep -> Unit
     }
   }
 
   private fun LngLat.latLng() = LatLng(lat, lon)
+
+  /** Looking straight down, north up: every map but the one following the car (C5, C24, C27). */
+  private fun flat(at: LngLat, zoom: Double) =
+    CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(at.latLng()).zoom(zoom).tilt(0.0).bearing(0.0).padding(0.0, 0.0, 0.0, 0.0).build())
 
   private companion object {
     const val SELECTED = "wf-route-selected"
@@ -325,14 +369,12 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
     const val POSITION = "wf-position"
     const val TRAVELLED = "wf-travelled"
     const val LIGHTS = "wf-lights"
+    const val START = "wf-start"
     // As the phone draws them (MapCanvas LIGHT_COLOURS).
     const val LIGHT_RED = "#d93025"
     const val LIGHT_GREEN = "#188038"
-    // The phone's accent (src/lib/theme.ts) and a quiet grey for the routes not chosen.
-    const val ACCENT = "#1765cc"
-    const val GREY = "#8a94a6"
-    // The road already driven, set apart from the blue route still ahead.
-    const val TRAVELLED_COLOUR = "#7b5cd6"
+    // The phone's accent (src/lib/theme.ts); the rest by day or night (CarColours).
+    const val ACCENT = CarColours.ACCENT
     const val WHITE = "#ffffff"
   }
 }

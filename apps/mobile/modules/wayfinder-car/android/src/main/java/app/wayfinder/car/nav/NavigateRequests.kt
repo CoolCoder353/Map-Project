@@ -9,6 +9,7 @@ import app.wayfinder.car.bridge.CarApi
 import app.wayfinder.car.bridge.CarPlace
 import app.wayfinder.car.map.MapScenes
 import app.wayfinder.car.screens.MessageScreen
+import app.wayfinder.car.screens.PickScreens
 import app.wayfinder.car.screens.RoutePreviewScreen
 
 /**
@@ -51,12 +52,28 @@ class NavigateRequests(
 
   private fun open(request: NavigateRequest) {
     when (request) {
-      is NavigateRequest.At -> preview(CarPlace("geo", request.label ?: DESTINATION, "", request.place, null))
+      is NavigateRequest.At -> if (request.label != null) {
+        preview(CarPlace("geo", request.label, "", request.place, null))
+      } else {
+        // No name sent: what is there, so the preview says where it's going (C75).
+        api.lookup(request.place) { r ->
+          if (!alive()) return@lookup
+          val found = r.getOrNull()
+          preview(CarPlace("geo", found?.name ?: DESTINATION, found?.detail.orEmpty(), request.place, null, address = found?.address))
+        }
+      }
       is NavigateRequest.Named -> api.search(request.query) { r ->
         if (!alive()) return@search
         r.onSuccess { places ->
-          val first = places.firstOrNull()
-          if (first != null) preview(first) else show("Nothing found for “${request.query}”.")
+          when {
+            places.isEmpty() -> show("Nothing found for “${request.query}”.")
+            places.size == 1 -> preview(places[0])
+            // More than one: the driver picks, rather than being sent to whichever came first (C72).
+            else -> {
+              screens.popToRoot()
+              screens.push(PickScreens.choose(carContext, api, map, "Which ${request.query}?", places))
+            }
+          }
         }.onFailure { show(it.message ?: "Search didn’t work. Try again.", request) }
       }
       NavigateRequest.Malformed -> Unit

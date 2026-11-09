@@ -9,11 +9,13 @@ data class LngLat(val lon: Double, val lat: Double)
 
 enum class Account { SIGNED_IN, SIGNED_OUT, OFFLINE }
 /** [saved]: the driver's saved places, Home first then the nearest (none from an older phone app). */
-data class CarStatus(val account: Account, val styleLight: String?, val styleDark: String?, val searchHint: String, val here: LngLat?, val saved: List<CarPlace> = emptyList())
+/** [plannedRoutes]: how many routes are planned for driving, so Home offers them only when there are some (null from an older phone app: always offered). */
+data class CarStatus(val account: Account, val styleLight: String?, val styleDark: String?, val searchHint: String, val here: LngLat?, val saved: List<CarPlace> = emptyList(), val plannedRoutes: Int? = null)
 /** The limit where the car is, with no trip: [kmh] null where none is known; [estimated] the road's legal default, not a sign. */
 data class CarSpeedLimit(val kmh: Int?, val estimated: Boolean, val road: String?)
 /** [saved]: one of your saved places; [home]: the one saved as Home, however it was written. */
-data class CarPlace(val id: String, val name: String, val detail: String, val location: LngLat, val distanceM: Double?, val saved: Boolean = false, val home: Boolean = false)
+/** [address]: where it is, to name it beside a saved name like "Home". */
+data class CarPlace(val id: String, val name: String, val detail: String, val location: LngLat, val distanceM: Double?, val saved: Boolean = false, val home: Boolean = false, val address: String? = null)
 data class RouteOption(
   val routeId: String, val title: String, val detail: String,
   val durationS: Double, val distanceM: Double, val extraDurationS: Double, val geometry: List<LngLat>,
@@ -72,6 +74,7 @@ object Protocol {
       searchHint = o.getString("searchHint"),
       here = if (o.isNull("here")) null else lngLat(o.getJSONArray("here")),
       saved = o.optJSONArray("saved")?.objects()?.map(::place).orEmpty(),
+      plannedRoutes = if (o.has("plannedRoutes") && !o.isNull("plannedRoutes")) o.getInt("plannedRoutes") else null,
     )
   }
 
@@ -86,7 +89,10 @@ object Protocol {
   fun place(o: JSONObject) = CarPlace(
     o.getString("id"), o.getString("name"), o.getString("detail"), lngLat(o.getJSONArray("location")), o.doubleOrNull("distanceM"),
     saved = o.optBoolean("saved", false), home = o.optBoolean("home", false),
+    address = if (o.has("address")) o.stringOrNull("address")?.takeIf { it.isNotBlank() } else null,
   )
+
+  fun lookup(o: JSONObject): CarPlace? = if (o.isNull("place")) null else place(o.getJSONObject("place"))
 
   fun plan(o: JSONObject) = PlanResult(o.getJSONArray("options").objects().map(::option), o.stringOrNull("note"))
 

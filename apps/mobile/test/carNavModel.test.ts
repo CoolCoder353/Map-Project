@@ -9,7 +9,7 @@ const route = (instructions: Instruction[]): Route => ({
   id: 'r1', kind: 'fastest', mode: 'car', distanceM: 5000, durationS: 600, extraDurationS: 0,
   geometry: [[153, -27.4], [153.1, -27.5]], instructions, viaPoints: [], novelty: { totalKm: 5, newKm: 1, noveltyPct: 20 },
 });
-const snap = (over: Partial<NavSnapshot>): NavSnapshot => ({ active: true, route: null, destinationName: 'Lookout', state: null, rerouting: false, error: null, muted: false, position: null, headingDeg: null, speedMps: null, travelled: [], simulated: false, ...over });
+const snap = (over: Partial<NavSnapshot>): NavSnapshot => ({ active: true, route: null, destinationName: 'Lookout', state: null, rerouting: false, error: null, muted: false, position: null, headingDeg: null, speedMps: null, travelled: [], simulated: false, ended: null, ...over });
 
 describe('maneuverOf', () => {
   it.each([

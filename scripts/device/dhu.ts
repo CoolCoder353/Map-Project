@@ -23,12 +23,21 @@ export const dhuCommand = {
   night: () => 'night',
   key: (key: CarKey) => `keycode ${key}`,
   restrict: (on: boolean) => `restrict ${on ? 'all' : 'none'}`,
+  /**
+   * The rotary controller: each turn moves the focus one item down (right) or up (left) a car
+   * list, scrolling it. The console has no swipe, so this is how lists below the fold are reached (H17).
+   */
+  rotate: (down: boolean) => `dpad rotate ${down ? 'right' : 'left'}`,
+  /** Presses the item the rotary controller has focused. */
+  select: () => 'dpad click',
   quit: () => 'quit',
 };
 
 /** An 800×480 touch head unit with a cluster, sending the car's location, speed and day/night. */
 export const DHU_CONFIG = `[general]
 touch = true
+touchpad = false
+controller = true
 resolution = 800x480
 dpi = 160
 framerate = 30

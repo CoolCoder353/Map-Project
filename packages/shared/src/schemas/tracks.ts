@@ -38,6 +38,8 @@ export const TripSummarySchema = z.object({
   distanceM: z.number(),
   /** Roads this trip was the first to travel. */
   newRoads: z.number().int(),
+  /** The place nearest where it ended ("Coot-tha Place"), to tell trips apart (P33). Absent from older servers, or where nothing is known. */
+  endedNear: z.string().nullable().optional(),
 });
 export type TripSummary = z.infer<typeof TripSummarySchema>;
 

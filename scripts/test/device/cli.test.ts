@@ -127,6 +127,19 @@ describe('tapping and typing', () => {
     expect(await run(['tap', 'car', '100', '100'], w.deps)).toBe(1);
     expect(w.dhuLines).not.toContain('tap 100 100');
   });
+
+  // The console has no swipe: the rotary controller reaches rows below the fold (H17).
+  it('scrolls car lists with the rotary controller and picks the row it reaches', async () => {
+    const w = world();
+    await run(['up', '--car'], w.deps);
+    expect(await run(['car', 'scroll', 'down', '3'], w.deps)).toBe(0);
+    expect(w.dhuLines.filter((l) => l === 'dpad rotate right')).toHaveLength(3);
+    expect(await run(['car', 'scroll', 'up'], w.deps)).toBe(0);
+    expect(w.dhuLines).toContain('dpad rotate left');
+    expect(await run(['car', 'select'], w.deps)).toBe(0);
+    expect(w.dhuLines.at(-1)).toBe('dpad click');
+    expect(await run(['car', 'scroll', 'down', '99'], w.deps)).toBe(1);
+  });
 });
 
 describe('screenshots', () => {

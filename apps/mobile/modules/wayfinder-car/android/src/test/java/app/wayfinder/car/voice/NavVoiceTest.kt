@@ -30,6 +30,17 @@ class NavVoiceTest {
     assertEquals(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK, shadowOf(audio).lastAudioFocusRequest.audioFocusRequest.focusGain)
   }
 
+  /** A PC with no sound card hears nothing from the head unit: the log says what was said (H10). */
+  @Test fun logsEachDirectionSaidOrNot() {
+    val logged = ArrayList<String>()
+    val voice = NavVoice(context, log = { logged += it })
+    shadowOf(voice.tts).onInitListener.onInit(TextToSpeech.SUCCESS)
+    voice.speak("Turn left")
+    shadowOf(audio).setNextFocusRequestResponse(AudioManager.AUDIOFOCUS_REQUEST_FAILED)
+    voice.speak("Turn right")
+    assertEquals(listOf(NavVoice.SAID + "Turn left", NavVoice.NOT_SAID + "Turn right"), logged)
+  }
+
   @Test fun saysWhatWasAskedBeforeTheVoiceWasReady() {
     val voice = NavVoice(context)
     voice.speak("In 200 metres, turn left")

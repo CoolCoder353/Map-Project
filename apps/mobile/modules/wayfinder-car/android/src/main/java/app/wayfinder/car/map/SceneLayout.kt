@@ -16,6 +16,8 @@ data class SceneDrawing(
   val destination: LngLat? = null,
   /** Lights ahead, red or green, while driving. */
   val lights: List<RouteLight> = emptyList(),
+  /** Where the chosen route starts, before Go: marked so the driver sees where it begins. */
+  val start: LngLat? = null,
 )
 
 sealed interface CameraSpec {
@@ -27,8 +29,17 @@ sealed interface CameraSpec {
 
 /** What to draw and where to look for each scene; the renderer only carries it out. */
 object SceneLayout {
-  /** The whole country, as the phone map starts (MapCanvas OVERVIEW). */
+  /** The whole country: only when there is no position now and none remembered from before. */
   val AUSTRALIA = CameraSpec.Center(LngLat(134.5, -27.5), 3.6)
+
+  /** How close to you the home map opens. */
+  const val HOME_ZOOM = 13.0
+
+  /** Following the car looks ahead, tilted; every other map is flat and north up (C5, C27). */
+  const val FOLLOW_TILT = 45.0
+
+  /** Pins closer than this share of the spread of all of them would overlap: they share one marker (C30). */
+  const val PIN_GROUP_SHARE = 0.06
 
   /** Following the car glides from one fix to the next (about a second apart). */
   const val FOLLOW_MS = 900
@@ -42,10 +53,23 @@ object SceneLayout {
    * marker is drawn there, fixed, so it stays still while the map glides under it instead of
    * jumping from fix to fix. Arguments are pixels; the visible area is left, top, right, bottom.
    */
-  fun followPoint(left: Int, top: Int, right: Int, bottom: Int): Pair<Float, Float> {
+  fun followPoint(left: Int, top: Int, right: Int, bottom: Int, reservedLeft: Int = 0): Pair<Float, Float> {
     val padTop = top + (bottom - top) * FOLLOW_TOP_SHARE
-    return (left + right) / 2f to ((padTop + bottom) / 2).toFloat()
+    return (left + reservedLeft + right) / 2f to ((padTop + bottom) / 2).toFloat()
   }
+
+  /**
+   * How much of the left of the visible area the speed readout keeps for itself while driving: its
+   * width and a margin each side. The car and the route are centred in what's left, so the readout
+   * is never drawn next to the car on the road ahead (C2, C88).
+   */
+  fun speedColumn(speedWidthPx: Int, marginPx: Int, shown: Boolean): Int = if (shown) speedWidthPx + 2 * marginPx else 0
+
+  /** How the camera is tilted for [spec]. */
+  fun tilt(spec: CameraSpec): Double = if (spec is CameraSpec.Follow) FOLLOW_TILT else 0.0
+
+  /** Which way is up for [spec]: the way you're going while following, else north. */
+  fun bearing(spec: CameraSpec): Double = (spec as? CameraSpec.Follow)?.bearing ?: 0.0
 
   /**
    * How long a camera move takes, in milliseconds; 0 jumps. Only following the car moves smoothly,
@@ -62,15 +86,16 @@ object SceneLayout {
    */
   fun drawing(scene: MapScene): SceneDrawing = when (scene) {
     is MapScene.Overview -> SceneDrawing(emptyList(), emptyList(), emptyList(), scene.here)
-    is MapScene.Places -> SceneDrawing(emptyList(), emptyList(), numbered(scene.places.map { it.location }), null)
+    is MapScene.Places -> SceneDrawing(emptyList(), emptyList(), grouped(numbered(scene.places.map { it.location })), scene.here)
     is MapScene.Routes -> {
       val chosen = scene.options.getOrNull(scene.selected)?.geometry.orEmpty()
       SceneDrawing(
         chosen,
         scene.options.filterIndexed { i, _ -> i != scene.selected }.map { it.geometry },
-        if (scene.selected == MapScene.Routes.NONE) numbered(scene.options.mapIndexed { i, o -> along(o.geometry, (i + 1.0) / (scene.options.size + 1)) }) else emptyList(),
+        if (scene.selected == MapScene.Routes.NONE) grouped(numbered(scene.options.mapIndexed { i, o -> along(o.geometry, (i + 1.0) / (scene.options.size + 1)) })) else emptyList(),
         null,
         destination = chosen.lastOrNull(),
+        start = chosen.firstOrNull(),
       )
     }
     is MapScene.Following -> SceneDrawing(scene.line, emptyList(), emptyList(), scene.position, scene.travelled, destination = scene.line.lastOrNull(), lights = scene.lights)
@@ -80,13 +105,31 @@ object SceneLayout {
   private fun numbered(at: List<LngLat?>) = at.mapIndexedNotNull { i, p -> p?.let { Pin(it, (i + 1).toString()) } }
 
   /**
+   * Pins that would sit on each other become one, labelled with both numbers ("2·4") at the first
+   * one's place: three overlapping badges were unreadable (C30). "Close" is a share of how far the
+   * pins spread, as the map is fitted to them.
+   */
+  internal fun grouped(pins: List<Pin>): List<Pin> {
+    if (pins.size < 2) return pins
+    val spread = Math.hypot(pins.maxOf { it.at.lon } - pins.minOf { it.at.lon }, pins.maxOf { it.at.lat } - pins.minOf { it.at.lat })
+    val near = spread * PIN_GROUP_SHARE
+    val groups = mutableListOf<MutableList<Pin>>()
+    for (p in pins) {
+      val g = groups.firstOrNull { g -> Math.hypot(g[0].at.lon - p.at.lon, g[0].at.lat - p.at.lat) < near }
+      if (g != null) g += p else groups += mutableListOf(p)
+    }
+    return groups.map { g -> Pin(g[0].at, g.joinToString("·") { it.label }) }
+  }
+
+  /**
    * A point [share] of the way along [line], by vertex. Each route's number sits at a different
    * share (1/3 and 2/3 for two), so routes that share roads don't stack their numbers.
    */
   internal fun along(line: List<LngLat>, share: Double) = line.getOrNull(Math.round((line.size - 1) * share).toInt().coerceIn(0, maxOf(0, line.size - 1)))
 
-  fun camera(scene: MapScene): CameraSpec = when (scene) {
-    is MapScene.Overview -> scene.here?.let { CameraSpec.Center(it, 13.0) } ?: AUSTRALIA
+  /** [remembered]: where the car or phone last was, for a map opened before either knows where it is now (C67). */
+  fun camera(scene: MapScene, remembered: LngLat? = null): CameraSpec = when (scene) {
+    is MapScene.Overview -> (scene.here ?: remembered)?.let { CameraSpec.Center(it, HOME_ZOOM) } ?: AUSTRALIA
     is MapScene.Places -> if (scene.places.isEmpty()) CameraSpec.Keep else CameraSpec.Fit(scene.places.map { it.location })
     is MapScene.Routes -> scene.options.flatMap { it.geometry }.let { if (it.isEmpty()) CameraSpec.Keep else CameraSpec.Fit(it) }
     is MapScene.Following -> scene.position?.let { CameraSpec.Follow(it, scene.headingDeg) }

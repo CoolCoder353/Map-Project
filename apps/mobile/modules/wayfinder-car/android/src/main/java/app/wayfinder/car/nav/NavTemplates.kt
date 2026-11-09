@@ -17,7 +17,6 @@ import app.wayfinder.car.bridge.CarManeuver
 import app.wayfinder.car.bridge.CarNav
 import app.wayfinder.car.bridge.NavStatus
 import java.util.TimeZone
-import kotlin.math.roundToLong
 
 /**
  * The buttons on the car map while driving (car API level 2 and up): pan, zoom, and once the
@@ -114,7 +113,7 @@ object NavTemplates {
   private fun routingInfo(nav: CarNav, m: CarManeuver, icons: ManeuverIcons): RoutingInfo =
     RoutingInfo.Builder()
       .setCurrentStep(step(m, nav.cue, nav.road, icons), distanceOf(nav.distanceToManeuverM ?: 0.0))
-      .apply { nav.next?.let { setNextStep(step(it.maneuver, it.cue, "", icons)) } }
+      .apply { nav.next?.let { setNextStep(step(it.maneuver, shortCue(it.cue), "", icons)) } }
       .build()
 
   private fun step(m: CarManeuver, cue: String, road: String, icons: ManeuverIcons): Step =
@@ -136,6 +135,29 @@ object NavTemplates {
   /** Arrival time and time left are for the whole trip; [meters] is how far the estimate's subject is (default: the destination). */
   private fun estimate(nav: CarNav, meters: Double = nav.remainingDistanceM): TravelEstimate =
     TravelEstimate.Builder(distanceOf(meters), DateTimeWithZone.create(nav.arrivalEpochMs, TimeZone.getDefault()))
-      .setRemainingTimeSeconds(nav.remainingDurationS.roundToLong())
+      .setRemainingTimeSeconds(shownSeconds(nav.remainingDurationS))
       .build()
+
+  /**
+   * Time left, in whole minutes as the phone rounds them: the car shows whole minutes it cuts down,
+   * so 75.6 minutes read "1 hr 15 min" on the car and "1 h 16 min" on the phone (C16).
+   */
+  fun shownSeconds(seconds: Double): Long = Math.round(seconds / 60.0) * 60
+
+  private val SHORT_ROADS = listOf(
+    "Street" to "St", "Road" to "Rd", "Drive" to "Dr", "Avenue" to "Ave", "Parade" to "Pde", "Terrace" to "Tce",
+    "Highway" to "Hwy", "Crescent" to "Cres", "Court" to "Ct", "Place" to "Pl", "Boulevard" to "Blvd",
+    "Circuit" to "Cct", "Esplanade" to "Esp", "Motorway" to "Mwy", "Freeway" to "Fwy", "Lane" to "La",
+  ).map { (long, short) -> Regex("\\b$long\\b") to short }
+
+  /**
+   * The "then" line is one short line on the car's turn card: "Turn left onto Little Cribb Street"
+   * was cut to "Turn left onto Little C…" (C89). Road types are shortened as on Australian signs,
+   * and "Turn left onto" says just "Left onto".
+   */
+  fun shortCue(cue: String): String {
+    var c = cue.replace(Regex("^Turn (slight |sharp )?(left|right)")) { m -> (m.groupValues[1] + m.groupValues[2]).replaceFirstChar { it.uppercase() } }
+    for ((long, short) in SHORT_ROADS) c = c.replace(long, short)
+    return c
+  }
 }

@@ -109,12 +109,15 @@ export interface CoveredRoad {
   /** First travelled in the last week. */
   recent: boolean;
   modes: number;
+  firstAt?: string;
+  lastAt?: string;
 }
 
 /** The roads a person has travelled inside the map view. */
 export async function roadsInView(db: DbClient, userId: string, bbox: BBox, limit = 4000): Promise<CoveredRoad[]> {
-  const r = await db.query<{ way_id: string; pieces: LngLat[][]; recent: boolean; modes: number }>(
-    `SELECT way_id::text, coalesce(pieces, jsonb_build_array(geometry)) AS pieces, first_visited_at > now() - interval '7 days' AS recent, modes
+  const r = await db.query<{ way_id: string; pieces: LngLat[][]; recent: boolean; modes: number; first_visited_at: Date; last_visited_at: Date | null }>(
+    `SELECT way_id::text, coalesce(pieces, jsonb_build_array(geometry)) AS pieces, first_visited_at > now() - interval '7 days' AS recent, modes,
+            first_visited_at, last_visited_at
      FROM visited_ways
      WHERE user_id = $1 AND box(point(min_lon, min_lat), point(max_lon, max_lat)) && box(point($2, $3), point($4, $5))
      ORDER BY length_m DESC
@@ -122,7 +125,16 @@ export async function roadsInView(db: DbClient, userId: string, bbox: BBox, limi
     [userId, bbox[0], bbox[1], bbox[2], bbox[3], limit],
   );
   // A road travelled in separate stretches is drawn as each of them.
-  return r.rows.flatMap((x) => x.pieces.map((geometry) => ({ wayId: Number(x.way_id), geometry, recent: x.recent, modes: x.modes })));
+  return r.rows.flatMap((x) =>
+    x.pieces.map((geometry) => ({
+      wayId: Number(x.way_id),
+      geometry,
+      recent: x.recent,
+      modes: x.modes,
+      firstAt: x.first_visited_at.toISOString(),
+      lastAt: (x.last_visited_at ?? x.first_visited_at).toISOString(),
+    })),
+  );
 }
 
 /** The way ids a person has travelled, for scoring how new a route is. */

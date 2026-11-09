@@ -12,8 +12,10 @@ import { useSession } from '../../src/lib/session';
 import { space, useTheme } from '../../src/lib/theme';
 import { MapCanvas, type MapCanvasHandle } from '../../src/map/MapCanvas';
 import { Body, Button, Loading, NewBadge, Notice, Small } from '../../src/ui/kit';
+import { useTopEdges } from '../../src/ui/NavigatingBanner';
 
 export default function Coverage() {
+  const topEdges = useTopEdges();
   const t = useTheme();
   const { user } = useSession();
   const { copy } = useAppConfig();
@@ -21,6 +23,7 @@ export default function Coverage() {
   const [geo, setGeo] = useState<GeoJSON.FeatureCollection | null>(null);
   const pending = useRef<AbortController | null>(null);
   const map = useRef<MapCanvasHandle>(null);
+  const [picked, setPicked] = useState<Record<string, unknown> | null>(null);
   const split = splitStyles(useLayout().sideBySide, '48%');
   const view = useRef<{ b: [number, number, number, number]; zoom: number } | null>(null);
   const [pulled, setPulled] = useState(false);
@@ -93,9 +96,9 @@ export default function Coverage() {
     : [];
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: t.bg }}>
+    <SafeAreaView edges={topEdges} style={{ flex: 1, backgroundColor: t.bg }}>
       <View style={split.container}>
-      <MapCanvas ref={map} style={split.map} coverage={geo} onRegionChange={onRegion} />
+      <MapCanvas ref={map} style={split.map} coverage={geo} onRegionChange={onRegion} onCoveragePress={setPicked} />
       <ScrollView
         testID="coverage-details"
         style={[split.panel, { backgroundColor: t.surface }]}
@@ -103,6 +106,13 @@ export default function Coverage() {
         refreshControl={<RefreshControl refreshing={pulled} onRefresh={() => void pullToRefresh()} />}
       >
         <Body muted>{copy.coverageIntro}</Body>
+        {/* What the colours mean: green is new to you, here as everywhere in the app (P96, P99). */}
+        <View accessible accessibilityLabel="Map key: green, roads first travelled this week; blue, roads travelled before. Tap a road to see when." style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space[3] }}>
+          <Key colour={t.exploreLine} text="New this week" />
+          <Key colour={t.accent} text="Travelled before" />
+          <Small>Tap a road to see when.</Small>
+        </View>
+        {picked ? <Notice>{roadWhen(picked)}</Notice> : null}
         {!user?.settings.trackingEnabled ? (
           <View style={{ gap: space[2] }}>
             <Notice>{copy.trackingOffHintApp}</Notice>
@@ -138,4 +148,27 @@ export default function Coverage() {
       </View>
     </SafeAreaView>
   );
+}
+
+function Key({ colour, text }: { colour: string; text: string }) {
+  const t = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[1] }}>
+      <View style={{ width: 18, height: 4, borderRadius: 2, backgroundColor: colour }} />
+      <Text style={{ color: t.text2, fontSize: 13 }}>{text}</Text>
+    </View>
+  );
+}
+
+const day = (iso: unknown) => (typeof iso === 'string' && !Number.isNaN(Date.parse(iso)) ? new Date(iso).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) : null);
+
+/** What a tapped road says: when it was first and last travelled, and how (P99). */
+export function roadWhen(road: Record<string, unknown>): string {
+  const first = day(road.firstAt);
+  const last = day(road.lastAt);
+  const modes = typeof road.modes === 'number' ? road.modes : 0;
+  const how = [modes & 1 ? 'driving' : null, modes & 2 ? 'on foot' : null].filter(Boolean).join(' and ');
+  if (!first) return 'You’ve travelled this road.';
+  const when = last && last !== first ? `First travelled ${first}, last ${last}` : `Travelled ${first}`;
+  return `${when}${how ? `, ${how}` : ''}.`;
 }

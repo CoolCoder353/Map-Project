@@ -62,7 +62,7 @@ export function toRoute(
     geometry: path.points.coordinates.map(([lon, lat]) => [lon, lat] as LngLat),
     instructions: joinSplitRoundabouts(path.instructions).map((i) => ({
       sign: i.sign,
-      text: i.text,
+      text: withRouteNumbers(i.text),
       streetName: i.street_name ?? '',
       distanceM: i.distance,
       durationS: i.time / 1000,
@@ -78,6 +78,14 @@ export function toRoute(
       noveltyPct: Math.round(opts.novelty.noveltyPct * 10) / 10,
     },
   };
+}
+
+/**
+ * GraphHopper says "take 32 toward Milton Road" with the bare number from the signs. A number on its
+ * own reads oddly (shown and spoken), so it becomes "route 32", and a lettered one like M3 "the M3".
+ */
+export function withRouteNumbers(text: string): string {
+  return text.replace(/\b([Tt])ake ([A-Z]{0,2}\d{1,3})(?= toward| onto|$|[,.])/g, (_, t: string, ref: string) => `${t}ake ${/^\d/.test(ref) ? 'route' : 'the'} ${ref}`);
 }
 
 const ROUNDABOUT = 6;
@@ -142,9 +150,18 @@ const EASIER_DRIVING = [
   { if: 'road_class == SERVICE', multiply_by: 0.3 },
 ];
 
-/** Custom model for explore candidates: easier roads for cars, away from places already visited. */
-function exploreModel(mode: Mode, polygon: ReturnType<typeof visitedAreaPolygon> | null, factor: number): CustomModel | undefined {
-  const priority = [...(mode === 'car' ? EASIER_DRIVING : []), ...(polygon ? [{ if: 'in_visited', multiply_by: factor }] : [])];
+/**
+ * Walks keep off the main roads where there is another way: a loop along an arterial is noisy and
+ * no walk at all (P72). Paths and quiet streets are left as they are.
+ */
+export const QUIETER_WALKING = [
+  { if: 'road_class == TRUNK || road_class == PRIMARY', multiply_by: 0.3 },
+  { if: 'road_class == SECONDARY', multiply_by: 0.6 },
+];
+
+/** Custom model for explore candidates: easier roads for cars, quieter ones on foot, away from places already visited. */
+export function exploreModel(mode: Mode, polygon: ReturnType<typeof visitedAreaPolygon> | null, factor: number): CustomModel | undefined {
+  const priority = [...(mode === 'car' ? EASIER_DRIVING : QUIETER_WALKING), ...(polygon ? [{ if: 'in_visited', multiply_by: factor }] : [])];
   if (priority.length === 0) return undefined;
   return {
     priority,
@@ -477,6 +494,29 @@ export function quickestFirst(fastest: Route, explore: Route[]): { fastest: Rout
   return { fastest: first, explore: rest.map((r) => ({ ...r, extraDurationS: Math.max(0, r.durationS - first.durationS) })) };
 }
 
+/** At most this share of a loop may be the same road travelled back the other way. */
+export const MAX_DOUBLED_BACK = 0.15;
+
+/**
+ * How much of a line, by length, goes back over a stretch it has already covered the other way:
+ * an out-and-back spur. Points are compared to about a metre.
+ */
+export function doubledBackShare(line: readonly LngLat[]): number {
+  const key = (a: LngLat, b: LngLat) => `${a[0].toFixed(5)},${a[1].toFixed(5)}>${b[0].toFixed(5)},${b[1].toFixed(5)}`;
+  const seen = new Set<string>();
+  let total = 0;
+  let back = 0;
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1]!;
+    const b = line[i]!;
+    const d = haversineM(a, b);
+    total += d;
+    if (seen.has(key(b, a))) back += d;
+    seen.add(key(a, b));
+  }
+  return total > 0 ? back / total : 0;
+}
+
 export async function roundTrips(
   deps: RoutingDeps,
   userId: string,
@@ -528,9 +568,11 @@ export async function roundTrips(
   const candidates = [...probe, ...(await tryRoutes(deps, await loopRequests(bearings, radius), 'roundtrip.candidate'))];
 
   const LOOPS = 3;
-  const rank = () =>
+  // A loop that goes out along a street and comes back the same way isn't one (P72): those that
+  // double back on much of themselves are only offered when there is nothing better.
+  const rankAll = (from: Candidate[]) =>
     rankRoundTripCandidates(
-      candidates.map((c) => ({
+      from.map((c) => ({
         candidate: c,
         durationS: c.path.time / 1000,
         uTurns: c.uTurns,
@@ -538,6 +580,10 @@ export async function roundTrips(
       })),
       { targetS, tolerance: 0.2, limit: LOOPS, maxUTurns: MAX_UTURNS[req.mode] },
     );
+  const rank = () => {
+    const proper = rankAll(candidates.filter((c) => doubledBackShare(c.path.points.coordinates as LngLat[]) <= MAX_DOUBLED_BACK));
+    return proper.length > 0 ? proper : rankAll(candidates);
+  };
   let ranked = rank();
   if (req.mode === 'car') {
     // Driving loops that need a U-turn aren't offered, which can leave too few from the
@@ -628,15 +674,29 @@ const CATEGORY_WEIGHT: Record<PoiCategory, number> = {
   cafe: 0.5,
 };
 
+/**
+ * The time bands Discover sorts places into: a third, two thirds and all of the time asked for,
+ * each rounded up to five minutes, so "within 10 min" of a 30 minute search. Fewer when that
+ * would repeat one.
+ */
+export function discoverBands(maxMinutes: number): number[] {
+  const up5 = (m: number) => Math.min(maxMinutes, Math.max(5, Math.ceil(m / 5) * 5));
+  return [...new Set([up5(maxMinutes / 3), up5((maxMinutes * 2) / 3), maxMinutes])].sort((a, b) => a - b);
+}
+
 export async function discover(
   deps: RoutingDeps,
   userId: string,
   q: { lon: number; lat: number; mode: Mode; maxMinutes: number; categories?: PoiCategory[] | undefined; limit: number },
 ): Promise<DiscoverItem[]> {
   const origin: LngLat = [q.lon, q.lat];
-  const rings = await deps.metrics.time('graphhopper.isochrone', q.mode, () =>
-    deps.graphhopper.isochrone(origin, profileFor(q.mode), q.maxMinutes * 60),
+  const bands = discoverBands(q.maxMinutes);
+  // The whole reach, and the nearer bands inside it, to say how long each place takes to get to.
+  const bandRings = await Promise.all(
+    bands.map((m) => deps.metrics.time('graphhopper.isochrone', q.mode, () => deps.graphhopper.isochrone(origin, profileFor(q.mode), m * 60))),
   );
+  const rings = bandRings.at(-1)!;
+  const withinMinutes = (p: LngLat) => bands.find((_, i) => bandRings[i]!.some((ring) => pointInRing(p, ring))) ?? q.maxMinutes;
   const areaCells = new Set<string>();
   for (const ring of rings) {
     for (const c of polygonCells(ring, AREA_RES)) for (const n of gridDisk(c, 1)) areaCells.add(n);
@@ -675,6 +735,7 @@ export async function discover(
         category: p.category,
         location: [p.lon, p.lat] as LngLat,
         distanceM: Math.round(distanceM),
+        withinMinutes: withinMinutes([p.lon, p.lat]),
         areaUnexploredPct: Math.round(areaFrac * 100),
         score: Math.round(score * 1000) / 1000,
       };

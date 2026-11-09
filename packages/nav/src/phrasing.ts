@@ -41,3 +41,33 @@ export function announcementText(ins: Instruction, distanceM: number | null): st
   if (distanceM === null) return base[0]!.toUpperCase() + base.slice(1);
   return `In ${formatSpokenDistance(distanceM)}, ${lowerFirst(base)}`;
 }
+
+/** A road has to carry at least this much of a route, not on the fastest one, to name it. */
+export const VIA_MIN_M = 500;
+
+/**
+ * The road that sets [route] apart from [fastest]: the one it drives furthest on that the fastest
+ * route doesn't use at all. Null when there's none worth naming (unnamed tracks, or every road is
+ * shared). Names a route by where it goes, rather than "Explore 2".
+ */
+export function viaRoad(route: { instructions: readonly Pick<Instruction, 'streetName' | 'distanceM'>[] }, fastest: { instructions: readonly Pick<Instruction, 'streetName'>[] } | null): string | null {
+  const onFastest = new Set((fastest?.instructions ?? []).map((i) => i.streetName.trim().toLowerCase()).filter(Boolean));
+  const along = new Map<string, number>();
+  for (const i of route.instructions) {
+    const name = i.streetName.trim();
+    if (!name || onFastest.has(name.toLowerCase())) continue;
+    along.set(name, (along.get(name) ?? 0) + i.distanceM);
+  }
+  let best: [string, number] | null = null;
+  for (const e of along) if (e[1] >= VIA_MIN_M && (!best || e[1] > best[1])) best = e;
+  return best?.[0] ?? null;
+}
+
+/**
+ * Titles for explore routes: "Via Moggill Road" where a road sets each apart, else "Explore 2".
+ * Two routes that would share a title both keep their numbers, so no two read the same.
+ */
+export function exploreTitles(explore: readonly { instructions: readonly Pick<Instruction, 'streetName' | 'distanceM'>[] }[], fastest: { instructions: readonly Pick<Instruction, 'streetName'>[] } | null): string[] {
+  const vias = explore.map((r) => viaRoad(r, fastest));
+  return vias.map((v, i) => (v && vias.filter((o) => o === v).length === 1 ? `Via ${v}` : `Explore ${i + 1}`));
+}

@@ -54,11 +54,12 @@ export const mapRoutes =
     });
 
     // Style JSON with absolute URLs for this deployment.
-    app.get<{ Querystring: { theme?: string } }>('/map/style.json', tileLimit, async (req, reply) => {
+    // `driving=1`: the map for directions, without buildings, place dots and light markers.
+    app.get<{ Querystring: { theme?: string; driving?: string } }>('/map/style.json', tileLimit, async (req, reply) => {
       const theme = req.query.theme === 'dark' ? 'dark' : 'light';
       const { buildStyle } = await import('../style.js');
       reply.header('cache-control', 'public, max-age=300');
-      return buildStyle(originOf(req), theme);
+      return buildStyle(originOf(req), theme, { driving: req.query.driving === '1' });
     });
 
     if (existsSync(assets)) {

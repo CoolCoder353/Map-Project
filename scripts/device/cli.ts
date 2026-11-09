@@ -15,6 +15,9 @@ import { type Fix, readRoute, replay } from './route.js';
 import { type Config, type Files, type Session, clearSession, harnessDir, loadConfig, loadSession, saveConfig, saveSession } from './state.js';
 import { type UiNode, centre, describeScreen, findByText, forbiddenAt, isSignInScreen, label, parseUiDump, screenSize, signedInEmail } from './ui.js';
 
+/** At most this many rotary turns in one `car scroll`: a list has six rows. */
+export const CAR_SCROLL_MAX = 12;
+
 export interface Deps {
   root: string;
   adb: (args: string[]) => Promise<{ code: number; out: Buffer; err: string }>;
@@ -462,13 +465,23 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
         requireSession(ctx);
         const dhu = requireDhu(ctx);
         const [what, arg] = args;
+        if (what === 'scroll' && (arg === 'up' || arg === 'down')) {
+          const times = Number(args[2] ?? 1);
+          if (!Number.isInteger(times) || times < 1 || times > CAR_SCROLL_MAX) throw new Refused(`car scroll up|down [1-${CAR_SCROLL_MAX}]`);
+          for (let i = 0; i < times; i++) await deps.sendDhu(dhu.fifo, dhuCommand.rotate(arg === 'down'));
+          return 0;
+        }
+        if (what === 'select') {
+          await deps.sendDhu(dhu.fifo, dhuCommand.select());
+          return 0;
+        }
         const line =
           what === 'day' ? dhuCommand.day()
           : what === 'night' ? dhuCommand.night()
           : what === 'key' && (CAR_KEYS as readonly string[]).includes(arg ?? '') ? dhuCommand.key(arg as CarKey)
           : what === 'restrict' && (arg === 'on' || arg === 'off') ? dhuCommand.restrict(arg === 'on')
           : null;
-        if (!line) throw new Refused(`car day|night | car key ${CAR_KEYS.join('|')} | car restrict on|off`);
+        if (!line) throw new Refused(`car day|night | car key ${CAR_KEYS.join('|')} | car restrict on|off | car scroll up|down [n] | car select`);
         await deps.sendDhu(dhu.fifo, line);
         return 0;
       }

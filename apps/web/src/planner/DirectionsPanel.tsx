@@ -6,6 +6,7 @@ import type { ChosenPlace } from '../components/SearchField';
 import { ModeToggle } from '../components/ModeToggle';
 import { SearchField } from '../components/SearchField';
 import { api, errorMessage } from '../lib/api';
+import { exploreTitles } from '../lib/format';
 import { currentPosition } from '../lib/geolocation';
 import { useAppConfig } from '../lib/config';
 import { useToast } from '../lib/toast';
@@ -239,11 +240,11 @@ export function DirectionsPanel() {
           <h2 className="panel-heading">{copy.exploreHeading}</h2>
           {routes.explore.length > 0 ? (
             <ul className="route-list" aria-label={copy.exploreHeading}>
-              {routes.explore.map((r, i) => (
+              {routes.explore.map((r, i, all) => (
                 <RouteOption
                   key={r.id}
                   route={r}
-                  title={`Explore ${i + 1}`}
+                  title={exploreTitles(all, routes.fastest)[i]!}
                   selected={selectedRouteId === r.id}
                   hovered={hovered === r.id}
                   onHover={(h) => setHovered(h ? r.id : null)}

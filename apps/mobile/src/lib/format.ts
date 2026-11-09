@@ -1,6 +1,6 @@
 import { formatDuration } from '@wayfinder/nav';
 
-export { formatDistanceShort, formatDuration } from '@wayfinder/nav';
+export { exploreTitles, formatDistanceShort, formatDuration } from '@wayfinder/nav';
 
 export const formatDateTime = (iso: string) =>
   new Date(iso).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });

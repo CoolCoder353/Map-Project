@@ -1,5 +1,5 @@
 import { type NavEvent, NavigationSession, type NavState } from '@wayfinder/nav';
-import { type LngLat, bearingDeg, haversineM } from '@wayfinder/shared/geo';
+import { type LngLat, bearingDeg, haversineM, lineLengthM } from '@wayfinder/shared/geo';
 import { type Route, RouteSchema } from '@wayfinder/shared/schemas';
 import * as Crypto from 'expo-crypto';
 import * as Location from 'expo-location';
@@ -87,7 +87,25 @@ export interface NavSnapshot {
   travelled: LngLat[];
   /** A test drive (the car's auto drive): nothing about it is recorded. */
   simulated: boolean;
+  /** The trip that last ended, for a summary and a way to pick it up again (P23, P63, P97). Null during a trip. */
+  ended: EndedTrip | null;
 }
+
+/** A trip that has ended: what it was, how it ended, and how far it went. */
+export interface EndedTrip {
+  route: Route;
+  destinationName: string | null;
+  /** It ended by arriving (by itself, or Done), not with End. */
+  arrived: boolean;
+  /** How far the phone saw you go, metres. Under [NOTHING_RECORDED_M] nothing was recorded worth keeping. */
+  distanceM: number;
+  durationS: number;
+  /** When it ended, by this clock. */
+  at: number;
+}
+
+/** A trip that moved less than this left nothing on Trips: the summary says so (P97). */
+export const NOTHING_RECORDED_M = 100;
 
 export interface StartOptions {
   destinationName?: string;
@@ -104,6 +122,8 @@ export interface NavigationService {
    */
   start(route: Route, opts?: StartOptions): void;
   stop(): void;
+  /** Forgets the trip that last ended, once its summary has been seen. */
+  dismissEnded(): void;
   setMuted(muted: boolean): void;
   /**
    * Leave an explore route's detour: the fastest way from here to the destination, dropping the
@@ -136,6 +156,7 @@ const IDLE: NavSnapshot = {
   headingDeg: null,
   speedMps: null,
   travelled: [],
+  ended: null,
   simulated: false,
 };
 
@@ -226,6 +247,8 @@ export function createNavigationService(): NavigationService {
   /** Bumped by every start and stop, so work from an earlier trip that finishes late is dropped. */
   let generation = 0;
   let lastFixTs = -Infinity;
+  /** When the trip being followed started, by this clock. */
+  let startedAt = 0;
   let lastServiceFixTs = -Infinity;
   /** Which way the car is going, so a new route starts that way rather than turning it round. */
   let travelHeading: number | null = null;
@@ -492,6 +515,17 @@ export function createNavigationService(): NavigationService {
   function stop() {
     const wasActive = session !== null;
     const wasSimulated = simulated;
+    const ended: EndedTrip | null =
+      wasActive && !wasSimulated && snap.route
+        ? {
+            route: snap.route,
+            destinationName: snap.destinationName,
+            arrived: arrivedAt !== null || snap.state?.status === 'arrived',
+            distanceM: snap.travelled.length > 1 ? lineLengthM(snap.travelled) : 0,
+            durationS: Math.max(0, (Date.now() - startedAt) / 1000),
+            at: Date.now(),
+          }
+        : snap.ended;
     simulated = false;
     generation++;
     timerHold.release(TIMERS_FOR_TRIP);
@@ -517,8 +551,13 @@ export function createNavigationService(): NavigationService {
     setNavigationRecording(false);
     quietly(() => stopSpeaking());
     if (wasActive && !wasSimulated) void syncQueue().catch(() => undefined);
-    const rest = idle();
+    const rest = { ...idle(), ended };
     if ((Object.keys(rest) as Array<keyof NavSnapshot>).some((k) => snap[k] !== rest[k])) set(rest);
+  }
+
+  /** The summary of the trip that ended has been read: it goes. */
+  function dismissEnded() {
+    if (snap.ended) set({ ended: null });
   }
 
   function start(route: Route, opts: StartOptions = {}) {
@@ -534,6 +573,7 @@ export function createNavigationService(): NavigationService {
     session = next;
     simulated = opts.simulated === true;
     sessionId = Crypto.randomUUID();
+    startedAt = Date.now();
     lastFixTs = -Infinity;
     lastServiceFixTs = -Infinity;
     lastPhoneFixAt = -Infinity;
@@ -602,6 +642,7 @@ export function createNavigationService(): NavigationService {
   return {
     start,
     stop,
+    dismissEnded,
     handleFix,
     setMuted,
     skipDetour,

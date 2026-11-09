@@ -21,6 +21,7 @@ import type { PoolClient } from 'pg';
 import { type Db, type DbClient, withTransaction } from '../db/pool.js';
 import { badRequest, isUuid, notFound } from '../lib/errors.js';
 import type { JobQueue } from './context.js';
+import { reverseGeocode } from './places.js';
 
 const TRIP_GAP_MS = 10 * 60_000;
 const MIN_TRIP_M = 100;
@@ -351,6 +352,7 @@ interface TripListRow {
   ended_at: Date;
   distance_m: number;
   new_roads: number;
+  last_point?: LngLat | null;
 }
 
 const toSummary = (r: TripListRow): TripSummary => ({
@@ -374,14 +376,20 @@ export async function listTrips(
   if (before && Number.isNaN(before.getTime())) throw badRequest('Invalid cursor');
   const rows = (
     await db.query<TripListRow>(
-      `SELECT id, mode, source, started_at, ended_at, distance_m, new_roads FROM trips
+      `SELECT id, mode, source, started_at, ended_at, distance_m, new_roads, geometry->-1 AS last_point FROM trips
        WHERE user_id = $1 AND deleted_at IS NULL AND ($2::timestamptz IS NULL OR started_at < $2)
        ORDER BY started_at DESC LIMIT $3`,
       [userId, before, limit + 1],
     )
   ).rows;
-  const items = rows.slice(0, limit).map(toSummary);
+  const items = await Promise.all(rows.slice(0, limit).map(async (r) => ({ ...toSummary(r), endedNear: await endedNear(db, r.last_point) })));
   return { items, nextCursor: rows.length > limit ? items[items.length - 1]!.startedAt : null };
+}
+
+/** The name of the place nearest a trip's last point, or null. */
+async function endedNear(db: DbClient, last: LngLat | null | undefined): Promise<string | null> {
+  if (!Array.isArray(last) || last.length < 2) return null;
+  return (await reverseGeocode(db, last).catch(() => null))?.name ?? null;
 }
 
 export async function getTrip(db: DbClient, userId: string, tripId: string, includeDeleted = false): Promise<TripDetail> {
@@ -409,7 +417,7 @@ export async function getTrip(db: DbClient, userId: string, tripId: string, incl
     )
   ).rows.flatMap((r) => r.pieces.filter((p) => p.length > 1));
   const matched = trip.matched_geometry && trip.matched_geometry.length > 1 ? trip.matched_geometry : null;
-  return { ...toSummary(trip), geometry: trip.geometry, points, ...(matched ? { matchedGeometry: matched } : {}), newRoadLines: fresh };
+  return { ...toSummary(trip), endedNear: await endedNear(db, trip.geometry.at(-1)), geometry: trip.geometry, points, ...(matched ? { matchedGeometry: matched } : {}), newRoadLines: fresh };
 }
 
 export async function updateTripMode(db: Db, queue: JobQueue, userId: string, tripId: string, mode: Mode) {

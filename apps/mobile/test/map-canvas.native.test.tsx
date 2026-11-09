@@ -2,7 +2,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
 import { createRef } from 'react';
-import { FOLLOW_ZOOM, MAP_LABEL, MapCanvas, type MapCanvasHandle, MINE_ZOOM, NEARBY_ZOOM } from '../src/map/MapCanvas';
+import { FOLLOW_ZOOM, MAP_LABEL, MapCanvas, type MapCanvasHandle, MINE_ZOOM, NEARBY_ZOOM, ROUTES_BELOW } from '../src/map/MapCanvas';
 import { forgetMapView, lastMapView } from '../src/lib/mapView';
 import { route } from './fakes';
 
@@ -12,7 +12,7 @@ jest.mock('expo-location', () => ({
   getForegroundPermissionsAsync: jest.fn(async () => ({ granted: false })),
   getLastKnownPositionAsync: jest.fn(async () => ({ coords: { longitude: 153.25, latitude: -27.52 } })),
 }));
-const mockCamera = { fitBounds: jest.fn(), flyTo: jest.fn() };
+const mockCamera = { fitBounds: jest.fn(), flyTo: jest.fn(), easeTo: jest.fn() };
 const mockSources: Record<string, { data: GeoJSON.FeatureCollection; onPress?: (e: unknown) => void }> = {};
 let mockMapProps: Record<string, unknown> = {};
 let mockCameraProps: Record<string, unknown> = {};
@@ -84,7 +84,7 @@ it('draws routes with the selected one last, markers, the track and travelled ro
     { id: 'b', kind: 'explore', selected: false },
     { id: 'a', kind: 'fastest', selected: true },
   ]);
-  expect(mockSources.markers!.data.features.map((f) => f.properties)).toEqual([{ kind: 'start', label: 'Home' }, { kind: 'end', label: '' }]);
+  expect(mockSources.markers!.data.features.map((f) => f.properties)).toEqual([{ id: 's', kind: 'start', label: 'Home' }, { id: 'e', kind: 'end', label: '' }]);
   expect(mockSources.track!.data.features).toHaveLength(1);
   expect(mockSources.coverage!.data).toBe(coverage);
   mockSources.routes!.onPress!({ nativeEvent: { features: [{ properties: { id: 'b' } }] } });
@@ -258,4 +258,34 @@ describe('finding yourself on a map that isn’t following you', () => {
     await screen.findByTestId('native-map');
     expect(screen.queryByRole('button', { name: 'Show my location' })).toBeNull();
   });
+});
+
+// Navigation's own position, turned to the way you're going (P27, P85); a drag stops it.
+it('follows the position it is given, turned to your direction, until dragged away', async () => {
+  const view = await render(<MapCanvas followUser follow={{ at: [153.01, -27.47], headingDeg: 80 }} />);
+  await screen.findByTestId('native-map');
+  expect(mockCameraProps.trackUserLocation).toBeUndefined();
+  expect(mockCamera.easeTo).toHaveBeenLastCalledWith({ center: [153.01, -27.47], bearing: 80, duration: 800 });
+  await act(async () => (mockMapProps.onRegionWillChange as (e: unknown) => void)({ nativeEvent: { userInteraction: true } }));
+  mockCamera.easeTo.mockClear();
+  await view.rerender(<MapCanvas followUser follow={{ at: [153.02, -27.47], headingDeg: 80 }} />);
+  expect(mockCamera.easeTo).not.toHaveBeenCalled();
+  await fireEvent.press(screen.getByRole('button', { name: 'Re-centre' }));
+  expect(mockCamera.easeTo).toHaveBeenCalled();
+});
+
+// Routes under place names (P7), the driving style without clutter (P28), and taps on pins and roads.
+it('draws routes under place names, asks for the driving map, and reports taps on pins and roads', async () => {
+  const onMarkerPress = jest.fn();
+  const onCoveragePress = jest.fn();
+  await render(
+    <MapCanvas driving markers={[{ id: 'd1', lngLat: [153, -27], kind: 'poi', label: '1' }]} coverage={{ type: 'FeatureCollection', features: [] }} onMarkerPress={onMarkerPress} onCoveragePress={onCoveragePress} />,
+  );
+  await screen.findByTestId('native-map');
+  expect(String(mockMapProps.mapStyle)).toContain('&driving=1');
+  expect(ROUTES_BELOW).toBe('place-suburb');
+  mockSources.markers!.onPress!({ nativeEvent: { features: [{ properties: { id: 'd1' } }] } });
+  expect(onMarkerPress).toHaveBeenCalledWith('d1');
+  mockSources.coverage!.onPress!({ nativeEvent: { features: [{ properties: { firstAt: 'x' } }] } });
+  expect(onCoveragePress).toHaveBeenCalledWith({ firstAt: 'x' });
 });

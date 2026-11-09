@@ -21,9 +21,10 @@ export default function Trip() {
   const map = useRef<MapCanvasHandle>(null);
   const split = splitStyles(useLayout().sideBySide, '50%');
   const trip = useQuery({ queryKey: ['trip', id], queryFn: () => api.request(`api/trips/${id}`, { schema: TripDetailSchema }), enabled: !!id });
-  // The roads it took where they're known, else the GPS as recorded (off-road, or not matched yet).
+  // Where you really went: the GPS as recorded, so a wrong match shows up against it (P32). The new
+  // roads it was matched onto are picked out over it.
   const raw: LngLat[] = trip.data ? (trip.data.points.length > 1 ? trip.data.points.map((p) => [p.lon, p.lat] as LngLat) : trip.data.geometry) : [];
-  const line = trip.data?.matchedGeometry ?? raw;
+  const line = raw.length > 1 ? raw : (trip.data?.matchedGeometry ?? raw);
   // The roads this trip was first on, picked out as new roads are on the coverage map.
   const newRoads: GeoJSON.FeatureCollection | null = trip.data?.newRoadLines?.length
     ? { type: 'FeatureCollection', features: trip.data.newRoadLines.map((l) => ({ type: 'Feature', properties: { recent: true }, geometry: { type: 'LineString', coordinates: l } })) }
@@ -57,11 +58,12 @@ export default function Trip() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.surface }}>
-      <View style={{ padding: space[3] }}>
-        <Button label="Trips" kind="ghost" icon={ArrowLeft} compact onPress={() => goBack('/trips')} style={{ alignSelf: 'flex-start' }} />
-      </View>
       <View style={split.container}>
-      <MapCanvas ref={map} style={split.map} track={line} coverage={newRoads} markers={line[0] ? [{ id: 's', lngLat: line[0], kind: 'start' }, { id: 'e', lngLat: line[line.length - 1]!, kind: 'end' }] : []} showUser={false} />
+      <View testID="map-area" style={split.map}>
+        <MapCanvas ref={map} style={{ flex: 1 }} track={line} coverage={newRoads} markers={line[0] ? [{ id: 's', lngLat: line[0], kind: 'start' }, { id: 'e', lngLat: line[line.length - 1]!, kind: 'end' }] : []} showUser={false} />
+        {/* On the map, not in a band of its own above it (P35). */}
+        <Button label="Trips" kind="secondary" icon={ArrowLeft} compact onPress={() => goBack('/trips')} style={{ position: 'absolute', top: space[3], left: space[3] }} />
+      </View>
       <ScrollView style={split.panel} contentContainerStyle={{ padding: space[4], gap: space[3], ...split.content }}>
         {trip.isLoading ? <Loading /> : null}
         {trip.error ? <Notice tone="error">{errorMessage(trip.error)}</Notice> : null}
@@ -71,8 +73,9 @@ export default function Trip() {
             <Title>{trip.data.mode === 'car' ? 'Drive' : 'Walk'} · {formatDistanceShort(trip.data.distanceM)}</Title>
             <Body muted>{`${formatDateTime(trip.data.startedAt)} – ${formatClock(Date.parse(trip.data.endedAt))}`}</Body>
             <Body>{formatTripPace(trip.data)}</Body>
+            {trip.data.endedNear ? <Body>{`To ${trip.data.endedNear}`}</Body> : null}
             {trip.data.newRoads > 0 ? <NewBadge text={`${trip.data.newRoads} road${trip.data.newRoads === 1 ? '' : 's'} you’d never travelled before`} /> : null}
-            {newRoads ? <Small>New roads are picked out on the map.</Small> : null}
+            <Small>{newRoads ? 'The line is where your phone recorded you going; new roads are picked out in green.' : 'The line is where your phone recorded you going.'}</Small>
             <View style={{ gap: space[2], marginTop: space[2] }}>
               <Segmented<Mode>
                 label="Recorded as"

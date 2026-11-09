@@ -1,18 +1,19 @@
 import { type CopyCatalog, copyFor } from '@wayfinder/shared/copy';
 import { haversineM, type LngLat } from '@wayfinder/shared/geo';
-import { formatDistanceShort, formatDuration } from '@wayfinder/nav';
-import { DiscoverResponseSchema, ExploreRouteResponseSchema, type FeedbackCreate, type Place, PlannedRouteListSchema, PublicConfigSchema, type Route, SavedPlaceListSchema, SearchResponseSchema, SpeedLimitResponseSchema } from '@wayfinder/shared/schemas';
+import { exploreTitles, formatDistanceShort, formatDuration } from '@wayfinder/nav';
+import { DiscoverResponseSchema, ReverseResponseSchema, ExploreRouteResponseSchema, type FeedbackCreate, type Place, PlannedRouteListSchema, RouteSchema, PublicConfigSchema, type Route, SavedPlaceListSchema, SearchResponseSchema, SpeedLimitResponseSchema } from '@wayfinder/shared/schemas';
 import Constants from 'expo-constants';
 import * as Location from 'expo-location';
 import { Platform } from 'react-native';
 import { api, hasSavedSession } from '../lib/api';
 import { ApiError, isServerUrl } from '../lib/apiClient';
 import { kindOf } from '../lib/categories';
+import { discoverChoices } from '../lib/discoverChoices';
 import { timerHold } from '../lib/keepTimers';
 import { getServerUrl } from '../lib/server';
 import { navigation, type NavSnapshot } from '../nav/navigationService';
 import type { CarHandlers } from './controller';
-import { DEMO_DESTINATION_NAME, demoRoute, startTestDrive } from './simulation';
+import { DEMO_DESTINATION_NAME, demoRoute, startTestDrive, testDriveTarget } from './simulation';
 import { type CarPlace, CarParams, type CarRouteOption, type CarSpeedLimit, type CarStatus } from './protocol';
 
 let copyCache: CopyCatalog | null = null;
@@ -74,6 +75,14 @@ async function here(fresh = false): Promise<LngLat | null> {
   return granted && fresh ? located(await within(Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }), PHONE_FIX_WAIT_MS)) : null;
 }
 
+/**
+ * How long the car's requests wait for the server: less than the phone's own 30 s, so the car says
+ * there's no connection while the driver still remembers asking (C65, C97). CarBridge.kt waits a
+ * little longer than this plus PHONE_FIX_WAIT_MS.
+ */
+export const CAR_SERVER_TIMEOUT_MS = 15_000;
+const carRequest = { timeoutMs: CAR_SERVER_TIMEOUT_MS };
+
 export const NO_OTHER_WAYS = 'No other ways fit your extra time. You can allow more in Settings on your phone.';
 /** Android Auto shows about six rows while driving; never send more. */
 export const MAX_ROWS = 6;
@@ -110,6 +119,7 @@ const toPlace = (p: Place): CarPlace => ({
   detail: [p.context ?? p.typeLabel ?? p.description, p.distanceM != null ? `${formatDistanceShort(p.distanceM)} away` : null].filter(Boolean).join(' · '),
   location: p.location,
   distanceM: p.distanceM ?? null,
+  address: p.context ?? null,
 });
 
 /**
@@ -160,7 +170,14 @@ async function savedPlaces(near: LngLat | null): Promise<CarPlace[]> {
       distanceM,
       saved: true,
       home: isHome(p.name),
+      address: p.description || null,
     }));
+}
+
+/** How many planned routes are for driving; null when that can't be found out. */
+async function plannedForCar(): Promise<number | null> {
+  const res = await api.request('api/planned-routes', { schema: PlannedRouteListSchema, ...carRequest }).catch(() => null);
+  return res ? res.items.filter((p) => p.route.mode === 'car').length : null;
 }
 
 export const carHandlers: CarHandlers = {
@@ -175,6 +192,7 @@ export const carHandlers: CarHandlers = {
       searchHint: (await copy()).searchPlaceholder,
       here: where,
       saved: signedIn ? await savedPlaces(where) : [],
+      plannedRoutes: signedIn ? await plannedForCar() : null,
     };
   },
   /** The limit where the car is, for its map with no trip. */
@@ -185,14 +203,27 @@ export const carHandlers: CarHandlers = {
   async search(params) {
     const { q } = CarParams.search.parse(params);
     const near = await here();
-    const res = await api.request('api/search', { query: { q, lon: near?.[0], lat: near?.[1], limit: MAX_ROWS }, schema: SearchResponseSchema });
+    const res = await api.request('api/search', { query: { q, lon: near?.[0], lat: near?.[1], limit: MAX_ROWS }, schema: SearchResponseSchema, ...carRequest });
     return { places: res.results.slice(0, MAX_ROWS).map(toPlace) };
+  },
+
+  /** What is at a point sent with no name, so the preview says where it is rather than "Chosen place" (C75). */
+  async lookup(params) {
+    const { at } = CarParams.lookup.parse(params);
+    const res = await api.request('api/reverse', { query: { lon: at[0], lat: at[1] }, schema: ReverseResponseSchema, ...carRequest }).catch(() => null);
+    return { place: res?.place ? { ...toPlace(res.place), location: at } : null };
   },
 
   async discover() {
     const from = await here(true);
     if (!from) throw new Error(NO_LOCATION);
-    const res = await api.request('api/discover', { query: { lon: from[0], lat: from[1], mode: 'car', maxMinutes: 30, limit: MAX_ROWS * 2 }, schema: DiscoverResponseSchema });
+    // The phone's Discover choices: its time limit and kinds of place (C31, C53).
+    const choice = discoverChoices();
+    const res = await api.request('api/discover', {
+      query: { lon: from[0], lat: from[1], mode: 'car', maxMinutes: choice.minutes, limit: MAX_ROWS * 2, ...(choice.categories.length ? { categories: choice.categories.join(',') } : {}) },
+      schema: DiscoverResponseSchema,
+      ...carRequest,
+    });
     // Nearest first, and nothing a short walk away: the car's list is for somewhere to drive to. How
     // new a place is stays on the phone; one short line is all a car row has room for.
     return {
@@ -203,7 +234,7 @@ export const carHandlers: CarHandlers = {
         .map<CarPlace>((i) => ({
           id: i.id,
           name: i.name,
-          detail: [`${formatDistanceShort(i.distanceM)} away`, kindOf(i.category)].filter(Boolean).join(' · '),
+          detail: [i.withinMinutes ? `Within ${i.withinMinutes} min` : `${formatDistanceShort(i.distanceM)} away`, kindOf(i.category)].filter(Boolean).join(' · '),
           location: i.location,
           distanceM: i.distanceM,
         })),
@@ -215,14 +246,14 @@ export const carHandlers: CarHandlers = {
     const from = await here(true);
     if (!from) throw new Error(NO_LOCATION);
     // The extra time allowed for ways you haven't been is the person's own setting (server default).
-    const [res, c] = await Promise.all([api.request('api/routes/explore', { method: 'POST', body: { from, to, mode: 'car' }, schema: ExploreRouteResponseSchema }), copy()]);
-    const options = [toOption(res.fastest, 'Fastest', c), ...res.explore.map((r, i) => toOption(r, `Explore ${i + 1}`, c, res.fastest.durationS))].slice(0, MAX_ROWS);
+    const [res, c] = await Promise.all([api.request('api/routes/explore', { method: 'POST', body: { from, to, mode: 'car' }, schema: ExploreRouteResponseSchema, ...carRequest }), copy()]);
+    const options = [toOption(res.fastest, 'Fastest', c), ...res.explore.map((r, i) => toOption(r, exploreTitles(res.explore, res.fastest)[i]!, c, res.fastest.durationS))].slice(0, MAX_ROWS);
     const note = res.explore.length ? null : res.fastest.novelty.noveltyPct >= 90 ? c.allNewAlready : NO_OTHER_WAYS;
     return { options, note };
   },
 
   async planned() {
-    const [res, c] = await Promise.all([api.request('api/planned-routes', { schema: PlannedRouteListSchema }), copy()]);
+    const [res, c] = await Promise.all([api.request('api/planned-routes', { schema: PlannedRouteListSchema, ...carRequest }), copy()]);
     // Walking routes sent from the web stay on the phone.
     return { items: res.items.filter((p) => p.route.mode === 'car').slice(0, MAX_ROWS).map((p) => ({ id: p.id, name: p.name, option: toOption(p.route, p.name, c) })) };
   },
@@ -262,7 +293,14 @@ export const carHandlers: CarHandlers = {
     // pretend drive "arrived".
     if (now.active && now.route && !now.simulated) return {};
     if (now.active && now.route) startTestDrive(navigation, now.route, now.destinationName);
-    else startTestDrive(navigation, demoRoute((await here()) ?? undefined), DEMO_DESTINATION_NAME);
+    else {
+      // A real route on the roads, so the car map doesn't draw one across houses and water (C84).
+      const from = (await here()) ?? undefined;
+      const real = from
+        ? await api.request('api/routes/fastest', { method: 'POST', body: { from, to: testDriveTarget(from), mode: 'car' }, schema: RouteSchema, ...carRequest }).catch(() => null)
+        : null;
+      startTestDrive(navigation, real ?? demoRoute(from), DEMO_DESTINATION_NAME);
+    }
     return {};
   },
 

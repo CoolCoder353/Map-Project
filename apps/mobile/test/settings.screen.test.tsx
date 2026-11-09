@@ -338,3 +338,33 @@ describe('for testers', () => {
     expect(mockOpenURL).toHaveBeenCalledWith('https://maps.example.com/settings');
   });
 });
+
+// The voice can be set here, not only from a trip's mute button (P54).
+it('turns voice directions off and on', async () => {
+  const { navigation } = jest.requireActual<typeof import('../src/nav/navigationService')>('../src/nav/navigationService');
+  const setMuted = jest.spyOn(navigation, 'setMuted');
+  await renderSettings();
+  const voice = await screen.findByRole('switch', { name: 'Voice directions' });
+  await fireEvent(voice, 'valueChange', false);
+  expect(setMuted).toHaveBeenCalledWith(true);
+  setMuted.mockRestore();
+});
+
+// Light or dark maps, whatever the phone is set to (P58).
+it('chooses light or dark colours for the app and its maps', async () => {
+  const { Appearance } = jest.requireActual<typeof import('react-native')>('react-native');
+  const set = jest.spyOn(Appearance, 'setColorScheme').mockImplementation(() => undefined);
+  await renderSettings();
+  await fireEvent.press(await screen.findByRole('radio', { name: 'Dark' }));
+  expect(set).toHaveBeenCalledWith('dark');
+  await fireEvent.press(screen.getByRole('radio', { name: 'Automatic' }));
+  expect(set).toHaveBeenLastCalledWith('unspecified');
+  set.mockRestore();
+});
+
+// Beside the account it signs out of, not among the actions further down (P56).
+it('signs out from the account line', async () => {
+  await renderSettings();
+  await fireEvent.press(await screen.findByRole('button', { name: 'Sign out' }));
+  expect(mockSignOut).toHaveBeenCalled();
+});

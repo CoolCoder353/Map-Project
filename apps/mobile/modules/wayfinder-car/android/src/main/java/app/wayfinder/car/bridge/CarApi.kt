@@ -4,6 +4,8 @@ package app.wayfinder.car.bridge
 interface CarApi {
   fun status(done: (Result<CarStatus>) -> Unit)
   fun search(query: String, done: (Result<List<CarPlace>>) -> Unit)
+  /** What is at [at], for a destination sent with no name; null when nothing is known there. */
+  fun lookup(at: LngLat, done: (Result<CarPlace?>) -> Unit) = done(Result.success(null))
   fun discover(done: (Result<List<CarPlace>>) -> Unit)
   fun plan(to: CarPlace, done: (Result<PlanResult>) -> Unit)
   fun planned(done: (Result<List<PlannedItem>>) -> Unit)

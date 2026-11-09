@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react-native';
+import { Minus, Plus } from 'lucide-react-native';
 import { type ReactNode, useState } from 'react';
 import {
   ActivityIndicator,
@@ -234,3 +235,30 @@ const styles = StyleSheet.create({
   segmented: { flexDirection: 'row', padding: 3, borderRadius: radius.pill, gap: 2, alignSelf: 'flex-start' },
   segment: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: MIN_TARGET, minWidth: MIN_TARGET, paddingHorizontal: space[3], borderRadius: radius.pill },
 });
+
+/**
+ * A value with − and + either side: the same round buttons on every screen (P45), each a full
+ * touch target, and a label that says what it is ("Within 30 min").
+ */
+export function Stepper({ label, onMinus, onPlus, disabled, minusLabel = 'Less', plusLabel = 'More' }: { label: string; onMinus(): void; onPlus(): void; disabled?: boolean; minusLabel?: string; plusLabel?: string }) {
+  const t = useTheme();
+  const round = (Icon: LucideIcon, a11y: string, onPress: () => void) => (
+    <Press
+      accessibilityRole="button"
+      accessibilityLabel={a11y}
+      accessibilityState={{ disabled: !!disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ hovered }) => ({ width: MIN_TARGET, height: MIN_TARGET, borderRadius: MIN_TARGET / 2, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: t.borderStrong, backgroundColor: hovered ? t.surface3 : t.surface, opacity: disabled ? 0.5 : 1 })}
+    >
+      <Icon size={20} color={t.accent} />
+    </Press>
+  );
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+      {round(Minus, `${minusLabel}: ${label}`, onMinus)}
+      <Text style={{ color: t.text, fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] }}>{label}</Text>
+      {round(Plus, `${plusLabel}: ${label}`, onPlus)}
+    </View>
+  );
+}

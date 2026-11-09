@@ -3,7 +3,7 @@ import * as Speech from 'expo-speech';
 import { RouteSchema } from '@wayfinder/shared/schemas';
 import { haversineM } from '@wayfinder/shared/geo';
 import { createNavigationService } from '../src/nav/navigationService';
-import { cancelTestDrive, DEMO_ORIGIN, demoRoute, startTestDrive } from '../src/car/simulation';
+import { cancelTestDrive, DEMO_ORIGIN, demoRoute, MAX_TEST_SPEED_MPS, startTestDrive, testDriveSpeed } from '../src/car/simulation';
 import { toCarNav } from '../src/car/navModel';
 import { isNavigationRecording } from '../src/tracking/navigationRecording';
 
@@ -83,15 +83,22 @@ describe('a test drive', () => {
     expect(nav.getSnapshot()).toMatchObject({ active: true, destinationName: 'Test drive' });
   });
 
-  it('is short whatever the route: about a minute and a half, never minutes of waiting', () => {
+  it('drives the built-in route in a few minutes, at a speed a car would', () => {
     startTestDrive(nav, demoRoute(), null);
     let seconds = 0;
     while (nav.getSnapshot().state?.status !== 'arrived' && seconds < 600) {
       jest.advanceTimersByTime(1000);
       seconds++;
     }
-    expect(seconds).toBeGreaterThan(30);
-    expect(seconds).toBeLessThan(120);
+    expect(seconds).toBeGreaterThan(60);
+    expect(seconds).toBeLessThan(240);
+  });
+
+  // It went the route's length over 90 s: 216 km/h on a long trip, red for speeding all the way (C86).
+  it('goes at the route’s own average speed, never faster than 90 km/h', () => {
+    expect(testDriveSpeed({ distanceM: 50_000, durationS: 2_400 })).toBeCloseTo(50_000 / 2_400);
+    expect(testDriveSpeed({ distanceM: 100_000, durationS: 1_000 })).toBe(MAX_TEST_SPEED_MPS);
+    expect(MAX_TEST_SPEED_MPS * 3.6).toBe(90);
   });
 
   it('records nothing, uploads nothing, and never touches the phone’s location', async () => {

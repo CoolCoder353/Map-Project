@@ -53,7 +53,8 @@ object MapPins {
     paint.color = Color.WHITE
     paint.textAlign = Paint.Align.CENTER
     paint.typeface = Typeface.DEFAULT_BOLD
-    paint.textSize = r * 1.1f // one digit: lists stop at six rows
+    // One digit (lists stop at six rows), or a few sharing a badge ("2·4") smaller to fit.
+    paint.textSize = if (label.length <= 1) r * 1.1f else r * 1.6f / label.length
     canvas.drawText(label, r, r - (paint.descent() + paint.ascent()) / 2, paint)
     return bmp
   }

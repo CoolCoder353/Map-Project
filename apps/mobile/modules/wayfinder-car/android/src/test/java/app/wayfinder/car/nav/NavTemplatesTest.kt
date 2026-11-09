@@ -37,8 +37,9 @@ class NavTemplatesTest {
     assertEquals("Turn left onto Main St", info.currentStep!!.cue.text())
     assertEquals("Main St", info.currentStep!!.road.text())
     assertEquals(250.0, info.currentDistance!!.displayDistance, 0.0)
-    assertEquals("Turn right", info.nextStep!!.cue.text())
-    assertEquals(500L, t.destinationTravelEstimate!!.remainingTimeSeconds)
+    // The "then" line short (C89), and the time in whole minutes as the phone rounds them (C16).
+    assertEquals("Right", info.nextStep!!.cue.text())
+    assertEquals(480L, t.destinationTravelEstimate!!.remainingTimeSeconds)
     assertEquals(listOf("speaker", "End"), buttons(t))
   }
 
@@ -98,7 +99,7 @@ class NavTemplatesTest {
     val trip = NavTemplates.trip(Samples.nav(), icons)
     assertEquals(250.0, trip.stepTravelEstimates.single().remainingDistance!!.displayDistance, 0.0)
     assertEquals(4.0, trip.destinationTravelEstimates.single().remainingDistance!!.displayDistance, 0.0)
-    assertEquals(500L, trip.stepTravelEstimates.single().remainingTimeSeconds)
+    assertEquals(480L, trip.stepTravelEstimates.single().remainingTimeSeconds)
   }
 
   /** The cluster shows the step after this one, however far off it is (Google's "next-turn information"). */
@@ -167,5 +168,18 @@ class NavTemplatesTest {
 
   @Test fun endAsksForASecondTapByItsOwnLabel() {
     assertEquals(listOf("speaker", NavTemplates.END_CONFIRM), buttons(NavTemplates.navigation(Samples.nav(), icons, onEnd = {}, onMute = {}, confirmingEnd = true)))
+  }
+
+  /** Whole minutes as the phone rounds them, so car and phone say the same time (C16). */
+  @Test fun timeLeftIsRoundedAsOnThePhone() {
+    assertEquals(76 * 60L, NavTemplates.shownSeconds(75.6 * 60))
+    assertEquals(75 * 60L, NavTemplates.shownSeconds(75.4 * 60))
+  }
+
+  /** The "then" line fits one short line on the turn card (C89). */
+  @Test fun theThenLineIsShort() {
+    assertEquals("Left onto Little Cribb St", NavTemplates.shortCue("Turn left onto Little Cribb Street"))
+    assertEquals("Slight right onto Coronation Dr", NavTemplates.shortCue("Turn slight right onto Coronation Drive"))
+    assertEquals("Keep left and take route 32 toward Milton Rd", NavTemplates.shortCue("Keep left and take route 32 toward Milton Road"))
   }
 }

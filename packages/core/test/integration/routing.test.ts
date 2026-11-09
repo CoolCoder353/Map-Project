@@ -289,6 +289,8 @@ describe('routing service (fake GraphHopper)', () => {
     const items = await routing.discover(deps(), u.id, { lon: from[0], lat: from[1], mode: 'car', maxMinutes: 10, limit: 10 });
     expect(items.map((i) => i.name)).toEqual(['Hidden Lookout']);
     expect(items[0]!.areaUnexploredPct).toBe(100);
+    // How long it takes, in a band of the time asked for (P43): 1.5 km is well inside the nearest.
+    expect(items[0]!.withinMinutes).toBe(routing.discoverBands(10)[0]);
     const parks = await routing.discover(deps(), u.id, { lon: from[0], lat: from[1], mode: 'car', maxMinutes: 10, limit: 10, categories: ['park'] });
     expect(parks).toHaveLength(0);
   });

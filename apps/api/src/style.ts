@@ -85,12 +85,19 @@ const DARK: Palette = {
   boundary: '#6d6385',
   label: '#e3ded3',
   labelHalo: '#1d2126',
-  roadLabel: '#c3bcae',
+  // Street names have to be read at arm's length on a car screen at night (C91).
+  roadLabel: '#ece6da',
   waterLabel: '#86b6cf',
   poi: '#d9895f',
   signal: '#0d0f11',
   signalLamp: '#e9a838',
 };
+
+/**
+ * Places worth a dot and a name: the better known ones, and no bus stops, whose long names
+ * ("Adelaide Street Stop 20 at City Hall") cluttered every map, the driving ones most.
+ */
+export const POI_SHOWN = ['all', ['<=', ['get', 'rank'], 20], ['!=', ['get', 'class'], 'bus'], ['!=', ['get', 'subclass'], 'bus_stop']];
 
 const FONT = ['Noto Sans Regular'];
 const FONT_BOLD = ['Noto Sans Bold'];
@@ -98,7 +105,13 @@ const FONT_ITALIC = ['Noto Sans Italic'];
 
 const zoomWidth = (stops: Array<[number, number]>) => ['interpolate', ['exponential', 1.5], ['zoom'], ...stops.flat()];
 
-export function buildStyle(origin: string, theme: 'light' | 'dark') {
+/**
+ * Left off the map while driving: buildings, place dots and names, and the traffic-light markers.
+ * Background for browsing, clutter at driving zoom on a screen read at a glance (P28).
+ */
+export const DRIVING_HIDDEN = ['building', 'poi', 'poi-label', 'traffic-signals', 'traffic-signals-lamp'];
+
+export function buildStyle(origin: string, theme: 'light' | 'dark', opts: { driving?: boolean } = {}) {
   const p = theme === 'dark' ? DARK : LIGHT;
   const roadClass = (classes: string[]) => ['in', ['get', 'class'], ['literal', classes]];
   const road = (id: string, classes: string[], color: string, widths: Array<[number, number]>, minzoom = 5) => [
@@ -133,7 +146,7 @@ export function buildStyle(origin: string, theme: 'light' | 'dark') {
       // Traffic lights, served from the database (they aren't in the OpenMapTiles schema).
       signals: { type: 'vector', tiles: [`${origin}/tiles/signals/{z}/{x}/{y}.mvt`], minzoom: SIGNAL_TILE_MIN_ZOOM, maxzoom: SIGNAL_TILE_MAX_ZOOM },
     },
-    layers: [
+    layers: ([
       { id: 'background', type: 'background', paint: { 'background-color': p.background } },
       {
         id: 'landuse-residential',
@@ -255,8 +268,9 @@ export function buildStyle(origin: string, theme: 'light' | 'dark') {
         type: 'circle',
         source: 'openmaptiles',
         'source-layer': 'poi',
-        minzoom: 14,
-        filter: ['<=', ['get', 'rank'], 20],
+        // From the zoom its name shows, so no dot is left unexplained.
+        minzoom: 15,
+        filter: POI_SHOWN,
         paint: { 'circle-color': p.poi, 'circle-radius': 3.5, 'circle-stroke-color': p.labelHalo, 'circle-stroke-width': 1 },
       },
       {
@@ -286,7 +300,7 @@ export function buildStyle(origin: string, theme: 'light' | 'dark') {
         source: 'openmaptiles',
         'source-layer': 'poi',
         minzoom: 15,
-        filter: ['<=', ['get', 'rank'], 20],
+        filter: POI_SHOWN,
         layout: {
           'text-field': ['get', 'name'],
           'text-font': FONT,
@@ -346,6 +360,6 @@ export function buildStyle(origin: string, theme: 'light' | 'dark') {
         layout: { 'text-field': ['get', 'name'], 'text-font': FONT_BOLD, 'text-size': 13, 'text-transform': 'uppercase' },
         paint: { 'text-color': p.boundary, 'text-halo-color': p.labelHalo, 'text-halo-width': 1.5 },
       },
-    ],
+    ] as Array<{ id: string }>).filter((l) => !(opts.driving && DRIVING_HIDDEN.includes(l.id))),
   };
 }

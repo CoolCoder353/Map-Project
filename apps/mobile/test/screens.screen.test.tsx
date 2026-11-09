@@ -1,8 +1,8 @@
 /// <reference types="jest" />
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { Alert, ScrollView } from 'react-native';
-import Coverage from '../app/(tabs)/coverage';
-import Discover, { REFILTER_PAUSE_MS } from '../app/(tabs)/discover';
+import Coverage, { roadWhen } from '../app/(tabs)/coverage';
+import Discover, { discoverDetail, REFILTER_PAUSE_MS } from '../app/(tabs)/discover';
 import TabsLayout from '../app/(tabs)/_layout';
 import Trips from '../app/(tabs)/trips';
 import Index from '../app/index';
@@ -38,6 +38,21 @@ beforeEach(() => {
 afterEach(() => expect(fake.api.unhandled).toEqual([]));
 
 describe('Coverage', () => {
+  // A key to the colours, and a tapped road says when it was travelled (P96, P99).
+  it('explains the map’s colours and says when a tapped road was travelled', async () => {
+    fake.api.on({ 'GET api/coverage/stats': () => ({ roadKm: 0, roadsTravelled: 0, newRoadsWeek: 0, newRoadsMonth: 0, byMode: { carKm: 0, footKm: 0 }, firstVisitAt: null, tripCount: 0, distanceKm: 0, bounds: null }), 'GET api/coverage': () => ({ type: 'FeatureCollection', features: [] }) });
+    await renderScreen(<Coverage />);
+    expect(screen.getByText('New this week')).toBeOnTheScreen();
+    expect(screen.getByText('Travelled before')).toBeOnTheScreen();
+    await act(async () => (fake.map.props.onCoveragePress as (r: object) => void)({ firstAt: '2026-11-03T01:00:00Z', lastAt: '2026-11-09T01:00:00Z', modes: 1 }));
+    expect(screen.getByText('First travelled 3 Nov 2026, last 9 Nov 2026, driving.')).toBeOnTheScreen();
+  });
+
+  it('words a road’s dates however much is known', () => {
+    expect(roadWhen({ firstAt: '2026-11-03T01:00:00Z', lastAt: '2026-11-03T05:00:00Z', modes: 3 })).toBe('Travelled 3 Nov 2026, driving and on foot.');
+    expect(roadWhen({})).toBe('You’ve travelled this road.');
+  });
+
   it('shows kilometres of road and road counts, and loads roads for the map’s view', async () => {
     fake.api.on({
       'GET api/coverage/stats': () => coverageStats(),
@@ -140,7 +155,7 @@ describe('Discover', () => {
     await fireEvent.changeText(from, 'gumdale');
     await fireEvent.press(await screen.findByText('Gumdale State School'));
     await fireEvent.press(screen.getByRole('checkbox', { name: 'Lookouts' }));
-    await fireEvent.press(screen.getByRole('button', { name: '+' }));
+    await fireEvent.press(screen.getByRole('button', { name: /^More:/ }));
     await fireEvent.press(screen.getByRole('radio', { name: 'Walk' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Find places' }));
     expect(await screen.findByText('Mount Coot-tha Lookout')).toBeOnTheScreen();
@@ -150,10 +165,18 @@ describe('Discover', () => {
     expect(screen.queryByText(/unexplored area/)).toBeNull();
     expect(fake.api.callsTo('GET api/discover')[0]!.query).toEqual({ lon: 153.15, lat: -27.49, mode: 'foot', maxMinutes: 35, categories: 'viewpoint', limit: 25 });
     expect(fake.map.fitTo).toHaveBeenCalled();
+    // Pins numbered as their cards (P47), with how long to get there (P43).
+    expect((fake.map.props.markers as Array<{ label?: string; kind: string }>).filter((m) => m.kind === 'poi').map((m) => m.label)).toEqual(['1', '2']);
+    expect(typeof fake.map.props.onMarkerPress).toBe('function');
     // A place found is somewhere to go: Plan works out the trip there, from the same start, walking.
     await fireEvent.press(screen.getByText('Mount Coot-tha Lookout'));
     expect(fake.router.navigate).toHaveBeenCalledWith('/plan');
     expect(takeTripToPlan()).toMatchObject({ from: { name: 'Gumdale State School', location: [153.15, -27.49] }, to: { name: 'Mount Coot-tha Lookout', location: [152.95, -27.48] }, mode: 'foot' });
+  });
+
+  it('says how long a place takes to get to, where the server says (P43)', () => {
+    expect(discoverDetail(discoverItem({ withinMinutes: 10, distanceM: 6600 }), 'car')).toBe('Lookout · within 10 min by car · 6.6 km away');
+    expect(discoverDetail(discoverItem({ distanceM: 6600 }), 'foot')).toBe('Lookout · 6.6 km away');
   });
 
   it('says when nothing new is in reach, and shows errors', async () => {
@@ -217,8 +240,8 @@ describe('Discover', () => {
     expect(fake.api.callsTo('GET api/discover')).toHaveLength(2);
     expect(fake.api.callsTo('GET api/discover')[1]!.query).toMatchObject({ mode: 'foot', categories: 'viewpoint' });
     // A few quick taps on + make one request, for where the taps ended.
-    await fireEvent.press(screen.getByRole('button', { name: '+' }));
-    await fireEvent.press(screen.getByRole('button', { name: '+' }));
+    await fireEvent.press(screen.getByRole('button', { name: /^More:/ }));
+    await fireEvent.press(screen.getByRole('button', { name: /^More:/ }));
     await waitFor(() => expect(fake.api.callsTo('GET api/discover')).toHaveLength(3));
     expect(fake.api.callsTo('GET api/discover')[2]!.query).toMatchObject({ maxMinutes: 40 });
     expect(await screen.findByText('Walkable Lookout')).toBeOnTheScreen();
@@ -297,13 +320,15 @@ describe('Trip', () => {
     expect(fake.api.callsTo('DELETE api/trips/t-1')).toHaveLength(1);
   });
 
-  it('draws the trip along the roads it took, with the roads it was first on picked out', async () => {
+  // The path as recorded, so a wrong match shows against it (P32), and where it went (P33).
+  it('draws where the trip really went, with the roads it was first on picked out', async () => {
     fake.params = { id: 't-1' };
     const matchedGeometry: Array<[number, number]> = [[153, -27.4], [153.1, -27.41], [153.1, -27.5]];
-    fake.api.on({ 'GET api/trips/t-1': () => tripDetail({ matchedGeometry, newRoadLines: [[[153.1, -27.41], [153.1, -27.5]]] }) });
+    fake.api.on({ 'GET api/trips/t-1': () => tripDetail({ matchedGeometry, newRoadLines: [[[153.1, -27.41], [153.1, -27.5]]], endedNear: 'Coot-tha Place' }) });
     await renderScreen(<Trip />);
-    expect(await screen.findByText('New roads are picked out on the map.')).toBeOnTheScreen();
-    expect(fake.map.props.track).toEqual(matchedGeometry);
+    expect(await screen.findByText(/new roads are picked out in green/)).toBeOnTheScreen();
+    expect(screen.getByText('To Coot-tha Place')).toBeOnTheScreen();
+    expect(fake.map.props.track).toEqual([[153.0, -27.4], [153.05, -27.45], [153.1, -27.5]]);
     expect(fake.map.props.coverage).toEqual({
       type: 'FeatureCollection',
       features: [{ type: 'Feature', properties: { recent: true }, geometry: { type: 'LineString', coordinates: [[153.1, -27.41], [153.1, -27.5]] } }],

@@ -32,6 +32,7 @@ class FakeCarApi : CarApi {
   override fun status(done: (Result<CarStatus>) -> Unit) = hold("status", done)
   override fun search(query: String, done: (Result<List<CarPlace>>) -> Unit) = hold("search $query", done)
   override fun discover(done: (Result<List<CarPlace>>) -> Unit) = hold("discover", done)
+  override fun lookup(at: LngLat, done: (Result<CarPlace?>) -> Unit) = hold("lookup ${at.lon},${at.lat}", done)
   override fun plan(to: CarPlace, done: (Result<PlanResult>) -> Unit) = hold("plan ${to.id}", done)
   override fun planned(done: (Result<List<PlannedItem>>) -> Unit) = hold("planned", done)
   override fun routeLine(routeId: String, done: (Result<List<LngLat>>) -> Unit) = hold("routeLine $routeId", done)

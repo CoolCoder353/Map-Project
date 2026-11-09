@@ -41,6 +41,8 @@ describe('category words', () => {
     expect(poiTypeLabel('shop=garden_centre')).toBe('Garden centre');
     expect(poiTypeLabel('shop=yes')).toBe('Place');
     expect(poiTypeLabel(null)).toBe('Place');
+    // One kind of shop tagged two ways in OpenStreetMap reads the same (P79).
+    expect(poiTypeLabel('shop=hardware')).toBe(poiTypeLabel('shop=doityourself'));
   });
 });
 
@@ -80,6 +82,8 @@ describe('splitAddress', () => {
     expect(splitAddress('1 Panorama Dr, Thornlands')).toEqual({ name: '1 Panorama Dr', locality: 'thornlands', postcode: null });
     expect(splitAddress('8 Smith Street Mount Cotton New South Wales 2165')).toEqual({ name: '8 Smith Street', locality: 'mount cotton', postcode: '2165' });
     expect(splitAddress('20 Boundary Rd QLD')).toEqual({ name: '20 Boundary Rd', locality: null, postcode: null });
+    // No comma, but a house number and the suburb after the street (P73).
+    expect(splitAddress('1 George St Brisbane')).toEqual({ name: '1 George St', locality: 'brisbane', postcode: null });
   });
 
   it('leaves ordinary searches alone', () => {

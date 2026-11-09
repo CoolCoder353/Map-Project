@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useFocusEffect } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { Car, ExternalLink, Footprints, LogOut, MessageSquarePlus, Navigation, RefreshCw, Trash2 } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AppState, ScrollView, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../../src/lib/api';
@@ -19,8 +19,11 @@ import { requestTrackingPermission, trackingPermission } from '../../src/trackin
 import { confirmBackgroundLocation } from '../../src/tracking/disclosure';
 import { sqliteQueueStore } from '../../src/tracking/sqliteStore';
 import { syncQueue } from '../../src/tracking/sync';
-import { Body, Button, Card, Field, Heading, Notice, Segmented, Small, Title } from '../../src/ui/kit';
+import { Body, Button, Card, Field, Heading, Notice, Segmented, Small, Stepper, Title } from '../../src/ui/kit';
 import Constants from 'expo-constants';
+import { useTopEdges } from '../../src/ui/NavigatingBanner';
+import { appearance, type AppearanceChoice, setAppearance } from '../../src/lib/appearance';
+import { navigation } from '../../src/nav/navigationService';
 
 /** Which build this is, for testers to say ("0.6.1 (17)"). */
 export const appVersion = () => {
@@ -30,8 +33,11 @@ export const appVersion = () => {
 };
 
 export default function SettingsScreen() {
+  const topEdges = useTopEdges();
   const t = useTheme();
   const { user, setUser, signOut } = useSession();
+  const voiceMuted = useSyncExternalStore(navigation.subscribe, () => navigation.getSnapshot().muted);
+  const [look, setLook] = useState<AppearanceChoice>(appearance());
   const { config } = useAppConfig();
   const qc = useQueryClient();
   const [permission, setPermission] = useState<string>('');
@@ -192,16 +198,20 @@ export default function SettingsScreen() {
   const startPlanned = (p: PlannedRoute) => {
     // A route drawn on the website with too few points has nothing to follow.
     if (!p.route?.geometry || p.route.geometry.length < 2) return setMessage('That route can’t be followed. Plan it again on the website.');
-    setRouteToNavigate(p.route);
+    setRouteToNavigate(p.route, p.name);
     router.push('/navigate');
   };
 
   if (!user) return null;
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: t.surface }}>
+    <SafeAreaView edges={topEdges} style={{ flex: 1, backgroundColor: t.surface }}>
       <ScrollView contentContainerStyle={{ padding: space[4], gap: space[3], width: '100%', maxWidth: CONTENT_MAX_WIDTH, alignSelf: 'center' }}>
         <Title>Settings</Title>
-        <Small>{user.email} · {config.appName} at {server}</Small>
+        {/* Sign out with the account it signs out of, quieter than the actions below (P56). */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
+          <Small style={{ flex: 1 }}>{user.email} · {config.appName} at {server}</Small>
+          <Button label="Sign out" kind="ghost" icon={LogOut} compact onPress={() => void signOut().finally(() => router.replace('/sign-in'))} />
+        </View>
 
         <Heading>Location history</Heading>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
@@ -257,12 +267,33 @@ export default function SettingsScreen() {
           onChange={(m) => save.mutate({ defaultMode: m })}
           options={[{ value: 'car', label: 'Drive', icon: Car }, { value: 'foot', label: 'Walk', icon: Footprints }]}
         />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2] }}>
-          {/* Off while saving: each step counts from the saved value, so quick taps would be lost. */}
-          <Button label="−" kind="secondary" compact disabled={save.isPending} onPress={() => save.mutate({ exploreBudgetMin: Math.max(5, user.settings.exploreBudgetMin - 5) })} />
-          <Body style={{ flexShrink: 1 }}>Explore routes may take up to {user.settings.exploreBudgetMin} min extra</Body>
-          <Button label="+" kind="secondary" compact disabled={save.isPending} onPress={() => save.mutate({ exploreBudgetMin: Math.min(60, user.settings.exploreBudgetMin + 5) })} />
+        {/* Short enough for one line between the buttons (P57); what it means is said under it. */}
+        {/* Off while saving: each step counts from the saved value, so quick taps would be lost. */}
+        <Stepper
+          label={`Up to ${user.settings.exploreBudgetMin} min extra`}
+          disabled={save.isPending}
+          onMinus={() => save.mutate({ exploreBudgetMin: Math.max(5, user.settings.exploreBudgetMin - 5) })}
+          onPlus={() => save.mutate({ exploreBudgetMin: Math.min(60, user.settings.exploreBudgetMin + 5) })}
+        />
+        <Small>How much longer than the fastest way an explore route may take.</Small>
+
+        <Heading>Directions</Heading>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[3] }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: t.text, fontSize: 16, fontWeight: '600' }}>Voice directions</Text>
+            <Small>Speaks each turn. Also on the mute button while driving, on the phone and the car.</Small>
+          </View>
+          <Switch accessibilityLabel="Voice directions" value={!voiceMuted} onValueChange={(on) => navigation.setMuted(!on)} />
         </View>
+        <Segmented<AppearanceChoice>
+          label="Map and app colours"
+          value={look}
+          onChange={(c) => {
+            setLook(c);
+            void setAppearance(c);
+          }}
+          options={[{ value: 'auto', label: 'Automatic' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]}
+        />
 
         <Heading>Saved places</Heading>
         <Small>Type a saved place’s name, like “Home”, in any search to find it first. Save one from Plan once you’ve chosen a destination.</Small>
@@ -303,7 +334,6 @@ export default function SettingsScreen() {
           </>
         ) : null}
 
-        <Button label="Sign out" kind="secondary" icon={LogOut} onPress={() => void signOut().finally(() => router.replace('/sign-in'))} style={{ marginTop: space[4] }} />
 
         <Heading>Your data</Heading>
         <Small>Download a copy of your data from Settings on the website.</Small>

@@ -1,4 +1,4 @@
-export { formatDistanceShort, formatDuration } from '@wayfinder/nav';
+export { exploreTitles, formatDistanceShort, formatDuration } from '@wayfinder/nav';
 
 const dateFmt = new Intl.DateTimeFormat('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 const timeFmt = new Intl.DateTimeFormat('en-AU', { hour: 'numeric', minute: '2-digit' });

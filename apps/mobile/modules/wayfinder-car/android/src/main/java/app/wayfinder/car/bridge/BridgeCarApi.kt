@@ -7,6 +7,8 @@ import org.json.JSONObject
 class BridgeCarApi(private val bridge: CarBridge) : CarApi {
   override fun status(done: (Result<CarStatus>) -> Unit) = ask("status", JSONObject(), Protocol::status, done)
   override fun search(query: String, done: (Result<List<CarPlace>>) -> Unit) = ask("search", JSONObject().put("q", query), Protocol::places, done)
+  override fun lookup(at: LngLat, done: (Result<CarPlace?>) -> Unit) =
+    ask("lookup", JSONObject().put("at", JSONArray().put(at.lon).put(at.lat)), Protocol::lookup, done)
   override fun discover(done: (Result<List<CarPlace>>) -> Unit) = ask("discover", JSONObject(), Protocol::places, done)
   override fun plan(to: CarPlace, done: (Result<PlanResult>) -> Unit) =
     ask("plan", JSONObject().put("to", JSONArray().put(to.location.lon).put(to.location.lat)), Protocol::plan, done)

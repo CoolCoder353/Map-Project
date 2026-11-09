@@ -8,8 +8,8 @@ import app.wayfinder.car.bridge.RouteOption
 /** What the car map should be showing; each screen says which. */
 sealed interface MapScene {
   data class Overview(val here: LngLat?) : MapScene
-  /** Numbered on the map as in the list beside it. */
-  data class Places(val places: List<CarPlace>) : MapScene
+  /** Numbered on the map as in the list beside it, with where you are among them when known (C66). */
+  data class Places(val places: List<CarPlace>, val here: LngLat? = null) : MapScene
   /** [selected] is the one drawn as chosen, or [NONE] for a list to pick from, numbered as its rows. */
   data class Routes(val options: List<RouteOption>, val selected: Int) : MapScene {
     companion object {

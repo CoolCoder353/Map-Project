@@ -130,6 +130,12 @@ seen on the phone or head unit: the next run should check by eye a trip with no 
 starting from the car's preview, no heads-up card over the car's directions, End taking two taps,
 and the harness's car taps landing where aimed. The harness no longer fakes a phone's own GPS.
 
+**The rest, also 2026-11-10:** the findings left that day are fixed in code with tests too, but
+lane guidance (C90) and the few the report's "Still not fixed" lists. Not seen on a device: check by
+eye that a trip survives leaving the Navigate screen, the phone's driving map turns with you and
+marks where you are, the car's speed box sits clear of the route at the left, and `car scroll`
+reaches rows below the fold.
+
 Before that run nothing below had been tried on a head unit; the automated tests pass
 (`pnpm test:android`, `pnpm test:mobile`, `carModule.test.ts`). Run it against a release APK on a real phone (build-android.md, "Trying it in a
 car"), tick each item as it passes, and record the date. Fix anything that fails, with a test.

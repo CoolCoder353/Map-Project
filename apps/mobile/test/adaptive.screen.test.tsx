@@ -42,6 +42,7 @@ let mockTakes = 0;
 jest.mock('../src/nav/useTurnByTurn', () => ({ useTurnByTurn: () => mockNav }));
 jest.mock('../src/lib/plannedStore', () => ({
   setRouteToNavigate: jest.fn(),
+  destinationToNavigate: () => null,
   takeTripToPlan: () => null,
   takeRouteToNavigate: () => {
     mockTakes++;
@@ -119,7 +120,9 @@ describe.each(sizes)('map screens on %s', (_name, size) => {
   ] as const)('%s stacks the map over the details, or puts them side by side when wide', async (_n, ui, height) => {
     await renderScreen(ui());
     await settle();
-    expect(fake.map.props.style).toEqual(wide ? { flex: 1 } : { height });
+    // Plan's map sits in an area of its own, with the button that makes it bigger.
+    const area = screen.queryByTestId('map-area');
+    expect(area ? area.props.style : fake.map.props.style).toEqual(wide ? { flex: 1 } : { height });
     expect(screen.getByTestId('map')).toBeOnTheScreen();
   });
 
@@ -127,7 +130,7 @@ describe.each(sizes)('map screens on %s', (_name, size) => {
     fake.params = { id: 't-1' };
     await renderScreen(<Trip />);
     expect(await screen.findByText('Drive · 18 km')).toBeOnTheScreen();
-    expect(fake.map.props.style).toEqual(wide ? { flex: 1 } : { height: '50%' });
+    expect(screen.getByTestId('map-area').props.style).toEqual(wide ? { flex: 1 } : { height: '50%' });
   });
 
   it('Navigate shows the map, the turn and the controls', async () => {

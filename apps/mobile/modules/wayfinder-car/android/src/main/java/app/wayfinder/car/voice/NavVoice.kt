@@ -17,6 +17,11 @@ import java.util.Locale
 class NavVoice(
   context: Context,
   createTts: (Context, TextToSpeech.OnInitListener) -> TextToSpeech = { c, listener -> TextToSpeech(c, listener) },
+  /**
+   * Each direction as it is said, or not said and why, in the log: a test PC with no sound card
+   * gets nothing out of the head unit, so `pnpm device logs` is how voice is checked (H10).
+   */
+  private val log: (String) -> Unit = { android.util.Log.i(app.wayfinder.car.CarVisibility.TAG, it) },
 ) : TextToSpeech.OnInitListener {
   private val audio = context.getSystemService(AudioManager::class.java)
   private val focus = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK).setAudioAttributes(ATTRIBUTES).build()
@@ -85,7 +90,11 @@ class NavVoice(
 
   private fun speakNow(text: String) {
     // Refused (a phone call, or another app holding the audio): talking over it is worse than silence.
-    if (audio.requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) return
+    if (audio.requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+      log("$NOT_SAID$text")
+      return
+    }
+    log("$SAID$text")
     val id = "wayfinder-directions-${++count}"
     current = id
     if (tts.speak(text, TextToSpeech.QUEUE_ADD, null, id) != TextToSpeech.SUCCESS) {
@@ -104,6 +113,8 @@ class NavVoice(
 
   companion object {
     internal val VOICES = listOf(Locale("en", "AU"), Locale.UK, Locale.ENGLISH)
+    const val SAID = "said: "
+    const val NOT_SAID = "not said (another app has the audio): "
 
     val ATTRIBUTES: AudioAttributes = AudioAttributes.Builder()
       .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)

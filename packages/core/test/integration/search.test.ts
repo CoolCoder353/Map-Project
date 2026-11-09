@@ -38,6 +38,9 @@ beforeAll(async () => {
     // The same address in two suburbs of one city, and a street with no numbers mapped.
     { id: 'wl-lut', name: '12 Wellington Street', kind: 'address', category: null, description: '', lon: 153.03, lat: -27.42, importance: 0, suburb: 'Lutwyche', state: 'QLD', postcode: '4030' },
     { id: 'wl-cle', name: '12 Wellington Street', kind: 'address', category: null, description: '', lon: 153.2557, lat: -27.525, importance: 0, suburb: 'Cleveland', state: 'QLD', postcode: '4163' },
+    // One George Street in the city, one in Ormiston (P73).
+    { id: 'gs-cbd', name: '1 George Street', kind: 'address', category: null, description: '', lon: 153.025, lat: -27.475, importance: 0, suburb: 'Brisbane City', state: 'QLD', postcode: '4000' },
+    { id: 'gs-orm', name: '1 George Street', kind: 'address', category: null, description: '', lon: 153.257, lat: -27.513, importance: 0, suburb: 'Ormiston', state: 'QLD', postcode: '4160' },
     { id: 'ssw-orm', name: 'Shore Street West', kind: 'street', category: null, description: '', lon: 153.26, lat: -27.51, importance: 0, suburb: 'Ormiston', state: 'QLD', postcode: '4160' },
     { id: 'ssw-cle', name: 'Shore Street West', kind: 'street', category: null, description: '', lon: 153.255, lat: -27.524, importance: 0, suburb: 'Cleveland', state: 'QLD', postcode: '4163' },
     { id: 'ssw-cle2', name: 'Shore Street West', kind: 'street', category: null, description: '', lon: 153.252, lat: -27.524, importance: 0, suburb: 'Cleveland', state: 'QLD', postcode: '4163' },
@@ -105,6 +108,8 @@ describe('place search', () => {
     const street = await places.searchPlaces(t.db, '5 Shore St West, Cleveland QLD 4163', null, 3, friday);
     expect(street[0]).toMatchObject({ id: expect.stringMatching(/^ssw-cle/), context: 'Cleveland QLD 4163' });
     expect(street.filter((p) => p.id.startsWith('ssw-cle'))).toHaveLength(1);
+    // No commas, and "Brisbane" for Brisbane City: the one in the city first, even from Ormiston (P73).
+    expect((await places.searchPlaces(t.db, '1 George St Brisbane', [153.26, -27.51], 2, friday))[0]!.id).toBe('gs-cbd');
   });
 
   it('works without an origin (no distances)', async () => {

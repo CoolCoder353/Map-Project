@@ -12,6 +12,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import app.wayfinder.car.bridge.CarApi
 import app.wayfinder.car.bridge.CarPlace
+import app.wayfinder.car.map.LastPosition
 import app.wayfinder.car.map.MapScene
 import app.wayfinder.car.map.MapScenes
 
@@ -30,6 +31,8 @@ class SearchScreen(
   private val hint: String,
   /** Your saved places: what the screen offers before anything is typed, and all it can while driving. */
   private val saved: List<CarPlace> = emptyList(),
+  /** During a trip, the way back to its directions (C98). */
+  private val directions: BackToDirections? = null,
 ) : Screen(carContext) {
   /** The words last searched for, put back in the box on return so the results beside it make sense. */
   private var query = ""
@@ -67,12 +70,14 @@ class SearchScreen(
 
     override fun onSearchSubmitted(searchText: String) {
       cancelTyped()
-      if (searchText.isNotBlank()) search(searchText)
+      if (searchText.isBlank()) return
+      // The keyboard's search key: the results on the map, which the search screen has no room for (C49).
+      search(searchText) { found -> if (found.isNotEmpty()) screenManager.push(PickScreens.choose(carContext, api, map, searchText.trim(), found, directions)) }
     }
   }
 
   init {
-    whenStarted { if (results.isNotEmpty()) show(map, MapScene.Places(results)) }
+    whenStarted { if (results.isNotEmpty()) show(map, MapScene.Places(results, LastPosition.at)) }
     // A search still waiting for a pause mustn't run after the driver has left.
     lifecycle.addObserver(object : DefaultLifecycleObserver {
       override fun onDestroy(owner: LifecycleOwner) = cancelTyped()
@@ -92,12 +97,12 @@ class SearchScreen(
     query = ""
     if (results.isNotEmpty()) {
       results = emptyList()
-      show(map, MapScene.Places(results))
+      show(map, MapScene.Places(results, LastPosition.at))
     }
     invalidate()
   }
 
-  private fun search(q: String) {
+  private fun search(q: String, then: (List<CarPlace>) -> Unit = {}) {
     val mine = ++ticket
     query = q.trim()
     tooShort = false
@@ -110,7 +115,8 @@ class SearchScreen(
       r.onSuccess {
         results = it.take(MAX_ROWS)
         if (results.isEmpty()) error = "Nothing found. Try another name or address."
-        show(map, MapScene.Places(results))
+        show(map, MapScene.Places(results, LastPosition.at))
+        then(results)
       }.onFailure {
         results = emptyList()
         error = it.message ?: "Search didn’t work. Try again."
@@ -124,6 +130,7 @@ class SearchScreen(
       // Results already there: the keyboard would only cover them.
       .setShowKeyboardByDefault(results.isEmpty())
       .apply { if (query.isNotEmpty()) setInitialSearchText(query) }
+      .apply { directionsStrip(directions)?.let { setActionStrip(it) } }
     // Only a spinner when there is nothing to show meanwhile.
     if (loading && results.isEmpty()) return b.setLoading(true).build()
     val list = ItemList.Builder()
@@ -133,7 +140,7 @@ class SearchScreen(
     message?.let { list.setNoItemsMessage(it) }
     shown.forEachIndexed { i, p ->
       val detail = if (p.saved) listOf(SAVED, p.detail).filter { it.isNotBlank() }.joinToString(" · ") else p.detail
-      list.addItem(row(p.name, detail, icon = numberIcon(i + 1)) { screenManager.push(RoutePreviewScreen.forPlace(carContext, api, map, p)) })
+      list.addItem(row(shortName(p.name), detail, icon = numberIcon(i + 1)) { screenManager.push(RoutePreviewScreen.forPlace(carContext, api, map, p)) })
     }
     return b.setItemList(list.build()).build()
   }

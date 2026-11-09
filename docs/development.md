@@ -160,7 +160,8 @@ On the first phone run USB dropped every few seconds with Android Auto installed
 | `gps <lon> <lat> [--car]`, `gps reset` | Move the car (and the emulator's GPS) (`[lon, lat]`, as everywhere). **A real phone's own GPS is never faked**: Play services' location reads a faked provider, so every other app on the phone (location sharing, home automation) would see the fake position. Wayfinder follows the car's position while the phone's is quiet |
 | `drive <route.geojson\|.gpx> [--speed 50]` | Replay a route a fix a second through the head unit (needs `up --car` on a phone); `scripts/device/routes/` has a rough one from the CBD to Mt Coot-tha |
 | `car day\|night`, `car key home\|back\|search\|navigation`, `car restrict on\|off` | The head unit's own controls |
-| `logs` | App and car logs since the last look |
+| `car scroll up\|down [n]`, `car select` | The rotary controller: each turn moves the car's focus one row and scrolls the list (the console has no swipe), then `select` presses the row it's on |
+| `logs` | App and car logs since the last look. Each spoken direction is logged as `said: …` (or `not said …` when another app has the audio), for a PC with no sound card |
 | `install <apk>` | Emulator only |
 | `down` | Sign the test account out, turn the test location off, stop the head unit |
 

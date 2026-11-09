@@ -8,7 +8,7 @@ import { overLimit, thenAfter } from '../src/car/navModel';
 import { formatClock } from '../src/lib/format';
 import { goBack } from '../src/lib/goBack';
 import { PANEL_WIDTH, useLayout } from '../src/lib/layout';
-import { takeRouteToNavigate } from '../src/lib/plannedStore';
+import { destinationToNavigate, takeRouteToNavigate } from '../src/lib/plannedStore';
 import { space, useTheme } from '../src/lib/theme';
 import { MapCanvas } from '../src/map/MapCanvas';
 import { sendSpeedLimitReport } from '../src/nav/speedLimitReport';
@@ -63,7 +63,7 @@ export default function Navigate() {
   const { resume } = useLocalSearchParams<{ resume?: string }>();
   // Resuming follows the trip already running (started in the car, say) instead of starting one.
   const initial = useMemo(() => (resume === '1' ? null : takeRouteToNavigate()), [resume]);
-  const nav = useTurnByTurn(initial);
+  const nav = useTurnByTurn(initial, initial ? destinationToNavigate() : null);
   const { sideBySide } = useLayout();
   // The trip ended without this screen (arrived and closed by itself, or ended in the car). Not
   // after End here, which goes back itself.
@@ -74,6 +74,8 @@ export default function Navigate() {
       goBack();
     }
   }, [nav.ended]);
+  // End was tapped on a trip not yet arrived: the bar asks first.
+  const [confirming, setConfirming] = useState(false);
   // What sending a wrong-limit report said, shown for a few seconds.
   const [reported, setReported] = useState<string | null>(null);
   useEffect(() => {
@@ -99,7 +101,10 @@ export default function Navigate() {
   const limitKmh = s?.status === 'navigating' ? s.speedLimitKmh : null;
   // A speedometer is for driving; walking, it's only something else to look at.
   const speedKmh = nav.route?.mode === 'car' && nav.speedMps != null ? Math.round(nav.speedMps * 3.6) : null;
-  const banner = nav.route?.kind === 'fastest' ? t.accent : t.explore;
+  // One colour whatever the route: green means somewhere new elsewhere in the app, and the car
+  // draws every route blue (P21, P86).
+  const banner = t.accent;
+  const destination = nav.route?.geometry.at(-1);
   // Tapping the limit reports it as wrong, after a confirm so a stray tap sends nothing.
   const reportLimit = () =>
     Alert.alert('Wrong speed limit?', limitKmh != null ? `Report that ${limitKmh} km/h is wrong here.` : 'Report that the limit here is missing.', [
@@ -108,18 +113,14 @@ export default function Navigate() {
     ]);
 
   const end = () => {
+    setConfirming(false);
     leaving.current = true;
     nav.stop();
     goBack();
   };
-  // A trip ends with one tap once you're there; before that, a stray tap mustn't end it.
-  const confirmEnd = () =>
-    arrived
-      ? end()
-      : Alert.alert('End this trip?', 'Directions stop, and the trip so far is kept.', [
-          { text: 'Keep going', style: 'cancel' },
-          { text: 'End trip', style: 'destructive', onPress: end },
-        ]);
+  // A trip ends with one tap once you're there; before that, a stray tap mustn't end it. Asked in
+  // the bar itself, in the app's own buttons, not Android's capitalised dialog (P22).
+  const confirmEnd = () => (arrived ? end() : setConfirming(true));
   // On an explore route, the detour can be dropped for the fastest way from here.
   const canSkipDetour = nav.route?.kind === 'explore' && s?.status === 'navigating' && !nav.rerouting;
 
@@ -168,6 +169,15 @@ export default function Navigate() {
           selectedRouteId={nav.route?.id ?? null}
           track={nav.travelled.length >= 2 ? nav.travelled : null}
           lights={s?.status === 'navigating' ? s.lightsAhead : []}
+          // Where navigation has you (the car's position, when it's following the car) and the
+          // destination, also once arrived (P84, P85); the map turns with your direction (P27).
+          markers={[
+            ...(destination ? [{ id: 'destination', lngLat: destination, kind: 'end' as const }] : []),
+            ...(nav.position ? [{ id: 'you', lngLat: nav.position, kind: 'position' as const }] : []),
+          ]}
+          follow={nav.position ? { at: nav.position, headingDeg: nav.headingDeg } : null}
+          showUser={false}
+          driving
           followUser
         />
         {limitKmh != null || speedKmh != null ? (
@@ -187,13 +197,30 @@ export default function Navigate() {
           </View>
         ) : null}
       </View>
+      {confirming && !arrived ? (
+        <View accessibilityLiveRegion="polite" style={[{ padding: space[4], gap: space[3], backgroundColor: t.surface }, panel, sideBySide && { marginTop: 'auto' }]}>
+          <Text style={{ color: t.text, fontSize: 18, fontWeight: '700' }}>End this trip?</Text>
+          <Text style={{ color: t.text2 }}>Directions stop, and the trip so far is kept.</Text>
+          <View style={{ flexDirection: 'row', gap: space[3] }}>
+            <Button label="Keep going" kind="secondary" onPress={() => setConfirming(false)} style={{ flex: 1 }} />
+            <Button label="End trip" onPress={end} style={{ flex: 1 }} />
+          </View>
+        </View>
+      ) : (
       <View style={[{ flexDirection: 'row', alignItems: 'center', padding: space[4], gap: space[3], backgroundColor: t.surface }, panel, sideBySide && { marginTop: 'auto' }]}>
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[2], flexWrap: 'wrap' }}>
-            <Text style={{ color: t.text, fontSize: 22, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{s ? formatDuration(s.remainingDurationS) : '–'}</Text>
-            {s && !arrived ? <Text style={{ color: t.text2, fontSize: 15, fontVariant: ['tabular-nums'] }}>{`Arrive ${formatClock(Date.now() + s.remainingDurationS * 1000)}`}</Text> : null}
-          </View>
-          <Text style={{ color: t.text2 }}>{s ? `${formatDistanceShort(s.remainingDistanceM)} to go` : ''}</Text>
+          {arrived ? (
+            // Not "0 min, 0 m to go" (P84).
+            <Text style={{ color: t.text, fontSize: 22, fontWeight: '700' }}>{nav.destinationName ? `At ${nav.destinationName}` : 'You’re there'}</Text>
+          ) : (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: space[2], flexWrap: 'wrap' }}>
+                <Text style={{ color: t.text, fontSize: 22, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{s ? formatDuration(s.remainingDurationS) : '–'}</Text>
+                {s ? <Text style={{ color: t.text2, fontSize: 15, fontVariant: ['tabular-nums'] }}>{`Arrive ${formatClock(Date.now() + s.remainingDurationS * 1000)}`}</Text> : null}
+              </View>
+              <Text style={{ color: t.text2 }}>{s ? `${formatDistanceShort(s.remainingDistanceM)} to go` : ''}</Text>
+            </>
+          )}
           {/* Muted is kept trip to trip: say so, or a trip starts silent with nothing to say why. */}
           {nav.muted && !arrived ? <Text style={{ color: t.text2 }}>Voice directions are off</Text> : null}
         </View>
@@ -202,6 +229,7 @@ export default function Navigate() {
         </Press>
         <Button label={arrived ? 'Done' : 'End'} kind={arrived ? 'primary' : 'secondary'} icon={X} onPress={confirmEnd} compact />
       </View>
+      )}
     </SafeAreaView>
   );
 }

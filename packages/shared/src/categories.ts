@@ -54,6 +54,8 @@ export function categoryTypes(q: string): string[] | null {
 const TYPE_LABELS: Record<string, string> = {
   fuel: 'Petrol station',
   doityourself: 'Hardware store',
+  // The same kind of shop, tagged either way in OpenStreetMap: one name for both (P79).
+  hardware: 'Hardware store',
   charging_station: 'EV charger',
   alcohol: 'Bottle shop',
   convenience: 'Convenience store',
