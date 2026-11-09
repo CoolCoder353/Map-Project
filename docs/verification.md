@@ -136,6 +136,9 @@ eye that a trip survives leaving the Navigate screen, the phone's driving map tu
 marks where you are, the car's speed box sits clear of the route at the left, and `car scroll`
 reaches rows below the fold.
 
+Deployed to maps.coolcodertech.com and shipped as 0.7.0 (versionCode 18) to internal testing on
+2026-11-10. `/api/health` up; `verify:stack` and `verify:mobile` not run.
+
 Before that run nothing below had been tried on a head unit; the automated tests pass
 (`pnpm test:android`, `pnpm test:mobile`, `carModule.test.ts`). Run it against a release APK on a real phone (build-android.md, "Trying it in a
 car"), tick each item as it passes, and record the date. Fix anything that fails, with a test.
