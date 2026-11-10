@@ -204,7 +204,10 @@ In code with tests, `pnpm check` passing; not yet seen on a device. Server chang
 (and migration 012), the rest a new build.
 
 - **R2-P1:** a name or brand followed by a suburb, with no comma ("Woolworths Victoria Point",
-  "Woolies Cleveland"), finds that place in that suburb first.
+  "Woolies Cleveland"), finds that place in that suburb first. Checked on the live data after the
+  deploy, that first version still missed "Bunnings Capalaba" and "McDonalds Victoria Point": it
+  wanted the whole name, apostrophe and all. Now the words may be the start of the name in whole
+  words ("Bunnings" for Bunnings Warehouse), and punctuation is ignored.
 - **R2-P2:** picking a search result puts the keyboard away.
 - **R2-P3 / R2-P4:** a navigated trip, like a background one, is only kept once it has gone 100 m,
   so a trip that never left credits no roads and isn't in Trips, as the banner says. Its points wait

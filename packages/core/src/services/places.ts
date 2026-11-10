@@ -212,15 +212,21 @@ const SUBURB_WORDS_MAX = 3;
  * Each split of the last few words is tried; where none names a suburb, nothing is found.
  */
 async function nameInSuburb(db: DbClient, q: string, near: LngLat | null): Promise<PlaceRow[]> {
-  const words = expandAbbreviations(q).toLowerCase().trim().split(/\s+/);
+  // Punctuation goes from both sides, so "mcdonalds" finds McDonald's.
+  const words = expandAbbreviations(q).toLowerCase().replace(/[^a-z0-9 ]/g, '').trim().split(/\s+/);
   const splits: Array<[string, string]> = [];
   for (let k = 1; k <= Math.min(SUBURB_WORDS_MAX, words.length - 1); k++) splits.push([words.slice(0, -k).join(' '), words.slice(-k).join(' ')]);
   const found = await Promise.all(
     splits.map(([name, suburb]) =>
       db
         .query<PlaceRow>(
-          `SELECT ${COLUMNS}, 1 AS sim FROM places
-           WHERE (lower(name) = $1 OR lower(brand) = $1) AND (lower(suburb) = $2 OR lower(suburb) = $2 || ' city') LIMIT 20`,
+          // The name or brand, or the start of it in whole words ("bunnings" for Bunnings
+          // Warehouse, not Bunningsville). The trigram test only narrows the rows to look at.
+          `WITH p AS (
+             SELECT ${COLUMNS}, regexp_replace(lower(name), '[^a-z0-9 ]', '', 'g') AS n, regexp_replace(lower(coalesce(brand, '')), '[^a-z0-9 ]', '', 'g') AS b
+             FROM places WHERE (name % $1 OR brand % $1) AND (lower(suburb) = $2 OR lower(suburb) = $2 || ' city'))
+           SELECT ${COLUMNS}, 1 AS sim FROM p
+           WHERE n = $1 OR n LIKE $1 || ' %' OR b = $1 OR b LIKE $1 || ' %' LIMIT 20`,
           [name, suburb],
         )
         .then((r) => r.rows),

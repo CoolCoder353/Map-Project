@@ -25,6 +25,12 @@ beforeAll(async () => {
     near('w2', 'Woolworths', 200, 4000, { poiType: 'shop=supermarket', suburb: 'Civic', state: 'ACT', postcode: '2601' }),
     near('f1', 'Ampol Braddon', 90, 800, { poiType: 'amenity=fuel', brand: 'Ampol', suburb: 'Braddon', state: 'ACT', postcode: '2612' }),
     near('f2', 'Caltex Dickson', 30, 3000, { poiType: 'amenity=fuel', brand: 'Ampol', suburb: 'Dickson', state: 'ACT' }),
+    // A chain's full name and an apostrophe the search won't be typed with (found on the live server).
+    near('b1', 'Bunnings Warehouse', 0, 1600, { poiType: 'shop=hardware', brand: 'Bunnings Warehouse', suburb: 'Dickson', state: 'ACT' }),
+    near('b2', 'Bunnings Warehouse', 200, 4100, { poiType: 'shop=hardware', brand: 'Bunnings Warehouse', suburb: 'Civic', state: 'ACT' }),
+    near('b3', 'Bunningsville Cafe', 200, 4200, { poiType: 'amenity=cafe', suburb: 'Civic', state: 'ACT' }),
+    near('m1', "McDonald's", 0, 1700, { poiType: 'amenity=fast_food', brand: "McDonald's", suburb: 'Dickson', state: 'ACT' }),
+    near('m2', "McDonald's", 200, 4300, { poiType: 'amenity=fast_food', brand: "McDonald's", suburb: 'Civic', state: 'ACT' }),
     near('c1', 'Petrol Heads Cafe', 180, 500, { poiType: 'amenity=cafe', suburb: 'Braddon', state: 'ACT' }),
     near('s1', 'Sydney Avenue', 180, 2500, { kind: 'street', suburb: 'Barton', state: 'ACT', postcode: '2600' }),
     { id: 'syd', name: 'Sydney', kind: 'city', category: null, description: 'City', lon: 151.208, lat: -33.87, importance: 1, suburb: 'Sydney', state: 'NSW', postcode: '2000' },
@@ -117,6 +123,11 @@ describe('place search', () => {
     expect((await places.searchPlaces(t.db, 'Woolworths Civic', braddon, 3, friday))[0]!.id).toBe('w2');
     expect((await places.searchPlaces(t.db, 'woolies civic', braddon, 3, friday))[0]!.id).toBe('w2');
     expect((await places.searchPlaces(t.db, 'Ampol Dickson', braddon, 3, friday))[0]!.id).toBe('f2');
+    // The start of a longer name, and the name without its apostrophe.
+    expect((await places.searchPlaces(t.db, 'bunnings civic', braddon, 3, friday))[0]!.id).toBe('b2');
+    expect((await places.searchPlaces(t.db, 'mcdonalds civic', braddon, 3, friday))[0]!.id).toBe('m2');
+    // Whole words only: Bunningsville, also in Civic, isn't put before the other Bunnings.
+    expect((await places.searchPlaces(t.db, 'bunnings civic', braddon, 3, friday)).slice(0, 2).map((p) => p.id)).toEqual(['b2', 'b1']);
     // Words that only look like a suburb change nothing.
     expect((await places.searchPlaces(t.db, 'Braddon Bakery', braddon, 3, friday))[0]!.name).toBe('Braddon Bakery');
   });
