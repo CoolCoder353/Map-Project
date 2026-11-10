@@ -232,6 +232,42 @@ In code with tests, `pnpm check` passing; not yet seen on a device. Server chang
   "stop navigation" the host uses when another app starts navigating, which must stop at once, so
   it can't ask for a second tap (C61).
 
+## Usability pass, 10 November (0.7.0)
+
+A look at how the phone and car screens are to use, on the same phone and head unit (0.7.0, so
+without the fixes above). Found, not yet fixed:
+
+- **U1** Editing the chosen destination's text at all, even one character, throws away the place
+  and its routes at once. When the keyboard closes the field still shows text ("Bunnings Warehous e")
+  but there are no routes on the map, no results and nothing to say why.
+- **U2** Back on Plan, with routes planned, leaves the app, and reopening it has lost them.
+- **U3** Clearing the destination leaves the map zoomed in on a piece of road where the route was,
+  with neither a route nor your position in view.
+- **U4** With routes planned, the panel scrolls under the map: once you scroll to the cards, the
+  From and To fields are out of sight.
+- **U5** Alternative routes are drawn alike (green dashes, one slightly thicker when picked), with
+  no number or name on the line, so a line can't be matched to its card.
+- **U6** Route cards aren't in time order ("Via Redland Bay Road 28 min" above "Via Cleveland Redland
+  Bay Road 24 min"); the car's preview the same (21 min above 16 min).
+- **U7** On a phone only the Fastest card shows after planning; the other ways, the point of the
+  app, need a scroll, though their lines are already on the map.
+- **U8** Discover's 24 pins crowd round you, numbers sit beside the pins and collide, and many pins
+  have no number, so a card can't be matched to its pin.
+- **U9** Discover's order isn't explained (6.6 km, 7.3 km, 620 m, 3.8 km), and every card says
+  "Roads around it are new to you", which doesn't tell them apart.
+- **U10** Discover says "within 10 min by car · 430 m away" for a park round the corner.
+- **C-U1** Car Home with no trip: a "50" limit sign floats on the map with no speed under it.
+- **C-U2** Car search results: no dot for where you are; pins 5 and 6 drawn on top of each other;
+  pin 1 over the "Cleveland" label.
+- **C-U3** Car search runs only on the keyboard's search key, then takes about 9 s; parked, each
+  result is three lines, so two fit.
+- **C-U4** Tapping the first car result, "Cleveland", opened a preview for "Cleary Street": the list
+  seems to have changed under the tap.
+- **C-U5** Car route preview: an alternative with no road name is "Explore 2", and the lines on the
+  map aren't numbered or named to match the rows.
+- **H-U1** `pnpm device up` refuses when Settings was left scrolled down; it should scroll up to
+  read the account.
+
 ## Phone app (100)
 
 - **P1** Plan opens on central Australia (OVERVIEW 134.5,-27.5 z3.6) even with location granted and a fresh fix; for a Queensland-only server the map is an empty desert showing "QUEENSLAN" cut off. Should start at the user's position or the server's region.
