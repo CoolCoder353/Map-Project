@@ -146,6 +146,12 @@ reaches rows below the fold.
 Deployed to maps.coolcodertech.com and shipped as 0.7.0 (versionCode 18) to internal testing on
 2026-11-10. `/api/health` up; `verify:stack` and `verify:mobile` not run.
 
+Shipped as 0.7.1 (versionCode 19, `9b074d7`) to internal testing on 2026-11-10: the second run's
+and the usability pass's fixes. The server was not deployed with it, so its parts of those fixes
+(brand and suburb search, gyms, short navigated trips, trips named by their destination, migration
+012) wait for the next deploy; until then the app's `destinationName` on track uploads is ignored
+by the server, not refused. Nothing of 0.7.1 has been seen on a device yet.
+
 Before that run nothing below had been tried on a head unit; the automated tests pass
 (`pnpm test:android`, `pnpm test:mobile`, `carModule.test.ts`). Run it against a release APK on a real phone (build-android.md, "Trying it in a
 car"), tick each item as it passes, and record the date. Fix anything that fails, with a test.
