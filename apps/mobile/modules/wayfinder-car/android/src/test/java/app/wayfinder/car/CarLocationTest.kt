@@ -47,6 +47,21 @@ class CarLocationTest {
     assertTrue(source.stopped)
   }
 
+  /** Whether a head unit's positions arrive, readable in `pnpm device logs` (R2-H1). */
+  @Test fun saysOnceWhetherTheCarsPositionIsFollowed() {
+    val lines = mutableListOf<String>()
+    val source = FakeSource()
+    CarLocation(source, api, now = { 1_790_000_000_000L }, log = { lines += it }).start()
+    source.onFix!!(fix())
+    source.onFix!!(fix(lon = 153.06))
+    assertEquals(listOf("car location: following the car's position"), lines)
+    val refusing = object : CarFixSource {
+      override fun listen(onFix: (CarFix) -> Unit): () -> Unit = throw IllegalStateException("car API level 2")
+    }
+    CarLocation(refusing, api, log = { lines += it }).start()
+    assertEquals("car location: none from this car (IllegalStateException)", lines.last())
+  }
+
   @Test fun carriesOnWithoutLocationWhenTheCarCantGiveIt() {
     val refusing = object : CarFixSource {
       override fun listen(onFix: (CarFix) -> Unit): () -> Unit = throw SecurityException("no location permission")

@@ -101,8 +101,8 @@ Newer servers add, each left out where empty:
 
 | Method | Path | Schema / notes |
 |---|---|---|
-| POST | `/api/tracks/batches` | `TrackBatchRequestSchema`: up to 5,000 points, `ts` in epoch ms. Re-sending a `batchId` returns `duplicate: true` |
-| GET | `/api/trips` | `limit`, `cursor` (the last trip's `startedAt`; anything else is a 400) → `TripListResponseSchema` (each trip has `newRoads`, and `endedNear`, the name of the place nearest its last point, or null) |
+| POST | `/api/tracks/batches` | `TrackBatchRequestSchema`: up to 5,000 points, `ts` in epoch ms; a navigated trip's batches may carry `destinationName`, where it is going. Re-sending a `batchId` returns `duplicate: true`. A navigated trip, like any other, is only kept once it has gone 100 m |
+| GET | `/api/trips` | `limit`, `cursor` (the last trip's `startedAt`; anything else is a 400) → `TripListResponseSchema` (each trip has `newRoads`; `endedNear`, the name of the place nearest its last point, or null; and `destinationName`, where a trip with directions was going, or null) |
 | GET | `/api/trips/:id` | `TripDetailSchema`, with the recorded points; `matchedGeometry`, the trip snapped to the roads it took (absent where it couldn't be matched); and `newRoadLines`, the stretches of the roads this trip was the first to travel (roads whose first visit is the trip's start); and `endedNear` as in the list |
 | PATCH | `/api/trips/:id` | `{ mode }`, which re-runs coverage |
 | DELETE | `/api/trips/:id` | Soft delete; an admin can restore it for 7 days |

@@ -7,7 +7,7 @@ import { FlatList, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../../src/lib/api';
 import { useAppConfig } from '../../src/lib/appConfig';
-import { formatClock, formatDateTime, formatDistanceShort, formatDuration, tripSeconds } from '../../src/lib/format';
+import { formatDistanceShort, formatDuration, tripSeconds, tripTo, tripWhen } from '../../src/lib/format';
 import { CONTENT_MAX_WIDTH } from '../../src/lib/layout';
 import { radius, space, useTheme } from '../../src/lib/theme';
 import { Empty, NewBadge, Notice, Press, Small, Title } from '../../src/ui/kit';
@@ -58,8 +58,8 @@ export default function Trips() {
             </View>
             <View style={{ flex: 1, gap: 3 }}>
               {/* When it started and finished (P36), and where it went (P33). */}
-              <Text style={{ color: t.text, fontWeight: '600' }}>{`${formatDateTime(item.startedAt)}–${formatClock(Date.parse(item.endedAt))} · ${formatDistanceShort(item.distanceM)}`}</Text>
-              {item.endedNear ? <Small>{`To ${item.endedNear}`}</Small> : null}
+              <Text style={{ color: t.text, fontWeight: '600' }}>{`${tripWhen(item)} · ${formatDistanceShort(item.distanceM)}`}</Text>
+              {tripTo(item) ? <Small>{`To ${tripTo(item)}`}</Small> : null}
               <View style={{ flexDirection: 'row', gap: space[2], alignItems: 'center' }}>
                 <Small>{`${item.mode === 'car' ? 'Drive' : 'Walk'}${item.source === 'navigation' ? ', with directions' : ''} · ${formatDuration(tripSeconds(item))}`}</Small>
                 {item.newRoads > 0 ? <NewBadge text={`${item.newRoads} new road${item.newRoads === 1 ? '' : 's'}`} /> : null}

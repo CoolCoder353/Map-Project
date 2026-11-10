@@ -277,6 +277,25 @@ describe('Trips', () => {
     expect(fake.router.push).toHaveBeenCalledWith('/trip/t-1');
   });
 
+  it('names a trip by where its directions led, and gives one time for a trip within a minute (R2-P5, R2-P6)', async () => {
+    fake.api.on({
+      'GET api/trips': () => ({
+        items: [
+          trip({ source: 'navigation', destinationName: 'Woolworths', endedNear: '27 Whitby Place', startedAt: '2026-09-20T08:00:05.000Z', endedAt: '2026-09-20T08:00:40.000Z' }),
+          trip({ id: 't-2', endedNear: 'Coot-tha Place' }),
+        ],
+        nextCursor: null,
+      }),
+    });
+    await renderScreen(<Trips />);
+    expect(await screen.findByText('To Woolworths')).toBeOnTheScreen();
+    expect(screen.queryByText('To 27 Whitby Place')).toBeNull();
+    expect(screen.getByText('To Coot-tha Place')).toBeOnTheScreen();
+    const when = screen.getAllByText(/20 Sept/).map((n) => String(n.props.children));
+    expect(when[0]).not.toMatch(/–/);
+    expect(when[1]).toMatch(/–/);
+  });
+
   it('shows trips recorded since, on coming back to the list', async () => {
     let items = [trip()];
     fake.api.on({ 'GET api/trips': () => ({ items, nextCursor: null }) });

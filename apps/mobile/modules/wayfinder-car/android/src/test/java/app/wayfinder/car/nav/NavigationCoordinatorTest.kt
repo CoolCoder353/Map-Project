@@ -297,10 +297,16 @@ class NavigationCoordinatorTest {
     val c = NavigationCoordinator(carContext, api, RecordingScenes(), ManeuverIcons(carContext), appShowing = { showing })
     c.attach()
     api.pushNav(Samples.nav())
-    assertEquals(NotificationManagerCompat.IMPORTANCE_DEFAULT, extender(posted()!!).importance)
+    // Even a quiet first post came up as a card over the directions (R2-C2): none is made yet.
+    assertNull(posted())
     showing = false
     api.pushNav(Samples.nav().copy(cue = "Turn right onto High St", maneuver = CarManeuver("right", null)))
     assertEquals("Wayfinder isn’t on the car’s screen: a heads-up", NotificationManagerCompat.IMPORTANCE_HIGH, extender(posted()!!).importance)
+    // Back on the directions, later turns update it quietly.
+    showing = true
+    api.pushNav(Samples.nav().copy(cue = "Turn left onto Low St", maneuver = CarManeuver("left", null)))
+    assertEquals("Turn left onto Low St", posted()!!.extras.getString(Notification.EXTRA_TITLE))
+    assertEquals(NotificationManagerCompat.IMPORTANCE_DEFAULT, extender(posted()!!).importance)
   }
 
   /** The phone has its own turn banner; a heads-up for every turn hid it (P16), and the lock screen hid the turn (P90). */

@@ -7,7 +7,7 @@ import { useEffect, useRef } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, errorMessage } from '../../src/lib/api';
-import { formatClock, formatDateTime, formatDistanceShort, formatTripPace } from '../../src/lib/format';
+import { formatDistanceShort, formatTripPace, tripTo, tripWhen } from '../../src/lib/format';
 import { goBack } from '../../src/lib/goBack';
 import { splitStyles, useLayout } from '../../src/lib/layout';
 import { space, useTheme } from '../../src/lib/theme';
@@ -71,9 +71,9 @@ export default function Trip() {
         {trip.data ? (
           <>
             <Title>{trip.data.mode === 'car' ? 'Drive' : 'Walk'} · {formatDistanceShort(trip.data.distanceM)}</Title>
-            <Body muted>{`${formatDateTime(trip.data.startedAt)} – ${formatClock(Date.parse(trip.data.endedAt))}`}</Body>
+            <Body muted>{tripWhen(trip.data, ' – ')}</Body>
             <Body>{formatTripPace(trip.data)}</Body>
-            {trip.data.endedNear ? <Body>{`To ${trip.data.endedNear}`}</Body> : null}
+            {tripTo(trip.data) ? <Body>{`To ${tripTo(trip.data)}`}</Body> : null}
             {trip.data.newRoads > 0 ? <NewBadge text={`${trip.data.newRoads} road${trip.data.newRoads === 1 ? '' : 's'} you’d never travelled before`} /> : null}
             <Small>{newRoads ? 'The line is where your phone recorded you going; new roads are picked out in green.' : 'The line is where your phone recorded you going.'}</Small>
             <View style={{ gap: space[2], marginTop: space[2] }}>

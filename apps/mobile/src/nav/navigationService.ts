@@ -54,7 +54,7 @@ export const TURNAROUND_GRACE_MS = 60_000;
 export const TURNAROUND_MOVED_M = 150;
 /** How long to wait for the first fix before saying the phone can't find where it is. */
 export const FIRST_FIX_WAIT_MS = 30_000;
-/** The car's location is followed once the phone's has been silent this long. */
+/** While the car has given a location this recently, the phone's own fixes are set aside. */
 export const CAR_FIX_AFTER_MS = 5_000;
 export type FixSource = 'watch' | 'service' | 'simulation' | 'car';
 /** How far apart points of the road already driven are kept, in metres. */
@@ -132,7 +132,7 @@ export interface NavigationService {
   skipDetour(): void;
   /**
    * `source` 'simulation' is the test drive's own fixes: the only ones a test drive follows. 'car' is
-   * the car's own location, followed only while the phone's has been silent for [CAR_FIX_AFTER_MS].
+   * the car's own location: while it comes (within [CAR_FIX_AFTER_MS]), the phone's are set aside.
    */
   handleFix(loc: Location.LocationObject, source?: FixSource): void;
   getSnapshot(): NavSnapshot;
@@ -256,7 +256,7 @@ export function createNavigationService(): NavigationService {
   /** The trip being followed is a test drive: nothing about it is saved. */
   let simulated = false;
   /** When the phone last gave a fix, by this clock. */
-  let lastPhoneFixAt = -Infinity;
+  let lastCarFixAt = -Infinity;
   /** When the destination was reached; the trip ends by itself [ARRIVED_END_MS] later. */
   let arrivedAt: number | null = null;
   /** When a new route that starts by turning around was given (see [TURNAROUND_GRACE_MS]). */
@@ -410,11 +410,12 @@ export function createNavigationService(): NavigationService {
     if (simulated !== (source === 'simulation')) return;
     const { longitude: lon, latitude: lat } = loc.coords;
     if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
-    // The car's location is for when the phone can't say where it is (locked and in a pocket, or
-    // GPS not started from the background); the phone's own fixes win while they come.
-    if (source === 'car') {
-      if (Date.now() - lastPhoneFixAt < CAR_FIX_AFTER_MS) return;
-    } else if (source !== 'simulation') lastPhoneFixAt = Date.now();
+    // In a car, the car's location wins while it comes, as on the car's own map (IdleFixes): its
+    // antenna is outside the cabin, and it keeps coming with the phone locked in a pocket. Two
+    // sources taken turn about would make the position jitter between them. The phone's fixes are
+    // followed once the car's stop (no car, or one with no location of its own) (R2-H1).
+    if (source === 'car') lastCarFixAt = Date.now();
+    else if (source !== 'simulation' && Date.now() - lastCarFixAt < CAR_FIX_AFTER_MS) return;
     // The location service and the GPS watch deliver the same fixes; follow each once. Only the
     // service's are compared with every fix so far: the watch alone may repeat a timestamp.
     if (loc.timestamp <= (source === 'service' || source === 'car' ? lastFixTs : lastServiceFixTs)) return;
@@ -477,6 +478,7 @@ export function createNavigationService(): NavigationService {
             source: 'navigation',
             mode: nav.mode,
             sessionId,
+            destination: snap.destinationName,
           },
         ],
         account,
@@ -576,7 +578,7 @@ export function createNavigationService(): NavigationService {
     startedAt = Date.now();
     lastFixTs = -Infinity;
     lastServiceFixTs = -Infinity;
-    lastPhoneFixAt = -Infinity;
+    lastCarFixAt = -Infinity;
     lastRecorded = null;
     previousFix = null;
     rerouteFailures = 0;

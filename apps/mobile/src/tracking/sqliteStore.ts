@@ -14,6 +14,7 @@ interface Row {
   session_id: string | null;
   batch_id: string | null;
   account_id: string | null;
+  destination?: string | null;
 }
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
@@ -35,6 +36,8 @@ function db() {
     // keep a null account and go up as whoever is signed in when they're sent.
     const v = await d.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
     if ((v?.user_version ?? 0) < 1) await d.execAsync('ALTER TABLE queued_points ADD COLUMN account_id TEXT; PRAGMA user_version = 1;');
+    // Version 2: where a navigated trip is going, sent with its batches (R2-P5).
+    if ((v?.user_version ?? 0) < 2) await d.execAsync('ALTER TABLE queued_points ADD COLUMN destination TEXT; PRAGMA user_version = 2;');
     return d;
   })().catch((err: unknown) => {
     // Let the next call try again rather than failing for as long as the app runs.
@@ -54,6 +57,7 @@ const toPoint = (r: Row): QueuedPoint => ({
   source: r.source,
   mode: r.mode,
   sessionId: r.session_id,
+  ...(r.destination ? { destination: r.destination } : {}),
 });
 
 const MINE = '(account_id = ? OR account_id IS NULL)';
@@ -66,8 +70,8 @@ export const sqliteQueueStore: QueueStore = {
     await d.withTransactionAsync(async () => {
       for (const p of points) {
         await d.runAsync(
-          'INSERT INTO queued_points (ts, lon, lat, accuracy_m, speed_mps, heading_deg, source, mode, session_id, account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          p.ts, p.lon, p.lat, p.accuracyM, p.speedMps, p.headingDeg, p.source, p.mode, p.sessionId, accountId,
+          'INSERT INTO queued_points (ts, lon, lat, accuracy_m, speed_mps, heading_deg, source, mode, session_id, account_id, destination) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          p.ts, p.lon, p.lat, p.accuracyM, p.speedMps, p.headingDeg, p.source, p.mode, p.sessionId, accountId, p.destination ?? null,
         );
       }
     });

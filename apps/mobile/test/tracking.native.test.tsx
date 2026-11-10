@@ -15,12 +15,13 @@ const mockDb: {
   version: 0,
   execAsync: jest.fn(async (sql: string) => {
     if (sql.includes('user_version = 1')) mockDb.version = 1;
+    if (sql.includes('user_version = 2')) mockDb.version = 2;
   }),
   withTransactionAsync: jest.fn(async (fn: () => Promise<void>) => fn()),
   runAsync: jest.fn(async (sql: string, ...args: unknown[]) => {
     if (sql.startsWith('INSERT')) {
-      const [ts, lon, lat, accuracy_m, speed_mps, heading_deg, source, mode, session_id, account_id] = args;
-      mockDb.rows.push({ id: mockDb.nextId++, ts, lon, lat, accuracy_m, speed_mps, heading_deg, source, mode, session_id, account_id, batch_id: null });
+      const [ts, lon, lat, accuracy_m, speed_mps, heading_deg, source, mode, session_id, account_id, destination] = args;
+      mockDb.rows.push({ id: mockDb.nextId++, ts, lon, lat, accuracy_m, speed_mps, heading_deg, source, mode, session_id, account_id, destination, batch_id: null });
     } else if (sql.startsWith('UPDATE')) {
       const [id, owner, from, to, account] = args as [string, string, number, number, string];
       for (const r of mockDb.rows) {
@@ -96,7 +97,7 @@ beforeEach(() => {
 
 describe('the on-phone queue', () => {
   it('batches points of one kind together, keeps a claimed batch until it is sent, then removes it', async () => {
-    await sqliteQueueStore.append([point(1), point(2), point(3, { source: 'navigation', mode: 'car', sessionId: 's1' })], 'u1');
+    await sqliteQueueStore.append([point(1), point(2), point(3, { source: 'navigation', mode: 'car', sessionId: 's1', destination: 'Woolworths' })], 'u1');
     await sqliteQueueStore.append([], 'u1');
     expect(await sqliteQueueStore.count()).toBe(3);
     const first = await sqliteQueueStore.claim(10, () => 'b1', 'u1');
@@ -106,7 +107,8 @@ describe('the on-phone queue', () => {
     expect((await sqliteQueueStore.claim(10, () => 'b2', 'u1'))!.batchId).toBe('b1');
     await sqliteQueueStore.complete('b1');
     const next = await sqliteQueueStore.claim(10, () => 'b3', 'u1');
-    expect(next!.points).toEqual([point(3, { source: 'navigation', mode: 'car', sessionId: 's1' })]);
+    // Where the trip was going rides along with its points (R2-P5).
+    expect(next!.points).toEqual([point(3, { source: 'navigation', mode: 'car', sessionId: 's1', destination: 'Woolworths' })]);
     await sqliteQueueStore.complete('b3');
     expect(await sqliteQueueStore.claim(10, () => 'b4', 'u1')).toBeNull();
   });
@@ -115,7 +117,7 @@ describe('the on-phone queue', () => {
     // A point from before the upgrade has no account.
     mockDb.rows.push({ id: mockDb.nextId++, ts: 1, lon: 153, lat: -27, accuracy_m: null, speed_mps: null, heading_deg: null, source: 'background', mode: null, session_id: null, account_id: null, batch_id: null });
     await sqliteQueueStore.append([point(2)], 'test-account');
-    expect(mockDb.version).toBe(1);
+    expect(mockDb.version).toBe(2);
     expect(await sqliteQueueStore.count('owner')).toBe(1); // only the old, unowned one
     const forOwner = await sqliteQueueStore.claim(10, () => 'b-owner', 'owner');
     expect(forOwner!.points).toHaveLength(1);

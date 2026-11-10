@@ -55,9 +55,11 @@ const USAGE = `Usage: pnpm device <command>
   gps reset
   drive <route.geojson|.gpx> [--speed <km/h>]
   car day|night | car key ${CAR_KEYS.join('|')} | car restrict on|off
+  car focus | car scroll up|down [n] | car select
+                               the rotary controller: focus into the app's list, move, press
   logs                         app and car logs since the last look
   install <apk>                emulator only
-  down                         sign the test account out and undo everything`;
+  down [--stay-signed-in]      undo everything and sign the test account out (unless asked not to)`;
 
 class Refused extends Error {}
 
@@ -259,7 +261,7 @@ async function tap(ctx: Ctx, args: string[]) {
  * Moves the emulator's GPS and the head unit's. A real phone's own GPS is never faked: Google Play
  * services' location reads the replaced "gps" provider, so every other app on the phone (Life360,
  * Home Assistant) would see the fake position and share it. On a phone, Wayfinder follows the
- * car's position while the phone's is quiet, which is what a drive needs.
+ * car's position while it comes, which is what a drive needs.
  */
 const PHONE_GPS_REFUSED =
   'A real phone’s own GPS is never faked: every other app on it (location sharing, home automation) would see the fake position too. The car’s position moves instead; Wayfinder follows it.';
@@ -302,7 +304,7 @@ async function signOut(ctx: Ctx) {
   ctx.deps.log(`Signed out of ${ctx.config.testAccountEmail}.`);
 }
 
-async function down(ctx: Ctx): Promise<number> {
+async function down(ctx: Ctx, staySignedIn = false): Promise<number> {
   const s = ctx.session;
   if (!s) {
     ctx.deps.log('No session open.');
@@ -317,7 +319,7 @@ async function down(ctx: Ctx): Promise<number> {
       problems.push(`${what}: ${(e as Error).message}`);
     }
   };
-  await step('sign out', () => signOut(ctx));
+  if (!staySignedIn) await step('sign out', () => signOut(ctx));
   await step('test location', () => resetGps(ctx));
   if (s.forward) await step('port forward', () => adb(ctx, { kind: 'forward', add: false }));
   if (s.dhu) {
@@ -344,19 +346,15 @@ async function drive(ctx: Ctx, file: string, speedKmh: number): Promise<number> 
   const fixes = replay(readRoute(routeText, file), speedKmh);
   let stopped = false;
   ctx.deps.onInterrupt(() => void (stopped = true));
-  try {
-    for (const f of fixes) {
-      if (stopped) break;
-      await setPosition(ctx, f, true, true);
-      await ctx.deps.sleep(1000);
-    }
-  } catch (e) {
-    await down(ctx);
-    throw e;
+  for (const f of fixes) {
+    if (stopped) break;
+    await setPosition(ctx, f, true, true);
+    await ctx.deps.sleep(1000);
   }
   if (stopped) {
-    await down(ctx);
-    ctx.deps.log('Stopped; everything undone as by pnpm device down.');
+    // A drive changes only the car's position (and the emulator's): nothing to undo, and the test
+    // account stays signed in, which only its owner can do again (R2-H4).
+    ctx.deps.log('Stopped. The car stays where the drive left it; the session is still open.');
     return 130;
   }
   ctx.deps.log(`Drove ${fixes.length} fixes (${Math.round(fixes.at(-1)!.atS / 60)} min at ${speedKmh} km/h).`);
@@ -378,6 +376,7 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
         emulator: { type: 'boolean', default: false },
         out: { type: 'string' },
         speed: { type: 'string', default: '50' },
+        'stay-signed-in': { type: 'boolean', default: false },
       },
     });
     const values = parsed.values;
@@ -471,6 +470,10 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
           for (let i = 0; i < times; i++) await deps.sendDhu(dhu.fifo, dhuCommand.rotate(arg === 'down'));
           return 0;
         }
+        if (what === 'focus') {
+          await deps.sendDhu(dhu.fifo, dhuCommand.focus());
+          return 0;
+        }
         if (what === 'select') {
           await deps.sendDhu(dhu.fifo, dhuCommand.select());
           return 0;
@@ -481,7 +484,7 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
           : what === 'key' && (CAR_KEYS as readonly string[]).includes(arg ?? '') ? dhuCommand.key(arg as CarKey)
           : what === 'restrict' && (arg === 'on' || arg === 'off') ? dhuCommand.restrict(arg === 'on')
           : null;
-        if (!line) throw new Refused(`car day|night | car key ${CAR_KEYS.join('|')} | car restrict on|off | car scroll up|down [n] | car select`);
+        if (!line) throw new Refused(`car day|night | car key ${CAR_KEYS.join('|')} | car restrict on|off | car focus | car scroll up|down [n] | car select`);
         await deps.sendDhu(dhu.fifo, line);
         return 0;
       }
@@ -499,7 +502,7 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
         await adb(ctx, { kind: 'install', apk: args[0] ?? '' });
         return 0;
       case 'down':
-        return await down(ctx);
+        return await down(ctx, values['stay-signed-in'] === true);
       default:
         deps.log(USAGE);
         return command ? 1 : 0;

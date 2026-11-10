@@ -155,15 +155,15 @@ On the first phone run USB dropped every few seconds with Android Auto installed
 | `up [--car] [--window] [--emulator]` | Checks Wayfinder is signed in to the test account (closing the notification shade, and waiting for Settings to show it); `--car` starts the head unit (`--window` to watch it), pauses any music Android Auto starts and puts Wayfinder back in front. A session left by an `up` that stopped, or by a restart, is picked up, not refused |
 | `shot phone\|car` | Screenshot to `.harness/shots/`; prints the path |
 | `ui` | What's on the phone's screen, and where to tap it |
-| `tap <text>`, `tap <x> <y>`, `tap car <x> <y>` | Tap by visible text or position. Car positions are in the `shot car` picture (800×480); the head unit's own grid is 1.16 times that (`carTapScale` in `.harness/config.json` for another head unit) |
+| `tap <text>`, `tap <x> <y>`, `tap car <x> <y>` | Tap by visible text or position. Car positions are in the `shot car` picture (800×480); with the rotary controller on, the head unit's own grid is the same (`carTapScale` in `.harness/config.json` for a head unit that differs; a run without the controller measured 1.16) |
 | `type <text>`, `key back\|home\|enter`, `swipe x1 y1 x2 y2` | Text and keys on the phone |
-| `gps <lon> <lat> [--car]`, `gps reset` | Move the car (and the emulator's GPS) (`[lon, lat]`, as everywhere). **A real phone's own GPS is never faked**: Play services' location reads a faked provider, so every other app on the phone (location sharing, home automation) would see the fake position. Wayfinder follows the car's position while the phone's is quiet |
+| `gps <lon> <lat> [--car]`, `gps reset` | Move the car (and the emulator's GPS) (`[lon, lat]`, as everywhere). **A real phone's own GPS is never faked**: Play services' location reads a faked provider, so every other app on the phone (location sharing, home automation) would see the fake position. Wayfinder follows the car's position while it comes, the phone's otherwise |
 | `drive <route.geojson\|.gpx> [--speed 50]` | Replay a route a fix a second through the head unit (needs `up --car` on a phone); `scripts/device/routes/` has a rough one from the CBD to Mt Coot-tha |
 | `car day\|night`, `car key home\|back\|search\|navigation`, `car restrict on\|off` | The head unit's own controls |
-| `car scroll up\|down [n]`, `car select` | The rotary controller: each turn moves the car's focus one row and scrolls the list (the console has no swipe), then `select` presses the row it's on |
+| `car focus`, `car scroll up\|down [n]`, `car select` | The rotary controller. Its focus starts in the rail (mic, layout, app icons): `focus` moves it into the app's list. Then each turn moves one row and scrolls the list (the console has no swipe), and `select` presses the row it's on |
 | `logs` | App and car logs since the last look. Each spoken direction is logged as `said: …` (or `not said …` when another app has the audio), for a PC with no sound card |
 | `install <apk>` | Emulator only |
-| `down` | Sign the test account out, turn the test location off, stop the head unit |
+| `down [--stay-signed-in]` | Stop the head unit, turn the test location off, and sign the test account out unless `--stay-signed-in`. Only the phone's owner can sign it back in, so to restart the head unit run `up --car` again instead |
 
 What it won't do, whatever it's asked:
 
@@ -182,7 +182,7 @@ What it won't do, whatever it's asked:
 - Change anything in `/admin`: Claude looks there, and asks before changing anything on the
   testers' server.
 
-`down` (and Ctrl-C during `drive`) undoes the phone changes. To undo them by hand (the test
+`down` undoes the phone changes. Ctrl-C during `drive` only stops the drive. To undo them by hand (the test
 provider only after an older harness, which faked the phone's GPS):
 `adb shell cmd location providers remove-test-provider gps`,
 `adb shell appops set com.android.shell android:mock_location deny`, `adb forward --remove tcp:5277`,

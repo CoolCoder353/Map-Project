@@ -42,9 +42,9 @@ export async function ingestBatch(
 ): Promise<{ accepted: number; duplicate: boolean }> {
   const accepted = await withTransaction(db, async (tx) => {
     const inserted = await tx.query(
-      `INSERT INTO track_batches (batch_id, user_id, source, mode, navigation_session_id, point_count)
-       VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (batch_id) DO NOTHING`,
-      [req.batchId, userId, req.source, req.mode ?? null, req.navigationSessionId ?? null, req.points.length],
+      `INSERT INTO track_batches (batch_id, user_id, source, mode, navigation_session_id, point_count, destination_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (batch_id) DO NOTHING`,
+      [req.batchId, userId, req.source, req.mode ?? null, req.navigationSessionId ?? null, req.points.length, (req.navigationSessionId && req.destinationName) || null],
     );
     if (inserted.rowCount === 0) return null;
     await tx.query(
@@ -236,7 +236,10 @@ export async function processUserTracks(db: Db, userId: string): Promise<{ trips
         const newPts = seg.filter((p): p is IdPoint & { id: string } => p.id !== null);
         if (newPts.length === 0) continue;
         const lengthM = lineLengthM(toGeometry(seg));
-        if (!continues && (seg.length < 2 || (!isNav && lengthM < MIN_TRIP_M))) continue;
+        // A navigated trip too is only kept once it has gone somewhere: one ended where it started
+        // was never a trip, and GPS wander indoors mustn't credit roads (R2-P3, R2-P4). Its points
+        // wait for the rest of the trip, and are dropped once it is settled short.
+        if (!continues && (seg.length < 2 || lengthM < MIN_TRIP_M)) continue;
 
         const mode: Mode = continues ? existing!.mode : (first.mode ?? inferMode(seg));
         let tripId: string;
@@ -254,8 +257,11 @@ export async function processUserTracks(db: Db, userId: string): Promise<{ trips
         } else {
           tripId = (
             await tx.query<{ id: string }>(
-              `INSERT INTO trips (user_id, mode, source, navigation_session_id, started_at, ended_at, distance_m, point_count, geometry)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+              `INSERT INTO trips (user_id, mode, source, navigation_session_id, started_at, ended_at, distance_m, point_count, geometry, destination_name)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+                       (SELECT destination_name FROM track_batches
+                        WHERE user_id = $1 AND navigation_session_id = $4 AND destination_name IS NOT NULL LIMIT 1))
+               RETURNING id`,
               [
                 userId,
                 mode,
@@ -288,7 +294,7 @@ export async function processUserTracks(db: Db, userId: string): Promise<{ trips
       // Keep the tail of an in-progress background trip (a rest that may be a red light, or a
       // movement still too short to count): the next batch may join it.
       const recent = new Set(
-        settled ? [] : rows.filter((r) => r.ts.getTime() > newest - TRIP_GAP_MS && !r.navigation_session_id && !discard.has(r.id)).map((r) => r.id),
+        settled ? [] : rows.filter((r) => r.ts.getTime() > newest - TRIP_GAP_MS && !discard.has(r.id)).map((r) => r.id),
       );
       const toDelete = leftover.filter((id) => !recent.has(id));
       if (toDelete.length) await tx.query('DELETE FROM track_points WHERE id = ANY($1::bigint[])', [toDelete]);
@@ -353,6 +359,7 @@ interface TripListRow {
   distance_m: number;
   new_roads: number;
   last_point?: LngLat | null;
+  destination_name: string | null;
 }
 
 const toSummary = (r: TripListRow): TripSummary => ({
@@ -363,6 +370,7 @@ const toSummary = (r: TripListRow): TripSummary => ({
   endedAt: r.ended_at.toISOString(),
   distanceM: r.distance_m,
   newRoads: r.new_roads,
+  destinationName: r.destination_name,
 });
 
 export async function listTrips(
@@ -376,7 +384,7 @@ export async function listTrips(
   if (before && Number.isNaN(before.getTime())) throw badRequest('Invalid cursor');
   const rows = (
     await db.query<TripListRow>(
-      `SELECT id, mode, source, started_at, ended_at, distance_m, new_roads, geometry->-1 AS last_point FROM trips
+      `SELECT id, mode, source, started_at, ended_at, distance_m, new_roads, destination_name, geometry->-1 AS last_point FROM trips
        WHERE user_id = $1 AND deleted_at IS NULL AND ($2::timestamptz IS NULL OR started_at < $2)
        ORDER BY started_at DESC LIMIT $3`,
       [userId, before, limit + 1],
@@ -397,7 +405,7 @@ export async function getTrip(db: DbClient, userId: string, tripId: string, incl
   if (!isUuid(tripId) || !isUuid(userId)) throw notFound('Trip not found');
   const trip = (
     await db.query<TripListRow & { geometry: LngLat[]; matched_geometry: LngLat[] | null }>(
-      `SELECT id, mode, source, started_at, ended_at, distance_m, new_roads, geometry, matched_geometry FROM trips
+      `SELECT id, mode, source, started_at, ended_at, distance_m, new_roads, destination_name, geometry, matched_geometry FROM trips
        WHERE id = $1 AND user_id = $2 AND ($3 OR deleted_at IS NULL)`,
       [tripId, userId, includeDeleted],
     )

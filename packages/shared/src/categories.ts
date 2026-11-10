@@ -32,6 +32,7 @@ const CATEGORY_WORDS: Record<string, readonly string[]> = {
   'tourism=motel': ['motel'],
   'tourism=information': ['visitor centre', 'information centre'],
   'shop=car_repair': ['mechanic'],
+  'leisure=fitness_centre': ['gym', 'fitness centre', 'fitness'],
 };
 
 const WORD_TO_TYPES = new Map<string, string[]>();
@@ -65,6 +66,7 @@ const TYPE_LABELS: Record<string, string> = {
   fast_food: 'Takeaway',
   toilets: 'Toilets',
   pitch: 'Sports field',
+  fitness_centre: 'Gym',
   camp_site: 'Campsite',
 };
 

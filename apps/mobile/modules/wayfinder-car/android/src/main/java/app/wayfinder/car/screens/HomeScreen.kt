@@ -155,13 +155,21 @@ class HomeScreen(
     val home = saved.firstOrNull { it.home || it.name.trim().equals("home", ignoreCase = true) }
     val others = saved.filter { it !== home }
     return listOfNotNull(
-      home?.let { h -> row(h.name, h.detail, browsable = true, icon = icon(R.drawable.wf_home)) { screenManager.push(RoutePreviewScreen.forPlace(carContext, api, map, h)) } },
+      home?.let { h -> row(h.name, shortDetail(h.detail), browsable = true, icon = icon(R.drawable.wf_home)) { screenManager.push(RoutePreviewScreen.forPlace(carContext, api, map, h)) } },
       others.takeIf { it.isNotEmpty() }?.let { row("Saved places", browsable = true, icon = icon(R.drawable.wf_bookmark)) { screenManager.push(PickScreens.saved(carContext, api, map, saved)) } },
     )
   }
 
   companion object {
     const val REFRESH_MS = 30_000L
+
+    /**
+     * Home's line, kept to one: how far and what it is, without the type, suburb and postcode
+     * ("4.3 km away · Bunnings Warehouse"). Parked, the whole of it ran to five lines and pushed
+     * the rows below off the screen (R2-C4).
+     */
+    fun shortDetail(detail: String): String =
+      detail.split(" · ").take(2).joinToString(" · ") { it.substringBefore(", ") }
   }
 
   private fun message(text: String): Template =

@@ -66,6 +66,18 @@ describe('tracking queue', () => {
     expect(req.points[0]).toMatchObject({ speedMps: null, headingDeg: 40, accuracyM: 10_000 });
   });
 
+  it('sends where a navigated trip is going, and nothing of the kind for background points (R2-P5)', async () => {
+    const session = '11111111-1111-4111-8111-111111111111';
+    const nav = toBatchRequest({ batchId: ids(), points: [pt(1, { source: 'navigation', mode: 'car', sessionId: session, destination: ' Woolworths ' })] });
+    expect(nav.destinationName).toBe('Woolworths');
+    expect(TrackBatchRequestSchema.safeParse(nav).success).toBe(true);
+    const store = new MemoryQueueStore();
+    await store.append([pt(2, { source: 'navigation', mode: 'car', sessionId: session, destination: 'Gym' })], 'u1');
+    expect((await store.claim(10, ids, 'u1'))!.points[0]!.destination).toBe('Gym');
+    expect(toBatchRequest({ batchId: ids(), points: [pt(3, { destination: 'Gym' })] }).destinationName).toBeUndefined();
+    expect(toBatchRequest({ batchId: ids(), points: [pt(4, { source: 'navigation', sessionId: session, destination: '  ' })] }).destinationName).toBeUndefined();
+  });
+
   it('throws away a batch the server will never accept, so later points still upload', async () => {
     const store = new MemoryQueueStore();
     await store.append([pt(1), pt(2)], 'u1');

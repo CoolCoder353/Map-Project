@@ -36,9 +36,10 @@ off this list when it ships, and record it in [verification.md](verification.md)
   5. Record the run in verification.md (date, phone, what passed), tick only the Android Auto
      items actually seen working, then work through the rest of that checklist with the harness.
 - **Second phone run done (2026-11-10, 0.7.0):** see the "Second run" section of
-  [device-test-2026-11-09.md](device-test-2026-11-09.md). Next for the harness: make `drive` move
-  Wayfinder on a real phone (R2-H1), a `dpad up` nudge before `car scroll` (R2-H3), and re-measure
-  `carTapScale` (R2-H2).
+  [device-test-2026-11-09.md](device-test-2026-11-09.md). Its findings are fixed in code
+  (see that section); the next run should check by eye that a replayed drive now moves the phone's
+  trip (`pnpm device logs` says "car location: following the car's position") and that no turn
+  card covers the car's directions at a trip's start.
 - **First phone run done (2026-11-09):** see [device-test-2026-11-09.md](device-test-2026-11-09.md).
   It worked over wireless debugging (`adb pair`, then register the `ip:port` serial); USB dropped
   every few seconds. Fixed since (2026-11-10): H2–H9, H12–H16 (it no longer fakes a phone's own

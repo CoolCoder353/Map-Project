@@ -90,7 +90,7 @@ it('keeps the screen awake, follows GPS, speaks, and records the trip as navigat
   expect(result.current.state).toMatchObject({ remainingDistanceM: 900 });
   expect(Speech.speak).toHaveBeenCalledWith('In 200 metres, turn left', expect.objectContaining({ language: 'en-AU' }));
   expect(mockAppend.mock.calls[0]![0]).toEqual([
-    { ts: 1000, lon: 153, lat: -27.4, accuracyM: 5, speedMps: 10, headingDeg: 90, source: 'navigation', mode: 'foot', sessionId: 'session-1' },
+    { ts: 1000, lon: 153, lat: -27.4, accuracyM: 5, speedMps: 10, headingDeg: 90, source: 'navigation', mode: 'foot', sessionId: 'session-1', destination: null },
   ]);
   // Leaving the screen lets the screen sleep but keeps the trip (C63); End stops it.
   await unmount();

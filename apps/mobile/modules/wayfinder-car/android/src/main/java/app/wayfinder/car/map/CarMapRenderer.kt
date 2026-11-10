@@ -317,10 +317,8 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
   private fun applyCamera() {
     val m = map ?: return
     if (visible.isEmpty) return
-    val left = visible.left.toDouble() + speedColumn()
-    val top = visible.top.toDouble()
-    val right = (surfaceSize.width() - visible.right).toDouble().coerceAtLeast(0.0)
-    val bottom = (surfaceSize.height() - visible.bottom).toDouble().coerceAtLeast(0.0)
+    val pad = SceneLayout.padding(surfaceSize.width(), surfaceSize.height(), visible.left, visible.top, visible.right, visible.bottom, speedColumn())
+    val (left, top, right, bottom) = pad.toList()
     val spec = SceneLayout.camera(scene, LastPosition.at)
     val move = { update: CameraUpdate ->
       val ms = SceneLayout.moveMs(spec)
@@ -343,14 +341,14 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
       is CameraSpec.Fit -> {
         val distinct = spec.points.distinct()
         if (distinct.size == 1) {
-          move(flat(distinct[0], 15.0))
+          move(flat(distinct[0], 15.0, pad))
         } else {
           // Flat and north up, whatever the drive before left the camera at (C27).
           val bounds = LatLngBounds.Builder().includes(distinct.map { it.latLng() }).build()
           move(CameraUpdateFactory.newLatLngBounds(bounds, 0.0, 0.0, (left + 40).toInt(), (top + 40).toInt(), (right + 40).toInt(), (bottom + 40).toInt()))
         }
       }
-      is CameraSpec.Center -> move(flat(spec.target, spec.zoom))
+      is CameraSpec.Center -> move(flat(spec.target, spec.zoom, pad))
       CameraSpec.Keep -> Unit
     }
   }
@@ -358,8 +356,8 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
   private fun LngLat.latLng() = LatLng(lat, lon)
 
   /** Looking straight down, north up: every map but the one following the car (C5, C24, C27). */
-  private fun flat(at: LngLat, zoom: Double) =
-    CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(at.latLng()).zoom(zoom).tilt(0.0).bearing(0.0).padding(0.0, 0.0, 0.0, 0.0).build())
+  private fun flat(at: LngLat, zoom: Double, pad: DoubleArray) =
+    CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(at.latLng()).zoom(zoom).tilt(0.0).bearing(0.0).padding(pad[0], pad[1], pad[2], pad[3]).build())
 
   private companion object {
     const val SELECTED = "wf-route-selected"

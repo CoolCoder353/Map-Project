@@ -11,6 +11,8 @@ export interface QueuedPoint {
   source: TrackSource;
   mode: Mode | null;
   sessionId: string | null;
+  /** Where a navigated trip is going ("Woolworths"), for Trips to name it (R2-P5). */
+  destination?: string | null;
 }
 
 export interface ClaimedBatch {
@@ -47,6 +49,7 @@ export function toBatchRequest(batch: ClaimedBatch): TrackBatchRequest {
     source: first.source,
     ...(first.mode ? { mode: first.mode } : {}),
     ...(first.sessionId ? { navigationSessionId: first.sessionId } : {}),
+    ...(first.sessionId && first.destination?.trim() ? { destinationName: first.destination.trim().slice(0, 200) } : {}),
     points: batch.points.filter(usable).map((p) => ({
       ts: Math.round(p.ts),
       lon: p.lon,
@@ -173,5 +176,6 @@ function strip<T extends QueuedPoint>(r: T): QueuedPoint {
     source: r.source,
     mode: r.mode,
     sessionId: r.sessionId,
+    ...(r.destination ? { destination: r.destination } : {}),
   };
 }

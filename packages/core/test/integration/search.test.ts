@@ -112,6 +112,15 @@ describe('place search', () => {
     expect((await places.searchPlaces(t.db, '1 George St Brisbane', [153.26, -27.51], 2, friday))[0]!.id).toBe('gs-cbd');
   });
 
+  it('finds a shop by name or brand and the suburb after it, with no comma (R2-P1)', async () => {
+    // Dickson's Woolworths is nearer, but Civic's was asked for.
+    expect((await places.searchPlaces(t.db, 'Woolworths Civic', braddon, 3, friday))[0]!.id).toBe('w2');
+    expect((await places.searchPlaces(t.db, 'woolies civic', braddon, 3, friday))[0]!.id).toBe('w2');
+    expect((await places.searchPlaces(t.db, 'Ampol Dickson', braddon, 3, friday))[0]!.id).toBe('f2');
+    // Words that only look like a suburb change nothing.
+    expect((await places.searchPlaces(t.db, 'Braddon Bakery', braddon, 3, friday))[0]!.name).toBe('Braddon Bakery');
+  });
+
   it('works without an origin (no distances)', async () => {
     const r = await places.searchPlaces(t.db, 'Sydney', null, 3, friday);
     expect(r[0]!.id).toBe('syd');

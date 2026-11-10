@@ -4,7 +4,7 @@ import type { Place } from '@wayfinder/shared/schemas';
 import * as Location from 'expo-location';
 import { LocateFixed, MapPin, Search, UserRound, X } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Text, TextInput, View } from 'react-native';
 import { api, errorMessage } from '../lib/api';
 import { type ContactMatch, findContacts } from '../lib/contacts';
 import { formatDistanceShort } from '../lib/format';
@@ -89,6 +89,8 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
   const Icon = tone === 'search' ? Search : MapPin;
   const iconColor = tone === 'end' ? t.danger : t.text2;
   const choose = (p: ChosenPlace) => {
+    // The keyboard goes with the list, so the routes that follow aren't hidden under it (R2-P2).
+    Keyboard.dismiss();
     setError(null);
     onChange(p);
     setFocused(false);

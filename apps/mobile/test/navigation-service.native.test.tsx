@@ -547,15 +547,19 @@ describe('the car’s own location', () => {
     }
   });
 
-  it('is ignored while the phone’s own fixes keep coming, and taken up when they stop', async () => {
+  it('wins over the phone’s own fixes while it comes, and hands back to them when it stops (R2-H1)', async () => {
     navigation.start(route());
     await waitFor(() => expect(mockOnFix).not.toBeNull());
     mockOnFix!(fix(153, -27.4, 1000));
-    navigation.handleFix(fix(153.001, -27.4, 2000) as never, 'car');
     expect(navigation.getSnapshot().position).toEqual([153, -27.4]);
+    navigation.handleFix(fix(153.001, -27.4, 2000) as never, 'car');
+    expect(navigation.getSnapshot().position).toEqual([153.001, -27.4]);
+    // The phone indoors, still where it was: set aside while the car's keep coming.
+    mockOnFix!(fix(153, -27.4, 2500));
+    expect(navigation.getSnapshot().position).toEqual([153.001, -27.4]);
     ahead = 6_000;
-    navigation.handleFix(fix(153.002, -27.4, 3000) as never, 'car');
-    expect(navigation.getSnapshot().position).toEqual([153.002, -27.4]);
+    mockOnFix!(fix(153.0005, -27.4, 9000));
+    expect(navigation.getSnapshot().position).toEqual([153.0005, -27.4]);
   });
 
   it('is not followed by a test drive', async () => {

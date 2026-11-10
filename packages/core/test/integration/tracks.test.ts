@@ -70,6 +70,18 @@ async function uploadLive(userId: string, points: ReturnType<typeof drive>, matc
   }
 }
 
+/** A batch of a navigated trip, uploaded as it goes. */
+async function uploadNav(userId: string, batch: Omit<Parameters<typeof tracks.ingestBatch>[3], 'batchId'>) {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  try {
+    vi.setSystemTime(batch.points.at(-1)!.ts + 20_000);
+    await tracks.ingestBatch(t.db, queue, userId, { batchId: randomUUID(), ...batch });
+    await runJobs(userId);
+  } finally {
+    vi.useRealTimers();
+  }
+}
+
 const cellCount = async (userId: string) =>
   Number((await t.db.query<{ n: string }>('SELECT count(*) AS n FROM visited_cells WHERE user_id = $1', [userId])).rows[0]!.n);
 
@@ -348,6 +360,36 @@ describe('track ingestion and coverage', () => {
     const { items } = await tracks.listTrips(t.db, u.id, 10);
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ source: 'navigation', mode: 'car' });
+  });
+
+  it('keeps no navigated trip that never went anywhere, and credits it nothing (R2-P3, R2-P4)', async () => {
+    const u = await makeUser(t.db, 'stood-still@example.com');
+    const session = randomUUID();
+    const nav = { source: 'navigation' as const, mode: 'car' as const, navigationSessionId: session, destinationName: 'Woolworths' };
+    // Standing in a house: 11 m of GPS wander.
+    const wander = drive(base, [151.0, -33.9], 90, 0.011, 0.2, 10);
+    await uploadNav(u.id, { ...nav, points: wander });
+    expect((await tracks.listTrips(t.db, u.id, 10)).items).toHaveLength(0);
+    expect(await cellCount(u.id)).toBe(0);
+    // Then it drives off: one trip from the first point, going where it said.
+    const last = wander.at(-1)!;
+    const off = drive(last.ts + 5_000, [last.lon, last.lat], 90, 2, 12);
+    await uploadNav(u.id, { ...nav, points: off });
+    const { items } = await tracks.listTrips(t.db, u.id, 10);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ source: 'navigation', destinationName: 'Woolworths' });
+    expect((await tracks.getTrip(t.db, u.id, items[0]!.id)).points).toHaveLength(wander.length + off.length);
+  });
+
+  it('drops a navigated trip settled short, and names trips without directions by nothing', async () => {
+    const u = await makeUser(t.db, 'short-nav@example.com');
+    await uploadNav(u.id, { source: 'navigation', mode: 'car', navigationSessionId: randomUUID(), points: drive(base, [151.1, -33.9], 0, 0.02, 1) });
+    // Settled: a trip gap has passed since its last point.
+    await tracks.processUserTracks(t.db, u.id);
+    const left = await t.db.query('SELECT count(*)::int AS n FROM track_points WHERE user_id = $1', [u.id]);
+    expect(left.rows[0].n).toBe(0);
+    await uploadLive(u.id, drive(Date.now() - 600_000, [151.2, -33.9], 0, 2, 12));
+    expect((await tracks.listTrips(t.db, u.id, 10)).items[0]!.destinationName).toBeNull();
   });
 
   it('soft-deleting a trip removes its unique cells; restoring brings them back; purge hard-deletes', async () => {

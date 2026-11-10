@@ -119,8 +119,8 @@ describe('tapping and typing', () => {
     const w = world();
     await run(['up', '--car'], w.deps);
     expect(await run(['tap', 'car', '400', '240'], w.deps)).toBe(0);
-    // On the head unit's own tap grid, 1.16 times the screenshot's.
-    expect(w.dhuLines).toContain('tap 464 278');
+    // With the rotary controller on, the head unit's tap grid is the screenshot's (R2-H2).
+    expect(w.dhuLines).toContain('tap 400 240');
     // Off the 800×480 screen: nothing.
     expect(await run(['tap', 'car', '820', '100'], w.deps)).toBe(1);
     w.carLog = 'I WayfinderCar: car screen shown\nI WayfinderCar: car screen hidden\n';
@@ -132,6 +132,9 @@ describe('tapping and typing', () => {
   it('scrolls car lists with the rotary controller and picks the row it reaches', async () => {
     const w = world();
     await run(['up', '--car'], w.deps);
+    // Focus starts in the rail; up moves it into the app's list first (R2-H3).
+    expect(await run(['car', 'focus'], w.deps)).toBe(0);
+    expect(w.dhuLines.at(-1)).toBe('dpad up');
     expect(await run(['car', 'scroll', 'down', '3'], w.deps)).toBe(0);
     expect(w.dhuLines.filter((l) => l === 'dpad rotate right')).toHaveLength(3);
     expect(await run(['car', 'scroll', 'up'], w.deps)).toBe(0);
@@ -195,7 +198,7 @@ describe('location', () => {
     expect(sent(w)).toContain('emu geo fix 153.020000 -27.470000');
   });
 
-  it('replays a drive a fix a second, and cleans everything up when interrupted', async () => {
+  it('replays a drive a fix a second, and stops when interrupted without signing out (R2-H4)', async () => {
     const w = world({ screens: [settings()] });
     w.files.set('/r.geojson', JSON.stringify({ type: 'LineString', coordinates: [[153, -27.5], [153.001, -27.5]] }));
     await run(['up', '--car'], w.deps);
@@ -206,10 +209,11 @@ describe('location', () => {
     expect(w.dhuLines.filter((l) => l.startsWith('location')).at(-1)).toMatch(/ 0\.0 90$/);
 
     w.deps.sleep = async () => w.interrupt();
-    w.screens = [settings(), signIn()];
+    const before = w.calls.length;
     expect(await run(['drive', '/r.geojson'], w.deps)).toBe(130);
-    expect(session(w)).toBeNull();
-    expect(w.dhuLines.at(-1)).toBe('quit');
+    expect(session(w)).not.toBeNull();
+    expect(w.dhuLines.at(-1)).not.toBe('quit');
+    expect(w.calls.slice(before).some((c) => c.join(' ').includes('input tap'))).toBe(false);
   });
 });
 
@@ -231,6 +235,18 @@ describe('down', () => {
     expect(w.dhuLines.at(-1)).toBe('quit');
     expect(session(w)).toBeNull();
     expect(lines.join('\n')).toContain('Signed out of');
+  });
+
+  it('can leave the test account signed in, for the next session (R2-H4)', async () => {
+    const w = world();
+    await run(['up', '--car'], w.deps);
+    w.calls.length = 0;
+    const lines = logged(w);
+    expect(await run(['down', '--stay-signed-in'], w.deps)).toBe(0);
+    expect(sent(w).some((c) => c.includes('input tap'))).toBe(false);
+    expect(w.dhuLines.at(-1)).toBe('quit');
+    expect(session(w)).toBeNull();
+    expect(lines.join('\n')).not.toContain('Signed out of');
   });
 
   it('says plainly when the test account may still be signed in', async () => {
@@ -352,7 +368,7 @@ describe('the rest of the commands', () => {
     expect(sent(emu)).toContain('emu geo fix 153.020000 -27.470000');
   });
 
-  it('says when a route can’t be read, and undoes everything when a drive fails part-way', async () => {
+  it('says when a route can’t be read, and when a drive fails part-way, leaving the session and sign-in alone (R2-H4)', async () => {
     const w = await up();
     expect(await run(['drive', '/missing.geojson'], w.deps)).toBe(1);
     w.files.set('/r.geojson', JSON.stringify({ type: 'LineString', coordinates: [[153, -27.5], [153.001, -27.5]] }));
@@ -365,7 +381,9 @@ describe('the rest of the commands', () => {
     const lines = logged(w);
     expect(await run(['drive', '/r.geojson'], w.deps)).toBe(1);
     expect(lines.join('\n')).toContain('device offline');
-    expect(session(w)).toBeNull();
+    // A drive changes only the car's position: nothing to undo, and only the owner can sign in again.
+    expect(session(w)).not.toBeNull();
+    expect(lines.join('\n')).not.toContain('Signed out of');
   });
 
   it('scrolls Settings to find Sign out, and kills a head unit that won’t quit', async () => {

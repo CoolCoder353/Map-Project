@@ -1,6 +1,7 @@
 /// <reference types="jest" />
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
+import { Keyboard } from 'react-native';
 import { PlaceSearch } from '../src/ui/PlaceSearch';
 
 const mockRequest = jest.fn();
@@ -126,4 +127,12 @@ describe('Your location', () => {
     await fireEvent.press(screen.getByText('Your location'));
     expect(await screen.findByText('Location permission is needed for this.')).toBeOnTheScreen();
   });
+});
+
+it('puts the keyboard away once a place is picked (R2-P2)', async () => {
+  const dismiss = jest.spyOn(Keyboard, 'dismiss');
+  mockRequest.mockResolvedValue({ results: [{ id: 'w', name: 'Woolworths', kind: 'poi', description: 'Supermarket', location: [153.28, -27.58] }] });
+  await type('woolworths');
+  await fireEvent.press(await screen.findByText('Woolworths'));
+  expect(dismiss).toHaveBeenCalled();
 });

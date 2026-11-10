@@ -53,6 +53,10 @@ class NavNotifications(
     val detail = if (nav.status != NavStatus.ARRIVED && !nav.rerouting) nav.error?.let(::afterFirstSentence) else null
     val text = listOfNotNull(ahead, detail, nav.destinationName?.let { "To $it" }).joinToString(" · ")
     if (title == lastTitle && text == lastText) return // a fix that changed nothing the car shows
+    // Not posted at all while Wayfinder's directions are on the car's screen: Android Auto showed
+    // the first post as a heads-up card over them however low its importance (R2-C2). It goes up,
+    // as a heads-up, once the driver switches to another app, which is when it is wanted.
+    if (!headsUp && lastTitle == null) return
     val changed = title != lastTitle && headsUp
     lastTitle = title
     lastText = text

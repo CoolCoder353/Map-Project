@@ -3,7 +3,7 @@
 /** The car screen's size in `shot car` pictures (DHU_CONFIG's resolution). */
 export const CAR_SCREEN = [800, 480] as const;
 /** See [dhuCommand.tap]; `.harness/config.json` `carTapScale` overrides it for another head unit. */
-export const CAR_TAP_SCALE = 1.16;
+export const CAR_TAP_SCALE = 1;
 
 /** Car keys the harness may press. No call, end-call or phone keys: it never starts a call. */
 export const CAR_KEYS = ['home', 'back', 'search', 'navigation'] as const;
@@ -12,9 +12,9 @@ export type CarKey = (typeof CAR_KEYS)[number];
 export const dhuCommand = {
   screenshot: (path: string) => `screenshot ${path}`,
   /**
-   * A tap at (x, y) in the `shot car` picture. The head unit's console takes taps on a grid
-   * [scale] times the picture's (measured 1.16 on DHU 2.0 at 800×480: unscaled, taps landed at
-   * x / 1.16 and the right of the screen couldn't be reached).
+   * A tap at (x, y) in the `shot car` picture, on the console's grid [scale] times the picture's.
+   * With the rotary controller on (DHU_CONFIG) the grid is the picture's own: measured 1:1 on DHU
+   * 2.0 at 800×480 (R2-H2). Without it, a first run measured 1.16.
    */
   tap: (x: number, y: number, scale = CAR_TAP_SCALE) => `tap ${Math.round(x * scale)} ${Math.round(y * scale)}`,
   /** The car's own GPS. The DHU takes latitude first; accuracy 5 m, altitude 0. */
@@ -28,6 +28,11 @@ export const dhuCommand = {
    * list, scrolling it. The console has no swipe, so this is how lists below the fold are reached (H17).
    */
   rotate: (down: boolean) => `dpad rotate ${down ? 'right' : 'left'}`,
+  /**
+   * Moves the rotary controller's focus up out of the rail (mic, layout, app icons), where it
+   * starts, into the app's list, so [rotate] then moves along its rows (R2-H3).
+   */
+  focus: () => 'dpad up',
   /** Presses the item the rotary controller has focused. */
   select: () => 'dpad click',
   quit: () => 'quit',

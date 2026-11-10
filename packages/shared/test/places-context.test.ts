@@ -33,12 +33,16 @@ describe('category words', () => {
     expect(categoryTypes('pharmacies')).toEqual(['amenity=pharmacy']);
     expect(categoryTypes('supermarkets')).toEqual(['shop=supermarket']);
     expect(categoryTypes('hardware')).toEqual(['shop=hardware', 'shop=doityourself']);
+    // "gym" lists gyms, not Gymea Place and Gympie (R2-P7).
+    expect(categoryTypes('gym')).toEqual(['leisure=fitness_centre']);
+    expect(categoryTypes('gyms')).toEqual(['leisure=fitness_centre']);
     expect(categoryTypes('Woolworths')).toBeNull();
   });
   it('labels OSM types', () => {
     expect(poiTypeLabel('amenity=fast_food')).toBe('Takeaway');
     expect(poiTypeLabel('amenity=fuel')).toBe('Petrol station');
     expect(poiTypeLabel('shop=garden_centre')).toBe('Garden centre');
+    expect(poiTypeLabel('leisure=fitness_centre')).toBe('Gym');
     expect(poiTypeLabel('shop=yes')).toBe('Place');
     expect(poiTypeLabel(null)).toBe('Place');
     // One kind of shop tagged two ways in OpenStreetMap reads the same (P79).

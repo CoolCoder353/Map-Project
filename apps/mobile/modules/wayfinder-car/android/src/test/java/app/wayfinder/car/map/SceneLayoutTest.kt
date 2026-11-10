@@ -2,6 +2,7 @@ package app.wayfinder.car.map
 
 import app.wayfinder.car.Samples
 import app.wayfinder.car.bridge.LngLat
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -148,5 +149,13 @@ class SceneLayoutTest {
     assertEquals(0, SceneLayout.speedColumn(60, 12, shown = false))
     val (x, _) = SceneLayout.followPoint(300, 0, 800, 480, column)
     assertEquals((300 + 84 + 800) / 2f, x, 0f)
+  }
+
+  /** The home map centred the car under the list card's edge (R2-C5): the padding keeps it in the open map. */
+  @Test fun theCameraIsPaddedToTheMapTheDriverCanSee() {
+    // An 800×480 surface with the list card over its left 400 px.
+    assertArrayEquals(doubleArrayOf(400.0, 0.0, 0.0, 0.0), SceneLayout.padding(800, 480, 400, 0, 800, 480), 0.0)
+    // A speed column, and a visible area short of the right and bottom edges.
+    assertArrayEquals(doubleArrayOf(130.0, 10.0, 20.0, 30.0), SceneLayout.padding(800, 480, 100, 10, 780, 450, 30), 0.0)
   }
 }

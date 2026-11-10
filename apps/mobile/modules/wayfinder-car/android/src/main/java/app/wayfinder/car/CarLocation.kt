@@ -21,17 +21,33 @@ interface CarFixSource {
  * keeps directions and planning working. A car without location, or without permission for it,
  * leaves things as they were.
  */
-class CarLocation(private val source: CarFixSource, private val api: CarApi, private val now: () -> Long = System::currentTimeMillis) {
+class CarLocation(
+  private val source: CarFixSource,
+  private val api: CarApi,
+  private val now: () -> Long = System::currentTimeMillis,
+  private val log: (String) -> Unit = { android.util.Log.i("WayfinderCar", it) },
+) {
   /** Starts listening; each usable position also goes to [also] (the map with no trip). */
   fun start(also: (CarFix) -> Unit = {}): () -> Unit =
     runCatching {
+      var logged = false
       source.listen { fix ->
-        if (usable(fix)) {
+        val ok = usable(fix)
+        // Once a session, so a drive replayed through a head unit shows whether its positions
+        // arrive and are used (R2-H1): `pnpm device logs`.
+        if (!logged) {
+          logged = true
+          log(if (ok) "car location: following the car's position" else "car location: a position from the car was too rough or old to use")
+        }
+        if (ok) {
           api.location(fix)
           also(fix)
         }
       }
-    }.getOrDefault({})
+    }.getOrElse {
+      log("car location: none from this car (${it.javaClass.simpleName})")
+      NOTHING
+    }
 
   private fun usable(f: CarFix) =
     f.lon.isFinite() && f.lat.isFinite() && f.lon in -180.0..180.0 && f.lat in -90.0..90.0 &&
@@ -41,6 +57,7 @@ class CarLocation(private val source: CarFixSource, private val api: CarApi, pri
       (f.accuracyM == null || f.accuracyM <= MAX_ACCURACY_M) && now() - f.timeMs <= MAX_AGE_MS
 
   companion object {
+    private val NOTHING: () -> Unit = {}
     const val MAX_ACCURACY_M = 100.0
     const val MAX_AGE_MS = 30_000L
   }
@@ -49,7 +66,8 @@ class CarLocation(private val source: CarFixSource, private val api: CarApi, pri
 /** The car's GNSS through Android Auto (Car API level 3 and up). */
 class HardwareFixSource(private val carContext: CarContext) : CarFixSource {
   override fun listen(onFix: (CarFix) -> Unit): () -> Unit {
-    if (carContext.carAppApiLevel < 3) return {}
+    // Too old a host: said once in the log by CarLocation, and the phone's GPS carries on.
+    check(carContext.carAppApiLevel >= 3) { "car API level ${carContext.carAppApiLevel}" }
     val sensors = carContext.getCarService(CarHardwareManager::class.java).carSensors
     val listener = OnCarDataAvailableListener<CarHardwareLocation> { data ->
       data.location.value?.let { onFix(CarFix.from(it)) }

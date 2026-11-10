@@ -20,6 +20,8 @@ export const TrackBatchRequestSchema = z.object({
   /** Set when recorded during navigation; the mode is then known. */
   mode: ModeSchema.optional(),
   navigationSessionId: z.uuid().optional(),
+  /** Where a navigated trip is going, as the app names it ("Woolworths"). */
+  destinationName: z.string().trim().min(1).max(200).optional(),
   points: z.array(TrackPointInputSchema).min(1).max(5000),
 });
 export type TrackBatchRequest = z.infer<typeof TrackBatchRequestSchema>;
@@ -40,6 +42,8 @@ export const TripSummarySchema = z.object({
   newRoads: z.number().int(),
   /** The place nearest where it ended ("Coot-tha Place"), to tell trips apart (P33). Absent from older servers, or where nothing is known. */
   endedNear: z.string().nullable().optional(),
+  /** Where a trip with directions was going ("Woolworths"). Absent from older servers and trips. */
+  destinationName: z.string().nullable().optional(),
 });
 export type TripSummary = z.infer<typeof TripSummarySchema>;
 

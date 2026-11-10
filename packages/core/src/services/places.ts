@@ -118,7 +118,14 @@ export async function searchPlaces(db: DbClient, rawQuery: string, near: LngLat 
   if (POSTCODE.test(rawQuery.trim())) return byPostcode(db, rawQuery.trim(), near, limit, now);
   rawQuery = expandNicknames(rawQuery);
   const address = splitAddress(rawQuery);
-  if (!address || (!address.locality && !address.postcode)) return searchNames(db, rawQuery, near, limit, now);
+  if (!address || (!address.locality && !address.postcode)) {
+    // "Woolworths Victoria Point": that shop in that suburb first (R2-P1).
+    const [inSuburb, named] = await Promise.all([nameInSuburb(db, rawQuery, near), searchNames(db, rawQuery, near, limit, now)]);
+    if (inSuburb.length === 0) return named;
+    const out = inSuburb.map((r) => toPlace(r, near, now));
+    for (const p of named) if (!out.some((o) => o.id === p.id || (o.name === p.name && o.location && p.location && haversineM(o.location, p.location) < 300))) out.push(p);
+    return out.slice(0, limit);
+  }
   // "12 Wellington St, Cleveland QLD 4163": that address in Cleveland, or failing that the street
   // there, before any other 12 Wellington Street in the country.
   const [located, named] = await Promise.all([findInLocality(db, address, near), searchNames(db, address.name, near, limit, now)]);
@@ -195,6 +202,35 @@ async function findInLocality(db: DbClient, a: { name: string; locality: string 
 }
 
 const lowerName = (r: PlaceRow) => r.name.toLowerCase();
+
+/** How many words at the end of a query may name a suburb ("Victoria Point", "Mount Cotton"). */
+const SUBURB_WORDS_MAX = 3;
+
+/**
+ * A name or brand followed by a suburb, with no house number or comma ("Woolworths Victoria
+ * Point", "Bunnings Cleveland"): places with that name or brand in that suburb, nearest first.
+ * Each split of the last few words is tried; where none names a suburb, nothing is found.
+ */
+async function nameInSuburb(db: DbClient, q: string, near: LngLat | null): Promise<PlaceRow[]> {
+  const words = expandAbbreviations(q).toLowerCase().trim().split(/\s+/);
+  const splits: Array<[string, string]> = [];
+  for (let k = 1; k <= Math.min(SUBURB_WORDS_MAX, words.length - 1); k++) splits.push([words.slice(0, -k).join(' '), words.slice(-k).join(' ')]);
+  const found = await Promise.all(
+    splits.map(([name, suburb]) =>
+      db
+        .query<PlaceRow>(
+          `SELECT ${COLUMNS}, 1 AS sim FROM places
+           WHERE (lower(name) = $1 OR lower(brand) = $1) AND (lower(suburb) = $2 OR lower(suburb) = $2 || ' city') LIMIT 20`,
+          [name, suburb],
+        )
+        .then((r) => r.rows),
+    ),
+  );
+  const dist = (r: PlaceRow) => (near ? haversineM(near, [r.lon, r.lat]) : -r.importance);
+  const kept: PlaceRow[] = [];
+  for (const r of found.flat().sort((a, b) => dist(a) - dist(b))) if (!kept.some((k) => sameThing(k, r))) kept.push(r);
+  return kept.slice(0, 5);
+}
 
 async function searchNames(db: DbClient, rawQuery: string, near: LngLat | null, limit: number, now: Date): Promise<Place[]> {
   const q = expandAbbreviations(rawQuery);

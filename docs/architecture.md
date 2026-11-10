@@ -226,8 +226,10 @@ The car screens hold no data of their own. They ask the JavaScript side through 
 then the nearest), `search`, `discover`, `plan`, `planned`, `routeLine`, `start`, `stop`, `mute` and
 `speedLimit`, and JS pushes every navigation change back
 (`src/car/navModel.ts`). The car also sends its own position once a second (`location`, from the car's
-GNSS via `CarLocation.kt`): the phone's navigation follows it only when the phone's own fixes have
-been silent for 5 s (a locked phone with the app started from the car). Planning and Discover use the
+GNSS via `CarLocation.kt`): while it comes, the phone's navigation follows it and sets the phone's own
+fixes aside, as the car's map does (`IdleFixes`); the phone's are followed again once the car's have
+stopped for 5 s (`CAR_FIX_AFTER_MS`), as in a car with no location of its own. `CarLocation` logs once
+a session whether the car's position is followed. Planning and Discover use the
 phone's position from the last minute, else the car's, and only then wait for a new fix from the
 phone, for at most 8 s (`PHONE_FIX_WAIT_MS`): a locked phone in a pocket may never give one. Each
 request gives up after 45 s (`CarBridge`), longer than the phone's own 30 s wait for the server plus

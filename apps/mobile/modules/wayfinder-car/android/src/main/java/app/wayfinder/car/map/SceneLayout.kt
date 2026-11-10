@@ -65,6 +65,19 @@ object SceneLayout {
    */
   fun speedColumn(speedWidthPx: Int, marginPx: Int, shown: Boolean): Int = if (shown) speedWidthPx + 2 * marginPx else 0
 
+  /**
+   * The camera's padding, left, top, right, bottom: the surface outside the visible area (under
+   * the list card, say) and the speed column. A point the camera centres on lands in the middle of
+   * the map the driver can see, not under the card's edge (R2-C5).
+   */
+  fun padding(surfaceWidth: Int, surfaceHeight: Int, left: Int, top: Int, right: Int, bottom: Int, reservedLeft: Int = 0): DoubleArray =
+    doubleArrayOf(
+      (left + reservedLeft).toDouble(),
+      top.toDouble(),
+      (surfaceWidth - right).toDouble().coerceAtLeast(0.0),
+      (surfaceHeight - bottom).toDouble().coerceAtLeast(0.0),
+    )
+
   /** How the camera is tilted for [spec]. */
   fun tilt(spec: CameraSpec): Double = if (spec is CameraSpec.Follow) FOLLOW_TILT else 0.0
 

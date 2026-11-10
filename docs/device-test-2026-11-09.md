@@ -198,6 +198,40 @@ on a tapped road; Settings' Sign out beside the account and the Light/Dark/Autom
 - **R2-H4** `pnpm device down` signs the test account out, so using it to reset a session needs
   the phone's owner to sign in again.
 
+### Fixed after the second run
+
+In code with tests, `pnpm check` passing; not yet seen on a device. Server changes need a deploy
+(and migration 012), the rest a new build.
+
+- **R2-P1:** a name or brand followed by a suburb, with no comma ("Woolworths Victoria Point",
+  "Woolies Cleveland"), finds that place in that suburb first.
+- **R2-P2:** picking a search result puts the keyboard away.
+- **R2-P3 / R2-P4:** a navigated trip, like a background one, is only kept once it has gone 100 m,
+  so a trip that never left credits no roads and isn't in Trips, as the banner says. Its points wait
+  for the rest of the trip and are dropped once it is settled short.
+- **R2-P5:** the phone sends where a navigated trip is going with its uploads; Trips says "To
+  Woolworths", and "To" the nearest place to where it ended only for trips without directions.
+  Trips recorded before this keep the old name.
+- **R2-P6:** a trip that ends in the minute it started shows one time.
+- **R2-P7 / R2-C1:** "gym", "gyms", "fitness" and "fitness centre" list the nearest gyms, labelled
+  Gym. (The 8 s wait for car results isn't explained by this; checked again on the next run.)
+- **R2-C2:** the car's turn notification isn't posted while Wayfinder's directions are on the car's
+  screen; it goes up, as a heads-up, once the driver switches app, and updates quietly after that.
+- **R2-C4:** the car's Home row is one line, "4.3 km away · Bunnings Warehouse".
+- **R2-C5:** every flat car map (home, a single place) is centred in the part of the screen the
+  driver can see, not under the list card.
+- **R2-H1:** in a car, the trip follows the car's position while it comes and sets the phone's
+  aside, as the car's own map already did; the phone's are followed again 5 s after the car's
+  stop. So a drive replayed through the head unit should now move the trip on a real phone. The car
+  app logs once whether the car's position is followed, or why not.
+- **R2-H2:** car taps are 1:1 with the `shot car` picture by default (the rotary controller is on).
+- **R2-H3:** `pnpm device car focus` moves the rotary's focus into the app's list.
+- **R2-H4:** Ctrl-C during `drive` only stops the drive; `down --stay-signed-in` leaves the test
+  account signed in.
+- **Not changed, R2-C3:** the ✕ on the car's time card is Android Auto's own. It calls the same
+  "stop navigation" the host uses when another app starts navigating, which must stop at once, so
+  it can't ask for a second tap (C61).
+
 ## Phone app (100)
 
 - **P1** Plan opens on central Australia (OVERVIEW 134.5,-27.5 z3.6) even with location granted and a fresh fix; for a Queensland-only server the map is an empty desert showing "QUEENSLAN" cut off. Should start at the user's position or the server's region.

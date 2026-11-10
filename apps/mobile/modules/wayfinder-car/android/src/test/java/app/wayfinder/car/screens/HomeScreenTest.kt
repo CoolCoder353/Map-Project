@@ -139,7 +139,7 @@ class HomeScreenTest {
     val t = screen.onGetTemplate() as PlaceListNavigationTemplate
     assertEquals(listOf("Home", "Saved places", "Search", "Discover nearby", "Planned routes"), titles(t))
     val home = t.itemList!!.items[0] as Row
-    assertEquals(Samples.saved("Home").detail, home.texts.single().text())
+    assertEquals("12 Moselle Drive · 25 km away", home.texts.single().text())
     assertEquals(R.drawable.wf_home, home.image!!.icon!!.resId)
     home.click()
     val pushed = carContext.getCarService(TestScreenManager::class.java).screensPushed.last()
@@ -236,5 +236,12 @@ class HomeScreenTest {
     org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(HomeScreen.REFRESH_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
     api.answer("status", Samples.status(saved = listOf(Samples.saved("Home").copy(saved = true, home = true))))
     assertTrue(titles(screen.onGetTemplate()).contains("Home"))
+  }
+
+  /** Parked, the whole description ran to five lines and pushed Discover off the screen (R2-C4). */
+  @Test fun homesLineIsHowFarAndWhatItIs() {
+    assertEquals("4.3 km away · Bunnings Warehouse", HomeScreen.shortDetail("4.3 km away · Bunnings Warehouse, Hardware store · Victoria Point QLD 4165"))
+    assertEquals("Lookout · 6.2 km away", HomeScreen.shortDetail("Lookout · 6.2 km away"))
+    assertEquals("", HomeScreen.shortDetail(""))
   }
 }
