@@ -11,18 +11,24 @@ jest.mock('expo-secure-store', () => ({
 const to = { name: 'Bunnings Warehouse', description: 'Hardware store', location: [153.28, -27.58] as [number, number] };
 const here = { name: 'Your location', description: '', location: [153.25, -27.56] as [number, number], current: true };
 
-beforeEach(() => mockStore.clear());
+let mockAccount: string | null = 'u1';
+jest.mock('../src/lib/account', () => ({ currentAccountId: async () => mockAccount }));
+
+beforeEach(() => {
+  mockStore.clear();
+  mockAccount = 'u1';
+});
 
 it('keeps the trip planned for a while, without "Your location" (U2)', async () => {
   await saveLastPlan({ from: here, to, mode: 'car' }, 1000);
-  expect(await loadLastPlan(2000)).toEqual({ to, mode: 'car', at: 1000 });
+  expect(await loadLastPlan(2000)).toEqual({ to, mode: 'car', at: 1000, account: 'u1' });
   expect(await loadLastPlan(1000 + LAST_PLAN_KEEP_MS + 1)).toBeNull();
 });
 
 it('keeps a start chosen by name, and forgets the trip once the destination is cleared', async () => {
   const start = { name: 'Cleveland', description: 'Suburb', location: [153.26, -27.52] as [number, number] };
   await saveLastPlan({ from: start, to, mode: 'foot' }, 1000);
-  expect(await loadLastPlan(1000)).toEqual({ from: start, to, mode: 'foot', at: 1000 });
+  expect(await loadLastPlan(1000)).toEqual({ from: start, to, mode: 'foot', at: 1000, account: 'u1' });
   await saveLastPlan({ from: start, to: null, mode: 'foot' }, 2000);
   expect(await loadLastPlan(2000)).toBeNull();
 });
@@ -32,4 +38,15 @@ it('ignores what it can’t read', async () => {
   expect(await loadLastPlan()).toBeNull();
   mockStore.set('wayfinder.lastPlan', JSON.stringify({ to: { name: 'x' }, mode: 'car', at: Date.now() }));
   expect(await loadLastPlan()).toBeNull();
+});
+
+it('never offers one account’s trip to another signed in on the phone', async () => {
+  await saveLastPlan({ from: null, to, mode: 'car' }, 1000);
+  mockAccount = 'u2';
+  expect(await loadLastPlan(1000)).toBeNull();
+  mockAccount = null;
+  expect(await loadLastPlan(1000)).toBeNull();
+  // Nobody signed in: nothing kept.
+  await saveLastPlan({ from: null, to, mode: 'car' }, 1000);
+  expect(mockStore.size).toBe(0);
 });

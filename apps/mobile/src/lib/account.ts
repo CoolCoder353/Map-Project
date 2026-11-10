@@ -24,7 +24,11 @@ export async function setCurrentAccountId(id: string | null): Promise<void> {
   cached = id;
   try {
     if (id) await SecureStore.setItemAsync(KEY, id);
-    else await SecureStore.deleteItemAsync(KEY);
+    else {
+      await SecureStore.deleteItemAsync(KEY);
+      // Signed out: where this account was going stays with it (lastPlan.ts).
+      await SecureStore.deleteItemAsync('wayfinder.lastPlan');
+    }
   } catch {
     // Memory still has it for this run; the next sign-in writes it again.
   }
