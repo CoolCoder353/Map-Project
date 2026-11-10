@@ -53,6 +53,17 @@ class SearchScreenTest {
     assertEquals("the search waiting for a pause is dropped", listOf("search coot-tha"), api.calls)
   }
 
+  /** The search key after the list for those words is already up: that list, at once (C-U3, C-U4). */
+  @Test fun theSearchKeyUsesResultsAlreadyFoundForTheSameWords() {
+    screen.callback.onSearchTextChanged("cle")
+    pause()
+    api.answer("search", listOf(Samples.place()))
+    screen.callback.onSearchSubmitted(" cle ")
+    assertEquals("no second search for the same words", listOf("search cle"), api.calls)
+    val pushed = carContext.getCarService(TestScreenManager::class.java).screensPushed.last()
+    assertTrue(pushed is PickScreen<*>)
+  }
+
   @Test fun keepsTheLastResultsUpWhileTheNextLoad() {
     screen.callback.onSearchSubmitted("coot")
     api.answer("search", listOf(Samples.place()))

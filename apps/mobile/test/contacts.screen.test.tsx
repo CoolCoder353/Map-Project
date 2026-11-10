@@ -1,5 +1,5 @@
 /// <reference types="jest" />
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
 import { Keyboard } from 'react-native';
 import { PlaceSearch } from '../src/ui/PlaceSearch';
@@ -135,4 +135,41 @@ it('puts the keyboard away once a place is picked (R2-P2)', async () => {
   await type('woolworths');
   await fireEvent.press(await screen.findByText('Woolworths'));
   expect(dismiss).toHaveBeenCalled();
+});
+
+describe('a chosen place being edited (U1)', () => {
+  const bunnings = { name: 'Bunnings Warehouse', description: 'Hardware store', location: [153.28, -27.58] as [number, number] };
+
+  it('keeps the place while its text is changed, and puts its name back on leaving', async () => {
+    const onChange = jest.fn();
+    await render(<PlaceSearch label="Destination" placeholder="Where to?" value={bunnings} onChange={onChange} />);
+    const box = screen.getByLabelText('Destination');
+    await fireEvent(box, 'focus');
+    await fireEvent.changeText(box, 'Bunnings Warehous e');
+    expect(onChange).not.toHaveBeenCalled();
+    await fireEvent(box, 'blur');
+    await waitFor(() => expect(box.props.value).toBe('Bunnings Warehouse'));
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('puts the name back when the keyboard closes with nothing to pick from', async () => {
+    const hide: Array<() => void> = [];
+    jest.spyOn(Keyboard, 'addListener').mockImplementation(((event: string, fn: () => void) => {
+      if (event === 'keyboardDidHide') hide.push(fn);
+      return { remove: jest.fn() };
+    }) as never);
+    await render(<PlaceSearch label="Destination" placeholder="Where to?" value={bunnings} onChange={jest.fn()} />);
+    const box = screen.getByLabelText('Destination');
+    await fireEvent(box, 'focus');
+    await fireEvent.changeText(box, 'Bunnings Warehous e');
+    await act(async () => hide.at(-1)!());
+    expect(box.props.value).toBe('Bunnings Warehouse');
+  });
+
+  it('only clears the place with the ✕', async () => {
+    const onChange = jest.fn();
+    await render(<PlaceSearch label="Destination" placeholder="Where to?" value={bunnings} onChange={onChange} />);
+    await fireEvent.press(screen.getByLabelText('Clear destination'));
+    expect(onChange).toHaveBeenCalledWith(null);
+  });
 });

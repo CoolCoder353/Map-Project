@@ -1,7 +1,7 @@
 /// <reference types="jest" />
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { useState } from 'react';
-import Plan, { loopNote } from '../app/(tabs)/plan';
+import Plan, { CLEARED_ZOOM, loopNote } from '../app/(tabs)/plan';
 import { takeRouteToNavigate } from '../src/lib/plannedStore';
 import { apiError, fake, place, renderScreen, resetFakes, route } from './fakes';
 import { user } from './mocks';
@@ -17,6 +17,9 @@ let mockHere: [number, number] | undefined;
 jest.mock('../src/lib/useApproxLocation', () => ({ useApproxLocation: () => mockHere }));
 jest.mock('expo-location', () => ({ requestForegroundPermissionsAsync: jest.fn(), getCurrentPositionAsync: jest.fn(), Accuracy: { Balanced: 3 } }));
 jest.mock('expo-linking', () => ({ openURL: jest.fn(async () => true) }));
+let mockLastPlan: unknown = null;
+const mockSaved: unknown[] = [];
+jest.mock('../src/lib/lastPlan', () => ({ loadLastPlan: async () => mockLastPlan, saveLastPlan: async (p: unknown) => void mockSaved.push(p) }));
 
 // Routes from where the phone is, as the server gives them.
 const fromHere = (over: Parameters<typeof route>[0] = {}) => route({ geometry: [[153.02, -27.47], [153.15, -27.49]], ...over });
@@ -24,6 +27,8 @@ const explore = fromHere({ id: 'r-exp', kind: 'explore', extraDurationS: 420, no
 
 beforeEach(() => {
   resetFakes();
+  mockLastPlan = null;
+  mockSaved.length = 0;
   mockHere = [153.02, -27.47];
   fake.api.on({
     'GET api/search': () => ({ results: [place()] }),
@@ -396,4 +401,55 @@ it('names where a trip goes when it starts', async () => {
   await screen.findByText('Fastest');
   await fireEvent.press(screen.getByRole('button', { name: 'Start' }));
   expect(destinationToNavigate()).toBe('Gumdale State School');
+});
+
+
+describe('usability pass', () => {
+  const gumdale = { name: 'Gumdale State School', description: 'School', location: [153.15, -27.49] as [number, number] };
+
+  it('finds the trip still planned on coming back to the app, and keeps the one chosen (U2)', async () => {
+    mockLastPlan = { to: gumdale, mode: 'foot', at: Date.now() };
+    await renderScreen(<Plan />);
+    await waitFor(() => expect(screen.getByLabelText('Destination')).toHaveDisplayValue('Gumdale State School'));
+    await waitFor(() => expect(fake.api.callsTo('POST api/routes/explore').at(-1)!.body).toMatchObject({ to: [153.15, -27.49], mode: 'foot' }));
+    expect(mockSaved.at(-1)).toMatchObject({ to: gumdale, mode: 'foot' });
+  });
+
+  it('goes back to where you are when the destination is cleared (U3)', async () => {
+    await renderScreen(<Plan />);
+    await chooseDestination();
+    await screen.findByText('Fastest');
+    await fireEvent.press(screen.getByRole('button', { name: 'Clear destination' }));
+    expect(fake.map.flyTo).toHaveBeenCalledWith([153.02, -27.47], CLEARED_ZOOM);
+    expect(mockSaved.at(-1)).toMatchObject({ to: null });
+  });
+
+  it('lists the other ways quickest first, labels each line with its time, and puts them before the controls (U5, U6, U7)', async () => {
+    const slow = fromHere({ id: 'r-slow', kind: 'explore', durationS: 1680, extraDurationS: 1020 });
+    const quick = fromHere({ id: 'r-quick', kind: 'explore', durationS: 1440, extraDurationS: 780 });
+    fake.api.on({ 'POST api/routes/explore': () => ({ fastest: fromHere({ durationS: 660 }), explore: [slow, quick] }) });
+    await renderScreen(<Plan />);
+    await chooseDestination();
+    await screen.findByText('Fastest');
+    expect((fake.map.props.routes as Array<{ id: string }>).map((r) => r.id)).toEqual(['r-fast', 'r-quick', 'r-slow']);
+    expect(fake.map.props.routeLabels).toEqual({ 'r-fast': '11 min', 'r-quick': '24 min', 'r-slow': '28 min' });
+    const tree = JSON.stringify(screen.toJSON());
+    expect(tree.indexOf('24 min')).toBeLessThan(tree.indexOf('28 min'));
+    expect(tree.indexOf('Fastest')).toBeLessThan(tree.indexOf('Travel mode'));
+  });
+
+  it('fits the routes again when the map changes size, so they aren’t left cut off (U1)', async () => {
+    await renderScreen(<Plan />);
+    await chooseDestination();
+    await screen.findByText('Fastest');
+    const fits = fake.map.fitTo.mock.calls.length;
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
+    try {
+      await fireEvent(screen.getByTestId('map-area'), 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 300 } } });
+      await act(async () => void jest.advanceTimersByTime(100));
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(fake.map.fitTo.mock.calls.length).toBe(fits + 1);
+  });
 });

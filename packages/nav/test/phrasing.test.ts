@@ -40,5 +40,8 @@ describe('naming explore routes by where they go', () => {
     const c = { instructions: [ins('Jubilee Terrace', 2500)] };
     expect(exploreTitles([a, b, c], fastest)).toEqual(['Explore 1', 'Explore 2', 'Via Jubilee Terrace']);
     expect(exploreTitles([{ instructions: [] }], null)).toEqual(['Explore 1']);
+    // Both take Bowman Parade, but one also has a road of its own: named by that (C-U5).
+    const d = { instructions: [ins('Bowman Parade', 3000), ins('Waterworks Road', 1500)] };
+    expect(exploreTitles([a, d], fastest)).toEqual(['Explore 1', 'Via Waterworks Road']);
   });
 });

@@ -3,7 +3,7 @@ import type { LngLat } from '@wayfinder/shared/geo';
 import type { Place } from '@wayfinder/shared/schemas';
 import * as Location from 'expo-location';
 import { LocateFixed, MapPin, Search, UserRound, X } from 'lucide-react-native';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, Text, TextInput, View } from 'react-native';
 import { api, errorMessage } from '../lib/api';
 import { type ContactMatch, findContacts } from '../lib/contacts';
@@ -49,11 +49,33 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
   /** What the results shown were found for, so "no places match" is said only of a search that ran. */
   const [answered, setAnswered] = useState('');
 
-  // Show a place chosen here or by the screen. Not when it's cleared: typing over a chosen place
-  // clears it, and resetting the text then would swallow what was just typed.
+  // Show a place chosen here or by the screen. Not when it's cleared, which would swallow what was
+  // just typed.
   useEffect(() => {
     if (value) setText(value.name);
   }, [value]);
+
+  // Typing over a chosen place keeps it, and its routes, until another is picked (U1): a slip of
+  // the finger used to throw the routes away with no word why. Leaving the field without picking
+  // puts the chosen place's name back. The keyboard closing with no suggestions to pick from
+  // counts as leaving (Android keeps the field focused when Back closes the keyboard); with some,
+  // the list stays to be picked from.
+  const input = useRef<TextInput>(null);
+  const valueName = value?.name;
+  const leave = useCallback(() => {
+    setFocused(false);
+    if (valueName !== undefined) setText(valueName);
+  }, [valueName]);
+  const listed = useRef(false);
+  useEffect(() => {
+    if (!focused) return;
+    const sub = Keyboard.addListener('keyboardDidHide', () => {
+      if (listed.current) return;
+      input.current?.blur();
+      leave();
+    });
+    return () => sub.remove();
+  }, [focused, leave]);
 
   useEffect(() => {
     const q = text.trim();
@@ -83,6 +105,7 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
     };
   }, [text, focused, near, value?.name]);
 
+  listed.current = results.length > 0 || contacts.length > 0;
   const rowStyle = { flexDirection: 'row', alignItems: 'center', gap: space[3], padding: space[3], minHeight: MIN_TARGET } as const;
   const typed = text.trim();
   const noMatch = focused && typed.length >= 2 && typed !== value?.name && answered === typed && results.length === 0 && contacts.length === 0;
@@ -131,17 +154,18 @@ export function PlaceSearch({ label, placeholder, value, onChange, near, allowCu
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[2], minHeight: 48, paddingLeft: space[3], borderRadius: radius.control, backgroundColor: t.surface2, borderWidth: 1, borderColor: focused ? t.accent : 'transparent' }}>
         <Icon size={18} color={iconColor} />
         <TextInput
+          ref={input}
           accessibilityLabel={label}
           style={{ flex: 1, color: t.text, fontSize: 16, minHeight: 46 }}
           placeholder={placeholder}
           placeholderTextColor={t.text3}
           value={text}
           onFocus={() => setFocused(true)}
-          onBlur={() => setTimeout(() => setFocused(false), 150)}
+          // Later, so a tap on a suggestion lands before the list goes.
+          onBlur={() => setTimeout(leave, 150)}
           onChangeText={(s) => {
             setText(s);
             if (s.trim().length < 2) setError(null);
-            if (value) onChange(null);
           }}
           returnKeyType="search"
           // Esc: the first press closes the suggestions, the next clears what was typed.

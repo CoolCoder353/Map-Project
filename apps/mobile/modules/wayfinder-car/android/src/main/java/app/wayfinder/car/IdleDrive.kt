@@ -73,14 +73,17 @@ class IdleDrive(private val api: CarApi, private val now: () -> Long = SystemClo
   private fun draw() {
     val here = position ?: return
     val fix = lastFix ?: return
-    val current = limit?.takeIf { limitAt?.let { at -> TripTrail.metres(at, here) <= SHOW_WITHIN_M } == true }
+    val speed = fix.speedMps?.takeIf { it.isFinite() && it >= 0 }?.let { (it * 3.6).roundToInt() }
+    // The limit only beside a speed: on its own, parked with a position that carries none, a "50"
+    // floated on the map meaning nothing (C-U1).
+    val current = limit?.takeIf { speed != null && limitAt?.let { at -> TripTrail.metres(at, here) <= SHOW_WITHIN_M } == true }
     show?.invoke(
       MapScene.Following(
         line = emptyList(),
         position = here,
         headingDeg = heading,
         speedLimitKmh = current?.kmh,
-        speedKmh = fix.speedMps?.takeIf { it.isFinite() && it >= 0 }?.let { (it * 3.6).roundToInt() },
+        speedKmh = speed,
         speedLimitEstimated = current?.estimated == true,
       ),
     )

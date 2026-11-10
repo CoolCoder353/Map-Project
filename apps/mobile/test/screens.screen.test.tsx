@@ -2,7 +2,7 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { Alert, ScrollView } from 'react-native';
 import Coverage, { roadWhen } from '../app/(tabs)/coverage';
-import Discover, { discoverDetail, REFILTER_PAUSE_MS } from '../app/(tabs)/discover';
+import Discover, { discoverDetail, discoverOrderNote, REFILTER_PAUSE_MS } from '../app/(tabs)/discover';
 import TabsLayout from '../app/(tabs)/_layout';
 import Trips from '../app/(tabs)/trips';
 import Index from '../app/index';
@@ -177,6 +177,11 @@ describe('Discover', () => {
   it('says how long a place takes to get to, where the server says (P43)', () => {
     expect(discoverDetail(discoverItem({ withinMinutes: 10, distanceM: 6600 }), 'car')).toBe('Lookout · within 10 min by car · 6.6 km away');
     expect(discoverDetail(discoverItem({ distanceM: 6600 }), 'foot')).toBe('Lookout · 6.6 km away');
+    // Round the corner: the distance says it all (U10).
+    expect(discoverDetail(discoverItem({ withinMinutes: 10, distanceM: 430 }), 'car')).toBe('Lookout · 430 m away');
+    // Why they're in this order; and that all are new, said once (U9).
+    expect(discoverOrderNote([discoverItem({ areaUnexploredPct: 100 }), discoverItem({ areaUnexploredPct: 98 })])).toMatch(/^All of these are in areas you haven’t been/);
+    expect(discoverOrderNote([discoverItem({ areaUnexploredPct: 100 }), discoverItem({ areaUnexploredPct: 20 })])).toMatch(/^Places in areas you haven’t been come first/);
   });
 
   it('says when nothing new is in reach, and shows errors', async () => {

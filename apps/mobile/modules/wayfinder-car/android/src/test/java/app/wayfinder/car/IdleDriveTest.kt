@@ -51,6 +51,15 @@ class IdleDriveTest {
     assertEquals("still the same road a moment later", 60, last().speedLimitKmh)
   }
 
+  /** Parked, with positions that carry no speed, a lone "50" on the map meant nothing (C-U1). */
+  @Test fun showsTheLimitOnlyBesideASpeed() {
+    drive.onFix(fix(0.0, speedMps = null), scenes::show)
+    api.answer("speedLimit", CarSpeedLimit(50, false, "Whitby Place"))
+    assertNull(last().speedLimitKmh)
+    drive.onFix(fix(1.0, speedMps = 0.0), scenes::show)
+    assertEquals("stopped at lights: the speed is known, so the limit stays", 50, last().speedLimitKmh)
+  }
+
   @Test fun saysWhenTheLimitIsOnlyTheRoadsDefault() {
     drive.onFix(fix(0.0), scenes::show)
     api.answer("speedLimit", CarSpeedLimit(50, true, null))

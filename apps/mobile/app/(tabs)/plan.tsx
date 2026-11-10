@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import * as Linking from 'expo-linking';
 import { router, useFocusEffect } from 'expo-router';
 import { ArrowUpDown, Briefcase, Car, ExternalLink, Footprints, Home, Maximize2, Minimize2, Repeat, Star } from 'lucide-react-native';
-import { haversineM } from '@wayfinder/shared/geo';
+import { haversineM, type LngLat } from '@wayfinder/shared/geo';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { useAppConfig } from '../../src/lib/appConfig';
 import { exploreTitles, formatDistanceShort, formatDuration } from '../../src/lib/format';
 import { googleMapsUrl } from '../../src/lib/googleMaps';
 import { setRouteToNavigate, takeTripToPlan } from '../../src/lib/plannedStore';
+import { loadLastPlan, saveLastPlan } from '../../src/lib/lastPlan';
 import { splitStyles, useLayout } from '../../src/lib/layout';
 import { useSession } from '../../src/lib/session';
 import { space, useTheme } from '../../src/lib/theme';
@@ -38,6 +39,18 @@ export const MAP_SHARE = { normal: '38%', big: '65%' } as const;
 
 /** How long the extra-time stepper waits for taps to stop before asking for routes. */
 const EXPLORE_WAIT_MS = 400;
+/** How close the map goes to where you are once the destination is cleared (U3). */
+export const CLEARED_ZOOM = 13;
+
+/** The fastest route, then the others quickest first (U6). */
+export function inTimeOrder(fastest: Route, others: Route[]): Route[] {
+  return [fastest, ...[...others].sort((a, b) => a.durationS - b.durationS)];
+}
+
+/** Each route's time, as its card shows it, for its line on the map (U5). */
+export function routeTimes(routes: Route[]): Record<string, string> {
+  return Object.fromEntries(routes.map((r) => [r.id, formatDuration(r.durationS)]));
+}
 
 export default function Plan() {
   const topEdges = useTopEdges();
@@ -80,6 +93,40 @@ export default function Plan() {
     setFrom({ name: 'Your location', description: '', location: here, current: true });
   }, [here, from]);
   const [to, setTo] = useState<ChosenPlace | null>(null);
+  // Leaving the app (Back on Plan closes it) and coming back finds the trip still planned (U2).
+  const restored = useRef(false);
+  useEffect(() => {
+    let live = true;
+    void loadLastPlan().then((p) => {
+      if (!live || restored.current || !p) return;
+      restored.current = true;
+      setTo((cur) => cur ?? p.to);
+      setMode(p.mode);
+      if (p.from) {
+        filledStart.current = true;
+        setFrom(p.from);
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+  useEffect(() => {
+    // Before the saved one is read back, an empty form would wipe it.
+    if (!to && !restored.current) return;
+    restored.current = true;
+    void saveLastPlan({ from, to, mode });
+  }, [from, to, mode]);
+  // The destination cleared: back to where you are, not left on a piece of road with nothing on it (U3).
+  const hadTo = useRef(false);
+  useEffect(() => {
+    if (to) hadTo.current = true;
+    else if (hadTo.current) {
+      hadTo.current = false;
+      const at = from?.location ?? here;
+      if (at) map.current?.flyTo(at, CLEARED_ZOOM);
+    }
+  }, [to, from, here]);
   // Saved places are a tap away while no destination is chosen. The list Settings shows, so
   // saving one there or here updates both.
   const saved = useQuery({ queryKey: ['saved-places'], queryFn: () => api.request('api/saved-places', { schema: SavedPlaceListSchema }) });
@@ -119,6 +166,22 @@ export default function Plan() {
       panel.current?.scrollTo({ y: 0, animated: false });
     }, []),
   );
+  // What the map was last fitted to. A map resized (the field taken focus, the keyboard gone, the
+  // map made bigger) keeps its zoom, which left the routes cut off or out of sight: fitted again.
+  const fitted = useRef<LngLat[] | null>(null);
+  const fitRoutes = (coords: LngLat[] | null) => {
+    fitted.current = coords;
+    if (coords?.length) map.current?.fitTo(coords, FIT_PADDING);
+  };
+  const mapHeight = useRef(0);
+  const refit = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onMapLayout = (height: number) => {
+    if (Math.abs(height - mapHeight.current) < 1) return;
+    mapHeight.current = height;
+    if (refit.current) clearTimeout(refit.current);
+    if (height > 0 && fitted.current) refit.current = setTimeout(() => fitRoutes(fitted.current), 50);
+  };
+  useEffect(() => () => void (refit.current && clearTimeout(refit.current)), []);
   // Every request takes a number; an answer that arrives after a newer request (or after the
   // tab, places or mode changed) is dropped, so a late round trip can't land in Directions.
   const latest = useRef(0);
@@ -133,6 +196,7 @@ export default function Plan() {
     // Routes for places that are no longer chosen would start navigation somewhere else.
     setRoutes(null);
     setSelected(null);
+    fitted.current = null;
     if (!from || !to) {
       setLoading(false);
       return;
@@ -147,12 +211,12 @@ export default function Plan() {
         .request('api/routes/explore', { method: 'POST', body: { from: from.location, to: to.location, mode, budgetMin: budget }, schema: ExploreRouteResponseSchema, signal: ctrl.signal })
         .then((res) => {
           if (ticket !== latest.current) return;
-          const all = [res.fastest, ...res.explore];
+          const all = inTimeOrder(res.fastest, res.explore);
           setRoutes(all);
           setSelected(res.fastest.id);
           setFastestNew(res.fastest.novelty.noveltyPct);
           // Room for the start and end labels (about 150 px wide), so neither is cut at the edge.
-          map.current?.fitTo(all.flatMap((r) => r.geometry), FIT_PADDING);
+          fitRoutes(all.flatMap((r) => r.geometry));
         })
         .catch((e) => ticket === latest.current && setError(errorMessage(e)))
         .finally(() => ticket === latest.current && setLoading(false));
@@ -178,7 +242,7 @@ export default function Plan() {
       if (ticket !== latest.current) return;
       setRoutes(res.routes);
       setSelected(res.routes[0]?.id ?? null);
-      if (res.routes.length) map.current?.fitTo(res.routes.flatMap((r) => r.geometry), FIT_PADDING);
+      if (res.routes.length) fitRoutes(res.routes.flatMap((r) => r.geometry));
     } catch (e) {
       if (ticket === latest.current) setError(errorMessage(e));
     } finally {
@@ -210,42 +274,59 @@ export default function Plan() {
     ...(to && tab === 'directions' ? [{ id: 'to', lngLat: to.location, kind: 'end' as const, label: to.name }] : []),
   ];
 
+  // With a destination, the routes come straight after the fields, and the mode and extra time
+  // after them: on a phone the other ways, the point of the app, were below the fold (U7).
+  const routesFirst = tab === 'directions' && !!to;
+  const modeRow = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[3], flexWrap: 'wrap' }}>
+       <Segmented<Mode> label="Travel mode" value={tab === 'loop' ? loopMode : mode} onChange={tab === 'loop' ? setLoopMode : setMode} options={[{ value: 'car', label: 'Drive', icon: Car }, { value: 'foot', label: 'Walk', icon: Footprints }]} />
+      {tab === 'directions' ? (
+        <Stepper label={copy.budgetLabel(budget)} onMinus={() => setBudget((b) => Math.max(5, b - 5))} onPlus={() => setBudget((b) => Math.min(60, b + 5))} />
+      ) : (
+        <Stepper label={`About ${formatDuration(loopMinutes * 60)}`} onMinus={() => setLoopMinutes((m) => Math.max(15, m - 15))} onPlus={() => setLoopMinutes((m) => Math.min(360, m + 15))} />
+      )}
+    </View>
+  );
+
   return (
     <SafeAreaView edges={topEdges} style={{ flex: 1, backgroundColor: t.bg }}>
       <View style={split.container}>
-      <View testID="map-area" style={split.map}>
-        <MapCanvas ref={map} style={{ flex: 1 }} routes={routes ?? []} selectedRouteId={selected} onRoutePress={setSelected} markers={markers} />
+      <View testID="map-area" style={split.map} onLayout={(e) => onMapLayout(e.nativeEvent.layout.height)}>
+        <MapCanvas ref={map} style={{ flex: 1 }} routes={routes ?? []} selectedRouteId={selected} onRoutePress={setSelected} routeLabels={routes ? routeTimes(routes) : undefined} markers={markers} />
         <MapSizeButton big={bigMap} onPress={() => setBigMap((b) => !b)} />
       </View>
-      <ScrollView ref={panel} style={[split.panel, { backgroundColor: t.surface }]} contentContainerStyle={{ padding: space[4], gap: space[3], ...split.content }} keyboardShouldPersistTaps="handled">
-        {running ? <Notice tone="info">{`Directions to ${running} are running. Starting a route here ends them.`}</Notice> : null}
-        {farStart && from ? (
-          <View style={{ gap: space[2] }}>
-            <Notice tone="warning">{`This route starts at ${from.name}, ${formatDistanceShort(haversineM(here!, farStart.geometry[0]!))} from where you are. Directions follow you from here.`}</Notice>
-            <View style={{ flexDirection: 'row', gap: space[2], flexWrap: 'wrap' }}>
-              <Button label="From here instead" compact onPress={() => {
-                setFarStart(null);
-                setFrom({ name: 'Your location', description: '', location: here!, current: true });
-              }} />
-              <Button label="Start anyway" kind="secondary" compact onPress={() => go(farStart)} />
+      <ScrollView ref={panel} style={[split.panel, { backgroundColor: t.surface }]} contentContainerStyle={{ padding: space[4], gap: space[3], ...split.content }} keyboardShouldPersistTaps="handled" stickyHeaderIndices={[1]}>
+        {/* Notices and the mode switch, then the fields, which stay at the top as the routes scroll under them (U4). */}
+        <View style={{ gap: space[3] }}>
+          {running ? <Notice tone="info">{`Directions to ${running} are running. Starting a route here ends them.`}</Notice> : null}
+          {farStart && from ? (
+            <View style={{ gap: space[2] }}>
+              <Notice tone="warning">{`This route starts at ${from.name}, ${formatDistanceShort(haversineM(here!, farStart.geometry[0]!))} from where you are. Directions follow you from here.`}</Notice>
+              <View style={{ flexDirection: 'row', gap: space[2], flexWrap: 'wrap' }}>
+                <Button label="From here instead" compact onPress={() => {
+                  setFarStart(null);
+                  setFrom({ name: 'Your location', description: '', location: here!, current: true });
+                }} />
+                <Button label="Start anyway" kind="secondary" compact onPress={() => go(farStart)} />
+              </View>
             </View>
-          </View>
-        ) : null}
-        <Segmented<Tab>
-          label="Planning mode"
-          value={tab}
-          onChange={(v) => {
-            setTab(v);
-            setRoutes(null);
-            setError(null);
-            setLoading(false);
-          }}
-          options={[
-            { value: 'directions', label: 'Directions' },
-            { value: 'loop', label: 'Round trip', icon: Repeat },
-          ]}
-        />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[1] }}>
+          ) : null}
+          <Segmented<Tab>
+            label="Planning mode"
+            value={tab}
+            onChange={(v) => {
+              setTab(v);
+              setRoutes(null);
+              setError(null);
+              setLoading(false);
+            }}
+            options={[
+              { value: 'directions', label: 'Directions' },
+              { value: 'loop', label: 'Round trip', icon: Repeat },
+            ]}
+          />
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space[1], backgroundColor: t.surface, paddingVertical: space[1] }}>
           <View style={{ flex: 1, gap: space[3] }}>
             <PlaceSearch label="Starting point" placeholder="Choose starting point" tone="start" value={from} onChange={setFrom} allowCurrentLocation near={to?.location ?? here} onFocusChange={setSearching} />
             {tab === 'directions' ? (
@@ -265,14 +346,7 @@ export default function Plan() {
           ) : null}
         </View>
         {tab === 'directions' && !to && saved.data?.items.length ? <SavedShortcuts places={saved.data.items} onChoose={setTo} /> : null}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space[3], flexWrap: 'wrap' }}>
-           <Segmented<Mode> label="Travel mode" value={tab === 'loop' ? loopMode : mode} onChange={tab === 'loop' ? setLoopMode : setMode} options={[{ value: 'car', label: 'Drive', icon: Car }, { value: 'foot', label: 'Walk', icon: Footprints }]} />
-          {tab === 'directions' ? (
-            <Stepper label={copy.budgetLabel(budget)} onMinus={() => setBudget((b) => Math.max(5, b - 5))} onPlus={() => setBudget((b) => Math.min(60, b + 5))} />
-          ) : (
-            <Stepper label={`About ${formatDuration(loopMinutes * 60)}`} onMinus={() => setLoopMinutes((m) => Math.max(15, m - 15))} onPlus={() => setLoopMinutes((m) => Math.min(360, m + 15))} />
-          )}
-        </View>
+        {routesFirst ? null : modeRow}
         {tab === 'loop' ? (
           <>
             <Body muted>{copy.roundTripIntro}</Body>
@@ -302,6 +376,7 @@ export default function Plan() {
             <Small>{copy.noRoundTrips}</Small>
           )
         ) : null}
+        {routesFirst ? modeRow : null}
         {!loading && !routes && tab === 'directions' ? <Empty icon={Car} text="Choose where you’re going to compare the fastest route with ways you haven’t been." /> : null}
         {/* After the routes, so Start is in view without scrolling (P5). */}
         {tab === 'directions' && to && canSavePlace(to) ? <SavePlace key={`${to.location[0]},${to.location[1]}`} place={to} /> : null}

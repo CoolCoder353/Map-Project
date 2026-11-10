@@ -217,6 +217,15 @@ describe('location', () => {
   });
 });
 
+describe('Settings left scrolled down (H-U1)', () => {
+  it('scrolls up to the account rather than refusing', async () => {
+    const scrolled = dump(node({ text: 'Saved places', b: [40, 300, 1040, 340] }), node({ text: 'Send feedback', b: [40, 900, 400, 960] }));
+    const w = world({ screens: [scrolled, settings()] });
+    expect(await run(['up'], w.deps)).toBe(0);
+    expect(sent(w).some((c) => /shell input swipe 540 \d+ 540 \d+/.test(c))).toBe(true);
+  });
+});
+
 describe('down', () => {
   it('signs the test account out, turns the test location off and stops the head unit', async () => {
     const w = world();

@@ -268,6 +268,36 @@ without the fixes above). Found, not yet fixed:
 - **H-U1** `pnpm device up` refuses when Settings was left scrolled down; it should scroll up to
   read the account.
 
+### Fixed after the usability pass
+
+In code with tests, `pnpm check` passing; not yet seen on a device, and all of it needs a new build.
+
+- **U1:** typing over a chosen destination keeps it and its routes until another place is picked;
+  leaving the field, or the keyboard closing with nothing to pick, puts its name back. Only the ✕
+  clears it. The Plan map also fits the routes again whenever it changes size (the field taking
+  the screen, the keyboard going, Bigger map), which had left them cut off or out of sight.
+- **U2:** the trip planned in the last two hours comes back on reopening the app (kept on the phone).
+- **U3:** clearing the destination takes the map back to where you are.
+- **U4:** the From and To fields stay at the top of the panel as the routes scroll under them.
+- **U5:** each route's line carries its time ("24 min"), placed where it's clear of the other
+  routes; the car's route preview the same. Alternatives sharing a road are named by one of their
+  own where they have one, so "Explore 2" is rarer.
+- **U6:** routes are listed quickest first.
+- **U7:** with a destination chosen, the routes come straight after the fields, the mode and
+  extra time after them.
+- **U8:** Discover's numbers sit inside their pins and are always shown.
+- **U9:** one line above Discover's results says what decides their order; "new to you" is said
+  once when it is true of all of them.
+- **U10:** a place under 1 km away shows its distance alone.
+- **C-U1:** the parked car map shows a limit only beside a speed.
+- **C-U2:** search results are fitted with where you are among them; the map's own labels make
+  way for pins; pins sharing a spot are a pill, so "5·6" no longer reads as 56.
+- **C-U3 / C-U4:** car rows are two lines ("2.4 km · Cleveland"); the search key shows the list
+  already found for those words at once rather than searching again (the server answers in under
+  0.1 s, so the wait was on the car and phone, and the second search could change the list under
+  the driver's tap). Whether that was all of the 9 s is to be checked on the next run.
+- **H-U1:** `pnpm device up` scrolls Settings up to the account when it was left scrolled down.
+
 ## Phone app (100)
 
 - **P1** Plan opens on central Australia (OVERVIEW 134.5,-27.5 z3.6) even with location granted and a fresh fix; for a Queensland-only server the map is an empty desert showing "QUEENSLAN" cut off. Should start at the user's position or the server's region.

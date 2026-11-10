@@ -52,7 +52,7 @@ class SceneLayoutTest {
     val a = Samples.option("a")
     val chosen = SceneLayout.drawing(MapScene.Routes(listOf(a), 0))
     assertEquals(a.geometry.last(), chosen.destination)
-    assertTrue("no numbers once one is chosen", chosen.pins.isEmpty())
+    assertTrue("one route on its own needs no label", chosen.pins.isEmpty())
     val line = listOf(here, LngLat(153.1, -27.5))
     assertEquals(line.last(), SceneLayout.drawing(MapScene.Following(line, here, 90.0)).destination)
     assertNull("not before the route's line has come", SceneLayout.drawing(MapScene.Following(emptyList(), here, 90.0)).destination)
@@ -64,6 +64,10 @@ class SceneLayoutTest {
     val d = SceneLayout.drawing(MapScene.Routes(listOf(a, b), 1))
     assertEquals(b.geometry, d.selected)
     assertEquals(listOf(a.geometry), d.others)
+    // Each line carries its time, as its row does (C-U5).
+    val timed = SceneLayout.drawing(MapScene.Routes(listOf(a, b.copy(durationS = 960.0)), 0))
+    assertEquals(listOf("25 min", "16 min"), timed.pins.map { it.label })
+    assertEquals("1 h 5 min", SceneLayout.minutes(3900.0))
     assertEquals(CameraSpec.Fit(a.geometry + b.geometry), SceneLayout.camera(MapScene.Routes(listOf(a, b), 1)))
   }
 
@@ -157,5 +161,12 @@ class SceneLayoutTest {
     assertArrayEquals(doubleArrayOf(400.0, 0.0, 0.0, 0.0), SceneLayout.padding(800, 480, 400, 0, 800, 480), 0.0)
     // A speed column, and a visible area short of the right and bottom edges.
     assertArrayEquals(doubleArrayOf(130.0, 10.0, 20.0, 30.0), SceneLayout.padding(800, 480, 100, 10, 780, 450, 30), 0.0)
+  }
+
+  /** Search results with where you are among them, so "4 km away" can be seen on the map (C-U2). */
+  @Test fun searchResultsAreFittedWithWhereYouAre() {
+    val here = LngLat(153.25, -27.56)
+    val spec = SceneLayout.camera(MapScene.Places(listOf(Samples.place()), here)) as CameraSpec.Fit
+    assertTrue(here in spec.points)
   }
 }

@@ -246,7 +246,8 @@ class CarMapRenderer(private val carContext: CarContext) : SurfaceCallback, MapS
     style.addLayer(CircleLayer(START, START).withProperties(circleColor(WHITE), circleRadius(7f), circleStrokeColor(ACCENT), circleStrokeWidth(4f)))
     style.addLayer(CircleLayer(POSITION, POSITION).withProperties(circleColor(ACCENT), circleRadius(10f), circleStrokeColor(WHITE), circleStrokeWidth(3f)))
     // Numbered pins and the destination (MapPins), on top and never hidden for overlapping.
-    style.addLayer(SymbolLayer(MARKERS, MARKERS).withProperties(iconImage(Expression.get(MapFeatures.IMAGE)), iconAllowOverlap(true), iconIgnorePlacement(true)))
+    // Pins always show, and the map's own labels make way for them rather than sit under them (C-U2).
+    style.addLayer(SymbolLayer(MARKERS, MARKERS).withProperties(iconImage(Expression.get(MapFeatures.IMAGE)), iconAllowOverlap(true), iconIgnorePlacement(false)))
   }
 
   private fun applyScene() {

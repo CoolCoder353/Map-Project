@@ -24,10 +24,23 @@ import { useTopEdges } from '../../src/ui/NavigatingBanner';
 export const REFILTER_PAUSE_MS = 500;
 export const DISCOVER_FIT = { top: 80, bottom: 50, left: 60, right: 70 };
 
+/** Closer than this, a place's line gives its distance alone: "within 10 min by car" for a park round the corner read oddly (U10). */
+export const NEAR_M = 1000;
+
 /** A place's line: what it is, how long to get there (P43) and how far. */
 export function discoverDetail(i: DiscoverItem, mode: Mode): string {
-  const time = i.withinMinutes ? `within ${i.withinMinutes} min ${mode === 'car' ? 'by car' : 'on foot'}` : null;
+  const time = i.withinMinutes && i.distanceM >= NEAR_M ? `within ${i.withinMinutes} min ${mode === 'car' ? 'by car' : 'on foot'}` : null;
   return [kindOf(i.category), time, `${formatDistanceShort(i.distanceM)} away`].filter(Boolean).join(' · ');
+}
+
+/** Every place found is somewhere you haven't been: said once above them, not on each card (U9). */
+export const allNew = (items: DiscoverItem[]) => items.length > 0 && items.every((i) => i.areaUnexploredPct >= 95);
+
+/** What decides the order of what Discover found (the server's score), in a line. */
+export function discoverOrderNote(items: DiscoverItem[]): string {
+  return allNew(items)
+    ? 'All of these are in areas you haven’t been. The places most worth the trip come first, then the nearer.'
+    : 'Places in areas you haven’t been come first, then the ones most worth the trip and the nearer.';
 }
 
 export default function Discover() {
@@ -176,6 +189,8 @@ export default function Discover() {
         <Button label="Find places" icon={Compass} onPress={() => void search()} busy={busy} disabled={!origin} />
         {error ? <Notice tone="error">{error}</Notice> : null}
         {items && items.length === 0 ? <Empty icon={Compass} text={copy.discoverEmpty} /> : null}
+        {/* Why they're in this order, and what they share said once rather than on every card (U9). */}
+        {items?.length ? <Small>{discoverOrderNote(items)}</Small> : null}
         {items?.map((i, n) => (
           <View key={i.id} onLayout={(e) => void cardAt.current.set(i.id, e.nativeEvent.layout.y)}>
           <Card onPress={() => planTrip(i)}>
@@ -187,7 +202,7 @@ export default function Discover() {
                 <Text style={{ color: t.text, fontWeight: '700', fontSize: 16 }}>{i.name}</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space[2], alignItems: 'center', marginTop: 4 }}>
                   <Small>{discoverDetail(i, mode)}</Small>
-                  {i.areaUnexploredPct >= 50 ? <NewBadge text={i.areaUnexploredPct >= 95 ? 'Roads around it are new to you' : `${i.areaUnexploredPct}% of roads around it new to you`} /> : null}
+                  {i.areaUnexploredPct >= 50 && !allNew(items) ? <NewBadge text={i.areaUnexploredPct >= 95 ? 'Roads around it are new to you' : `${i.areaUnexploredPct}% of roads around it new to you`} /> : null}
                 </View>
               </View>
               <Small color={t.accent}>Directions</Small>

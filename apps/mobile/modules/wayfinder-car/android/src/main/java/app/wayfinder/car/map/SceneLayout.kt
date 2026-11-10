@@ -105,13 +105,25 @@ object SceneLayout {
       SceneDrawing(
         chosen,
         scene.options.filterIndexed { i, _ -> i != scene.selected }.map { it.geometry },
-        if (scene.selected == MapScene.Routes.NONE) grouped(numbered(scene.options.mapIndexed { i, o -> along(o.geometry, (i + 1.0) / (scene.options.size + 1)) })) else emptyList(),
+        when {
+          scene.selected == MapScene.Routes.NONE -> grouped(numbered(scene.options.mapIndexed { i, o -> along(o.geometry, (i + 1.0) / (scene.options.size + 1)) }))
+          // Choosing between routes: each line carries its time, as its row does, so a line can be
+          // matched to its row (C-U5). One route needs no label.
+          scene.options.size > 1 -> scene.options.mapIndexedNotNull { i, o -> along(o.geometry, (i + 1.0) / (scene.options.size + 1))?.let { Pin(it, minutes(o.durationS)) } }
+          else -> emptyList()
+        },
         null,
         destination = chosen.lastOrNull(),
         start = chosen.firstOrNull(),
       )
     }
     is MapScene.Following -> SceneDrawing(scene.line, emptyList(), emptyList(), scene.position, scene.travelled, destination = scene.line.lastOrNull(), lights = scene.lights)
+  }
+
+  /** A route's time as its row gives it: "16 min", "1 h 5 min". */
+  internal fun minutes(durationS: Double): String {
+    val m = Math.round(durationS / 60).toInt().coerceAtLeast(1)
+    return if (m < 60) "$m min" else if (m % 60 == 0) "${m / 60} h" else "${m / 60} h ${m % 60} min"
   }
 
   /** Numbered by place in the list, so a row with nothing to mark doesn't renumber the ones after it. */
@@ -143,7 +155,8 @@ object SceneLayout {
   /** [remembered]: where the car or phone last was, for a map opened before either knows where it is now (C67). */
   fun camera(scene: MapScene, remembered: LngLat? = null): CameraSpec = when (scene) {
     is MapScene.Overview -> (scene.here ?: remembered)?.let { CameraSpec.Center(it, HOME_ZOOM) } ?: AUSTRALIA
-    is MapScene.Places -> if (scene.places.isEmpty()) CameraSpec.Keep else CameraSpec.Fit(scene.places.map { it.location })
+    // Where you are too, so "4 km away" can be seen on the map (C-U2).
+    is MapScene.Places -> if (scene.places.isEmpty()) CameraSpec.Keep else CameraSpec.Fit(scene.places.map { it.location } + listOfNotNull(scene.here))
     is MapScene.Routes -> scene.options.flatMap { it.geometry }.let { if (it.isEmpty()) CameraSpec.Keep else CameraSpec.Fit(it) }
     is MapScene.Following -> scene.position?.let { CameraSpec.Follow(it, scene.headingDeg) }
       ?: if (scene.line.isEmpty()) CameraSpec.Keep else CameraSpec.Fit(scene.line)

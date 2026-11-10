@@ -113,10 +113,21 @@ export const ROUTE_EXPIRED = 'That route has expired. Go back and choose the pla
 /** Discover by car leaves out places closer than this: they're a walk, not a drive. */
 export const DISCOVER_MIN_M = 1000;
 
+/** "Cleveland QLD 4163" → "Cleveland": the state and postcode add a line on a car row and say little. */
+export const suburbOf = (context: string | null | undefined) => (context ?? '').replace(/\s*\b(NSW|VIC|QLD|SA|WA|TAS|NT|ACT)\b(\s+\d{4})?\s*$/, '').trim();
+
+/**
+ * A place's line on the car: how far, then its suburb (or what it is, for a suburb itself), short
+ * enough that a row is two lines parked; three left room for two results (C-U3).
+ */
+export function carPlaceDetail(p: { context?: string | null; typeLabel?: string; description?: string; distanceM?: number }): string {
+  return [p.distanceM != null ? formatDistanceShort(p.distanceM) : null, suburbOf(p.context) || p.typeLabel || p.description || null].filter(Boolean).join(' · ');
+}
+
 const toPlace = (p: Place): CarPlace => ({
   id: p.id,
   name: p.name,
-  detail: [p.context ?? p.typeLabel ?? p.description, p.distanceM != null ? `${formatDistanceShort(p.distanceM)} away` : null].filter(Boolean).join(' · '),
+  detail: carPlaceDetail(p),
   location: p.location,
   distanceM: p.distanceM ?? null,
   address: p.context ?? null,

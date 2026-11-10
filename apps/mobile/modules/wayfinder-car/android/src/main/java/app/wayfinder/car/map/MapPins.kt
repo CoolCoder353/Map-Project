@@ -40,22 +40,30 @@ object MapPins {
     return bmp
   }
 
-  /** A badge [sizePx] across: the number in white on the app's blue (the route line's), ringed in white. */
+  /** How wide a badge for [label] is, as a multiple of its height: a few numbers sharing one get a pill. */
+  fun badgeWidth(label: String): Float = if (label.length <= 1) 1f else 0.3f + 0.45f * label.length
+
+  /**
+   * A badge [sizePx] high: the number in white on the app's blue (the route line's), ringed in
+   * white. A few sharing one ("5·6") are a pill wide enough to keep their numbers full size: shrunk
+   * into a circle, "5·6" read as 56 (C-U2).
+   */
   fun badge(label: String, sizePx: Int): Bitmap {
-    val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+    val w = (sizePx * badgeWidth(label)).toInt()
+    val bmp = Bitmap.createBitmap(w, sizePx, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bmp)
     val r = sizePx / 2f
     val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     paint.color = Color.WHITE
-    canvas.drawCircle(r, r, r, paint)
+    canvas.drawRoundRect(0f, 0f, w.toFloat(), sizePx.toFloat(), r, r, paint)
     paint.color = ACCENT
-    canvas.drawCircle(r, r, r * 0.84f, paint)
+    val ring = r * 0.16f
+    canvas.drawRoundRect(ring, ring, w - ring, sizePx - ring, r - ring, r - ring, paint)
     paint.color = Color.WHITE
     paint.textAlign = Paint.Align.CENTER
     paint.typeface = Typeface.DEFAULT_BOLD
-    // One digit (lists stop at six rows), or a few sharing a badge ("2·4") smaller to fit.
-    paint.textSize = if (label.length <= 1) r * 1.1f else r * 1.6f / label.length
-    canvas.drawText(label, r, r - (paint.descent() + paint.ascent()) / 2, paint)
+    paint.textSize = r * 1.1f
+    canvas.drawText(label, w / 2f, r - (paint.descent() + paint.ascent()) / 2, paint)
     return bmp
   }
 

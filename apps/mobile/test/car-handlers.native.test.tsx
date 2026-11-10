@@ -3,7 +3,7 @@ import { timerHold } from '../src/lib/keepTimers';
 import { waitFor } from '@testing-library/react-native';
 import * as Location from 'expo-location';
 import { formatDistanceShort } from '@wayfinder/nav';
-import { CAR_SERVER_TIMEOUT_MS, carHandlers, carReportMessage, DISCOVER_MIN_M, isHomeName, NO_OTHER_WAYS, OFFERED_KEPT, PHONE_FIX_WAIT_MS, ROUTE_EXPIRED, REPORT_COOLDOWN_MS, REPORT_JUST_SENT, REPORT_LIMIT, REPORT_OFF, resetCarHandlers } from '../src/car/handlers';
+import { CAR_SERVER_TIMEOUT_MS, carHandlers, carPlaceDetail, carReportMessage, DISCOVER_MIN_M, isHomeName, NO_OTHER_WAYS, OFFERED_KEPT, PHONE_FIX_WAIT_MS, ROUTE_EXPIRED, REPORT_COOLDOWN_MS, REPORT_JUST_SENT, REPORT_LIMIT, REPORT_OFF, resetCarHandlers } from '../src/car/handlers';
 import { ApiError } from '../src/lib/apiClient';
 import { getServerUrl } from '../src/lib/server';
 import { fake, place, resetFakes, route } from './fakes';
@@ -205,7 +205,7 @@ describe('search', () => {
     fake.api.on({ 'GET api/search': () => ({ results: [place({ id: 'p1', name: 'Mt Coot-tha Lookout', context: 'Mount Coot-tha QLD', distanceM: 6200 })] }) });
     const res = await carHandlers.search!({ q: 'coot' });
     expect(fake.api.callsTo('GET api/search')[0]!.query).toMatchObject({ q: 'coot', lon: 153.02, lat: -27.47, limit: 6 });
-    expect(res).toEqual({ places: [{ id: 'p1', name: 'Mt Coot-tha Lookout', detail: 'Mount Coot-tha QLD · 6.2 km away', location: expect.any(Array), distanceM: 6200, address: 'Mount Coot-tha QLD' }] });
+    expect(res).toEqual({ places: [{ id: 'p1', name: 'Mt Coot-tha Lookout', detail: '6.2 km · Mount Coot-tha', location: expect.any(Array), distanceM: 6200, address: 'Mount Coot-tha QLD' }] });
     // The car says the phone can't reach the server well before it gives up on the phone (C65).
     expect(fake.api.callsTo('GET api/search')[0]!.timeoutMs).toBe(CAR_SERVER_TIMEOUT_MS);
   });
@@ -607,4 +607,11 @@ describe('the speed limit with no trip', () => {
   it('refuses a position that isn’t one', async () => {
     await expect(carHandlers.speedLimit!({ lon: 'east', lat: -27.56 })).rejects.toThrow();
   });
+});
+
+
+it('keeps a car row to two lines: how far, then the suburb or what it is (C-U3)', () => {
+  expect(carPlaceDetail({ context: 'Cleveland QLD 4163', typeLabel: 'Shooting range', distanceM: 2400 })).toBe('2.4 km · Cleveland');
+  expect(carPlaceDetail({ context: 'QLD 4163', typeLabel: 'Suburb', distanceM: 4100 })).toBe('4.1 km · Suburb');
+  expect(carPlaceDetail({ context: null, description: 'Map point' })).toBe('Map point');
 });

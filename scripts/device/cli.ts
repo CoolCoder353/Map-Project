@@ -127,6 +127,9 @@ const SETTINGS_WAIT_MS = 15_000;
  * wait, which on a slow phone read the screen before and reported someone it couldn't read. The
  * notification shade (pulled down by Android Auto connecting) is closed first.
  */
+/** Settings' sections below the account: seen without it, the screen was left scrolled down. */
+const SETTINGS_BELOW_ACCOUNT = ['Saved places', 'Map and app colours', 'Planned routes', 'Send feedback'];
+
 async function readSettings(ctx: Ctx): Promise<UiNode[]> {
   await adb(ctx, { kind: 'collapseShade' }).catch(() => undefined);
   await adb(ctx, { kind: 'open', path: '/settings' });
@@ -135,6 +138,11 @@ async function readSettings(ctx: Ctx): Promise<UiNode[]> {
     await ctx.deps.sleep(waited === 0 ? 1000 : 500);
     nodes = await screen(ctx);
     if (isSignInScreen(nodes) || signedInEmail(nodes)) return nodes;
+    // Settings left scrolled down: the account is at the top, so scroll up to it (H-U1).
+    if (nodes.some((n) => SETTINGS_BELOW_ACCOUNT.includes(label(n)))) {
+      const [w, h] = screenSize(nodes);
+      await adb(ctx, { kind: 'swipe', x1: w / 2, y1: h * 0.3, x2: w / 2, y2: h * 0.85 });
+    }
   }
   const pkg = focusedPackage(await text(ctx, { kind: 'focus' }));
   if (pkg !== APP) throw new Refused(`Something is covering Wayfinder (${pkg ?? 'the notification shade or lock screen'}), so its Settings couldn’t be read. Unlock the phone and close it, then run up again.`);

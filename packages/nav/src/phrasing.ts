@@ -50,8 +50,13 @@ export const VIA_MIN_M = 500;
  * route doesn't use at all. Null when there's none worth naming (unnamed tracks, or every road is
  * shared). Names a route by where it goes, rather than "Explore 2".
  */
-export function viaRoad(route: { instructions: readonly Pick<Instruction, 'streetName' | 'distanceM'>[] }, fastest: { instructions: readonly Pick<Instruction, 'streetName'>[] } | null): string | null {
-  const onFastest = new Set((fastest?.instructions ?? []).map((i) => i.streetName.trim().toLowerCase()).filter(Boolean));
+export function viaRoad(
+  route: { instructions: readonly Pick<Instruction, 'streetName' | 'distanceM'>[] },
+  fastest: { instructions: readonly Pick<Instruction, 'streetName'>[] } | null,
+  /** Roads not to name either: ones the other routes take too, which wouldn't tell them apart. */
+  shared: ReadonlySet<string> = new Set(),
+): string | null {
+  const onFastest = new Set([...(fastest?.instructions ?? []).map((i) => i.streetName.trim().toLowerCase()).filter(Boolean), ...shared]);
   const along = new Map<string, number>();
   for (const i of route.instructions) {
     const name = i.streetName.trim();
@@ -69,5 +74,13 @@ export function viaRoad(route: { instructions: readonly Pick<Instruction, 'stree
  */
 export function exploreTitles(explore: readonly { instructions: readonly Pick<Instruction, 'streetName' | 'distanceM'>[] }[], fastest: { instructions: readonly Pick<Instruction, 'streetName'>[] } | null): string[] {
   const vias = explore.map((r) => viaRoad(r, fastest));
-  return vias.map((v, i) => (v && vias.filter((o) => o === v).length === 1 ? `Via ${v}` : `Explore ${i + 1}`));
+  // Two routes on the same road: each is named, where it can be, by a road the others don't take
+  // (C-U5: one became "Explore 2" though it had a road of its own).
+  const roadsOf = explore.map((r) => new Set(r.instructions.filter((i) => i.distanceM >= VIA_MIN_M).map((i) => i.streetName.trim().toLowerCase()).filter(Boolean)));
+  return vias.map((v, i) => {
+    if (v && vias.filter((o) => o === v).length === 1) return `Via ${v}`;
+    const others = new Set(roadsOf.flatMap((s, j) => (j === i ? [] : [...s])));
+    const own = viaRoad(explore[i]!, fastest, others);
+    return own ? `Via ${own}` : `Explore ${i + 1}`;
+  });
 }

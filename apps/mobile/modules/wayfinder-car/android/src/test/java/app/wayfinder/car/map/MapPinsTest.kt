@@ -2,6 +2,7 @@ package app.wayfinder.car.map
 
 import app.wayfinder.car.bridge.LngLat
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -34,6 +35,14 @@ class MapPinsTest {
     val flag = MapPins.image(MapPins.DESTINATION, 160)
     assertEquals(34, flag.width)
     assertEquals("the pin's point is the image's centre", 68, flag.height)
+  }
+
+  /** Shrunk into a circle, "5·6" read as 56 (C-U2): a pill keeps the numbers full size. */
+  @Test fun aSharedBadgeIsAPill() {
+    val one = MapPins.badge("5", 52)
+    val two = MapPins.badge("5·6", 52)
+    assertEquals(52, two.height)
+    assertTrue(two.width > one.width * 1.2)
   }
 
   @Test fun aRowsBadgeIsTheSameDrawingAtTheRowsSize() {

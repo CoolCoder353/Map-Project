@@ -13,6 +13,7 @@ import { getServerUrl } from '../lib/server';
 import { MapErrorBoundary } from './MapErrorBoundary';
 import { useTheme } from '../lib/theme';
 import { lastMapView, rememberMapView } from '../lib/mapView';
+import { routeLabelPoints } from './routeLabels';
 
 export interface MapMarker {
   id: string;
@@ -31,6 +32,8 @@ interface Props {
   routes?: Route[];
   selectedRouteId?: string | null;
   onRoutePress?: (id: string) => void;
+  /** A label on each route's line ("24 min", as on its card), so a line can be matched to its card (U5). */
+  routeLabels?: Record<string, string>;
   /** A road on the coverage map tapped: what the server says about it (when it was travelled, P99). */
   onCoveragePress?: (road: Record<string, unknown>) => void;
   /** A marker tapped: its id (Discover's pins lead to their cards, P47). */
@@ -103,7 +106,7 @@ export function boundsOf(coords: LngLat[]): [number, number, number, number] | n
 }
 
 export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
-  { style, routes = [], selectedRouteId = null, onRoutePress, onMarkerPress, onCoveragePress, markers = [], coverage, track, showUser = true, followUser = false, onPress, onRegionChange, lights, follow, driving = false },
+  { style, routes = [], selectedRouteId = null, onRoutePress, routeLabels, onMarkerPress, onCoveragePress, markers = [], coverage, track, showUser = true, followUser = false, onPress, onRegionChange, lights, follow, driving = false },
   ref,
 ) {
   const t = useTheme();
@@ -193,6 +196,15 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
       properties: { id: r.id, kind: driving ? 'fastest' : r.kind, selected: r.id === selectedRouteId },
       geometry: { type: 'LineString', coordinates: r.geometry },
     })),
+  };
+  const labelAt = routeLabels ? routeLabelPoints(ordered) : null;
+  const labelData: GeoJSON.FeatureCollection = {
+    type: 'FeatureCollection',
+    features: ordered.flatMap((r) => {
+      const at = labelAt?.get(r.id);
+      const text = routeLabels?.[r.id];
+      return at && text ? [{ type: 'Feature' as const, properties: { id: r.id, text, kind: r.kind, selected: r.id === selectedRouteId }, geometry: { type: 'Point' as const, coordinates: at } }] : [];
+    }),
   };
   const markerData: GeoJSON.FeatureCollection = {
     type: 'FeatureCollection',
@@ -285,6 +297,22 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
         {/* Loops overlap: the chosen one solid and on top, the others grey and thin, so each can be told apart (P68). */}
         <Layer id="routes-loop" beforeId={ROUTES_BELOW} type="line" filter={['==', ['get', 'kind'], 'roundtrip']} layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-color': ['case', ['get', 'selected'], t.exploreLine, t.text2], 'line-width': ['case', ['get', 'selected'], 7, 3], 'line-opacity': ['case', ['get', 'selected'], 1, 0.5] }} />
       </GeoJSONSource>
+      <GeoJSONSource
+        id="route-labels"
+        data={labelData}
+        onPress={onRoutePress ? (e) => {
+          const id = (e.nativeEvent as unknown as { features?: GeoJSON.Feature[] }).features?.[0]?.properties?.id as string | undefined;
+          if (id) onRoutePress(id);
+        } : undefined}
+      >
+        {/* Each route's time on its line, in its own colour: which line is which card (U5). */}
+        <Layer
+          id="route-labels-text"
+          type="symbol"
+          layout={{ 'text-field': ['get', 'text'], 'text-font': ['Noto Sans Bold'], 'text-size': ['case', ['get', 'selected'], 15, 13], 'text-allow-overlap': true, 'text-ignore-placement': true, 'symbol-sort-key': ['case', ['get', 'selected'], 1, 0] }}
+          paint={{ 'text-color': ['case', ['==', ['get', 'kind'], 'fastest'], t.accent, t.explore], 'text-halo-color': t.surface, 'text-halo-width': 3 }}
+        />
+      </GeoJSONSource>
       <GeoJSONSource id="route-lights" data={lightData}>
         <Layer
           id="route-lights-circle"
@@ -306,8 +334,10 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(
           if (id) onMarkerPress(id);
         } : undefined}
       >
-        <Layer id="markers-circle" type="circle" paint={{ 'circle-radius': 8, 'circle-color': ['match', ['get', 'kind'], 'end', t.danger, 'poi', t.exploreLine, 'position', t.accent, t.surface], 'circle-stroke-color': ['match', ['get', 'kind'], 'start', t.text, t.surface], 'circle-stroke-width': 3 }} />
-        <Layer id="markers-label" type="symbol" filter={['!=', ['get', 'label'], '']} layout={{ 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Bold'], 'text-size': 13, 'text-offset': [0, 1.3], 'text-anchor': 'top', 'text-optional': true }} paint={{ 'text-color': t.text, 'text-halo-color': t.surface, 'text-halo-width': 1.5 }} />
+        <Layer id="markers-circle" type="circle" paint={{ 'circle-radius': ['case', ['==', ['get', 'kind'], 'poi'], 11, 8], 'circle-color': ['match', ['get', 'kind'], 'end', t.danger, 'poi', t.exploreLine, 'position', t.accent, t.surface], 'circle-stroke-color': ['match', ['get', 'kind'], 'start', t.text, t.surface], 'circle-stroke-width': 3 }} />
+        {/* A place's number inside its pin, always shown: beside it, numbers collided or were dropped (U8). */}
+        <Layer id="markers-number" type="symbol" filter={['all', ['==', ['get', 'kind'], 'poi'], ['!=', ['get', 'label'], '']]} layout={{ 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Bold'], 'text-size': 12, 'text-allow-overlap': true, 'text-ignore-placement': true }} paint={{ 'text-color': t.surface }} />
+        <Layer id="markers-label" type="symbol" filter={['all', ['!=', ['get', 'kind'], 'poi'], ['!=', ['get', 'label'], '']]} layout={{ 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Bold'], 'text-size': 13, 'text-offset': [0, 1.3], 'text-anchor': 'top', 'text-optional': true }} paint={{ 'text-color': t.text, 'text-halo-color': t.surface, 'text-halo-width': 1.5 }} />
       </GeoJSONSource>
       {showUser && canShowUser ? <UserLocation /> : null}
     </Map>

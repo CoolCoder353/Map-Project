@@ -71,8 +71,13 @@ class SearchScreen(
     override fun onSearchSubmitted(searchText: String) {
       cancelTyped()
       if (searchText.isBlank()) return
-      // The keyboard's search key: the results on the map, which the search screen has no room for (C49).
-      search(searchText) { found -> if (found.isNotEmpty()) screenManager.push(PickScreens.choose(carContext, api, map, searchText.trim(), found, directions)) }
+      val q = searchText.trim()
+      val choose = { found: List<CarPlace> -> if (found.isNotEmpty()) screenManager.push(PickScreens.choose(carContext, api, map, q, found, directions)) }
+      // The keyboard's search key: the results on the map, which the search screen has no room for
+      // (C49). Already found for these words: those, at once, rather than a second wait for the
+      // same list, which could come back different under the driver's tap (C-U3, C-U4).
+      if (q == query && !loading && error == null && results.isNotEmpty()) choose(results)
+      else search(q, choose)
     }
   }
 
