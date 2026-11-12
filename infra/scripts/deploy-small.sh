@@ -4,7 +4,7 @@
 #
 #   infra/scripts/deploy-small.sh images   # build and load api, worker (slim), web, graphhopper
 #   infra/scripts/deploy-small.sh data     # routing graph + vector tiles from DATA_VOLUME
-#   infra/scripts/deploy-small.sh places   # search data from the build database BUILD_DB
+#   infra/scripts/deploy-small.sh places   # search data, lights, limit rules and lanes from the build database BUILD_DB
 #   infra/scripts/deploy-small.sh all
 #
 # Settings (environment):
@@ -69,13 +69,14 @@ data() {
 places() {
   echo "== sending places"
   date=$(docker exec "$BUILD_DB" psql -U wayfinder -d wayfinder -At -c "SELECT value #>> '{}' FROM app_state WHERE key = 'osm.dataDate'")
-  # Traffic lights and speed-limit rules are built with the places and travel with them.
-  docker exec "$BUILD_DB" pg_dump -U wayfinder -d wayfinder --data-only -t places -t traffic_signals -t way_speed_rules -Fc \
-    | remote "cd $DIR/infra && $DC exec -T db sh -c 'psql -q -U wayfinder -d wayfinder -c \"TRUNCATE places, traffic_signals, way_speed_rules\" && pg_restore -U wayfinder -d wayfinder --data-only --single-transaction'"
+  # Traffic lights, speed-limit rules and lane markings are built with the places and travel with them.
+  docker exec "$BUILD_DB" pg_dump -U wayfinder -d wayfinder --data-only -t places -t traffic_signals -t way_speed_rules -t way_lanes -Fc \
+    | remote "cd $DIR/infra && $DC exec -T db sh -c 'psql -q -U wayfinder -d wayfinder -c \"TRUNCATE places, traffic_signals, way_speed_rules, way_lanes\" && pg_restore -U wayfinder -d wayfinder --data-only --single-transaction'"
   remote "cd $DIR/infra && $DC exec -T db psql -q -U wayfinder -d wayfinder -c \"
     INSERT INTO app_state (key, value) VALUES ('osm.dataDate', to_jsonb('$date'::text))
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
-    ANALYZE places; ANALYZE traffic_signals; ANALYZE way_speed_rules;\""
+    ANALYZE places; ANALYZE traffic_signals; ANALYZE way_speed_rules; ANALYZE way_lanes;\""
+  echo "   roads with lanes: $(remote "cd $DIR/infra && $DC exec -T db psql -U wayfinder -d wayfinder -At -c 'SELECT count(*) FROM way_lanes'")"
   echo "   traffic lights: $(remote "cd $DIR/infra && $DC exec -T db psql -U wayfinder -d wayfinder -At -c 'SELECT count(*) FROM traffic_signals'")"
   echo "   places: $(remote "cd $DIR/infra && $DC exec -T db psql -U wayfinder -d wayfinder -At -c 'SELECT count(*) FROM places'"), data date $date"
 }

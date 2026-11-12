@@ -49,13 +49,11 @@ export function placeDetail(
 
 /** A website as a person would say it: "bakery.com.au" for "https://www.bakery.com.au/". */
 export function websiteLabel(url: string): string {
-  try {
-    const u = new URL(url);
-    const path = u.pathname === '/' ? '' : u.pathname.replace(/\/$/, '');
-    return `${u.hostname.replace(/^www\./, '')}${path}`;
-  } catch {
-    return url;
-  }
+  const m = /^https?:\/\/([^/?#]+)([^?#]*)/i.exec(url);
+  if (!m) return url;
+  const host = m[1]!.toLowerCase().replace(/^www\./, '');
+  const path = m[2] === '/' ? '' : m[2]!.replace(/\/$/, '');
+  return `${host}${path}`;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
