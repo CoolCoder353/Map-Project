@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { featureToPlaces, poiCategory, representativePoint, streetKey } from '../../src/pipeline/osm-places.js';
+import { checkedOnOf, closedDown, featureToPlaces, phoneOf, poiCategory, representativePoint, streetKey, websiteOf } from '../../src/pipeline/osm-places.js';
 
 const point = (id: string, properties: Record<string, string>, coords = [149.1, -35.3]) => ({
   type: 'Feature' as const,
@@ -109,5 +109,32 @@ describe('OSM place mapping', () => {
     });
     expect(featureToPlaces(way('residential'))[0]).toMatchObject({ kind: 'street', poiType: 'highway=residential' });
     expect(featureToPlaces(way('service'))[0]).toMatchObject({ kind: 'street', poiType: 'highway=service' });
+  });
+
+  it('keeps a business’s phone, website and the latest date its details were checked', () => {
+    const [cafe] = featureToPlaces(
+      point('n50', { amenity: 'cafe', name: 'Bean There', 'contact:phone': '+61 7 3000 1234; +61 400 000 000', website: 'beanthere.com.au', check_date: '2023-05-01', 'check_date:opening_hours': '2025-02-10' }),
+    );
+    expect(cafe).toMatchObject({ phone: '+61 7 3000 1234', website: 'https://beanthere.com.au/', checkedOn: '2025-02-10' });
+    const [bare] = featureToPlaces(point('n51', { shop: 'bakery', name: 'Plain Bakery' }));
+    expect(bare).toMatchObject({ phone: null, website: null, checkedOn: null });
+  });
+
+  it('ignores contact details that are not a phone number or a web address', () => {
+    expect(phoneOf({ phone: 'call us' })).toBeNull();
+    expect(websiteOf({ website: 'javascript:alert(1)' })).toBeNull();
+    expect(websiteOf({ website: 'localhost' })).toBeNull();
+    expect(websiteOf({ url: 'http://example.org/a' })).toBe('http://example.org/a');
+    expect(checkedOnOf({ check_date: '2024' })).toBeNull();
+  });
+
+  it('leaves out businesses that have closed down but keeps their address', () => {
+    expect(closedDown({ disused: 'yes' })).toBe(true);
+    expect(closedDown({ opening_hours: 'closed' })).toBe(true);
+    expect(closedDown({ opening_hours: 'Mo-Fr 09:00-17:00' })).toBe(false);
+    const closed = featureToPlaces(point('n52', { shop: 'video', name: 'Video Ezy', disused: 'yes', 'addr:housenumber': '3', 'addr:street': 'High Street' }));
+    expect(closed.map((p) => p.kind)).toEqual(['address']);
+    const lookout = featureToPlaces(point('n53', { tourism: 'viewpoint', name: 'Old Lookout', abandoned: 'yes' }));
+    expect(lookout).toEqual([]);
   });
 });

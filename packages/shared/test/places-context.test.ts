@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryTypes, expandAbbreviations, splitAddress, placeContext, placeDetail, poiTypeLabel, pointInPolygon, stateAbbreviation, stateTimeZone } from '../src/index.js';
+import { categoryTypes, checkedLabel, websiteLabel, expandAbbreviations, splitAddress, placeContext, placeDetail, poiTypeLabel, pointInPolygon, stateAbbreviation, stateTimeZone } from '../src/index.js';
 
 describe('place context line', () => {
   it('gives suburb, state and postcode for things inside a suburb', () => {
@@ -95,5 +95,18 @@ describe('splitAddress', () => {
     expect(splitAddress('Woolworths Cleveland')).toBeNull();
     expect(splitAddress('12 Lonsdale St')).toBeNull();
     expect(splitAddress(' , ')).toBeNull();
+  });
+});
+
+describe('website and check-date labels', () => {
+  it('says a website the way a person would', () => {
+    expect(websiteLabel('https://www.bakery.com.au/')).toBe('bakery.com.au');
+    expect(websiteLabel('https://shop.example.com/stores/dickson/')).toBe('shop.example.com/stores/dickson');
+    expect(websiteLabel('not a url')).toBe('not a url');
+  });
+
+  it('says when details were checked by month', () => {
+    expect(checkedLabel('2024-03-02')).toBe('Details checked Mar 2024');
+    expect(checkedLabel('2024-13-02')).toBe('Details checked');
   });
 });

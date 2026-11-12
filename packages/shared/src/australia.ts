@@ -47,6 +47,26 @@ export function placeDetail(
   return parts.filter(Boolean).join(' · ');
 }
 
+/** A website as a person would say it: "bakery.com.au" for "https://www.bakery.com.au/". */
+export function websiteLabel(url: string): string {
+  try {
+    const u = new URL(url);
+    const path = u.pathname === '/' ? '' : u.pathname.replace(/\/$/, '');
+    return `${u.hostname.replace(/^www\./, '')}${path}`;
+  } catch {
+    return url;
+  }
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** When a place's details were last checked on the ground: "Details checked Mar 2024". */
+export function checkedLabel(checkedOn: string): string {
+  const m = /^(\d{4})-(\d{2})/.exec(checkedOn);
+  const month = m ? MONTHS[Number(m[2]) - 1] : undefined;
+  return m && month ? `Details checked ${month} ${m[1]}` : 'Details checked';
+}
+
 /**
  * The time zone at a point in Australia, roughly: Western Australia west of 129°E, the Northern
  * Territory and South Australia either side of 26°S as far as 138°E and 141°E, Queensland north of

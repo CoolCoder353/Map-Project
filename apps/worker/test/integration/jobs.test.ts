@@ -99,7 +99,7 @@ describe('worker job handlers', () => {
 
   it('road-speeds rebuilds the typical speeds from drives', async () => {
     const handlers = jobHandlers(deps());
-    expect(await handlers['road-speeds']({})).toEqual({ roads: 0, pruned: 0 });
+    expect(await handlers['road-speeds']({})).toEqual({ roads: 0, pruned: 0, limitChecks: 0 });
   });
 
   it('light-timings rebuilds how long lights hold drives', async () => {

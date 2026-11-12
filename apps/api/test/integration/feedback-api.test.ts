@@ -153,3 +153,19 @@ describe('user feedback', () => {
     expect((await ta.t.db.query('SELECT count(*)::int AS n FROM feedback WHERE user_id = $1', [alex.id])).rows[0].n).toBe(0);
   });
 });
+
+describe('limits to check', () => {
+  it('lists the roads drives suggest have a wrong limit, to devs and admins only', async () => {
+    await ta.t.db.query(`INSERT INTO limit_checks (way_id, limit_kmh, typical_kmh, trips, people, lon, lat) VALUES (9, 100, 48.6, 5, 2, 153.1, -27.5), (8, 60, 66, 4, 2, 153.2, -27.6)`);
+    const res = await ta.app.inject({ method: 'GET', url: '/api/admin/limit-checks', headers: await auth(dev, 'dev') });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      items: [
+        { wayId: '9', limitKmh: 100, typicalKmh: 49, trips: 5, people: 2, location: [153.1, -27.5] },
+        { wayId: '8', limitKmh: 60, typicalKmh: 66, trips: 4, people: 2, location: [153.2, -27.6] },
+      ],
+    });
+    expect((await ta.app.inject({ method: 'GET', url: '/api/admin/limit-checks', headers: await auth(sam) })).statusCode).toBe(404);
+    await ta.t.db.query('DELETE FROM limit_checks');
+  });
+});

@@ -3,7 +3,7 @@
  * lights, and how long the route really takes. Pure functions over route geometry, used by the
  * server to finish each route and by the turn-by-turn engine to say which set of lights to turn at.
  */
-import { type LngLat, type SpeedLimitRun, haversineM, projectOntoSegment } from './geo.js';
+import { type LngLat, type SpeedLimitRun, bearingDeg, haversineM, projectOntoSegment } from './geo.js';
 import { type LightTiming, expectedDelayS } from './light-timing.js';
 
 /** `signals` a junction's lights, `crossing` lights for people crossing, `ramp_meter` a motorway on-ramp's. */
@@ -348,6 +348,102 @@ export function mainRoadEstimates(
   for (const [a, b, kmh] of estimated) {
     for (let i = a; i < b && i < n; i++) {
       const v = MAIN_ROAD_CLASSES.has(classes[i] ?? '') ? carried(i) : kmh;
+      const last = out.at(-1);
+      if (last && last[1] === i && last[2] === v) last[1] = i + 1;
+      else out.push([i, i + 1, v]);
+    }
+  }
+  return out;
+}
+
+/** A surveyed speed limit sign: where, the limit, and which way the traffic facing it is going. */
+export interface SurveyedSign {
+  lon: number;
+  lat: number;
+  kmh: number;
+  /** Degrees from north. */
+  bearing: number;
+}
+
+/** How far from the route line a sign can be and still be beside it (signs stand on the verge). */
+export const SIGN_MATCH_M = 20;
+/** How far a sign's direction can be from the route's and still face it. */
+const SIGN_HEADING_DEG = 50;
+/** How far along the same road a sign's limit is carried. */
+const SIGN_CARRY_M = 5000;
+
+const headingGap = (a: number, b: number) => {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+};
+
+/**
+ * Estimated limits mended from surveyed signs. Where the map has no limit for a stretch, the last
+ * sign the route passed facing its way on the same road (the same street name, within
+ * SIGN_CARRY_M) is a better guess than the legal default. Signposted stretches are left alone:
+ * these runs are only the estimated ones, and the survey is older than the map.
+ */
+export function surveyedEstimates(
+  estimated: readonly Run[],
+  coords: readonly LngLat[],
+  signs: readonly SurveyedSign[],
+  names: readonly TextRun[],
+): Array<[number, number, number | null]> {
+  const n = coords.length - 1;
+  if (n < 1 || signs.length === 0 || estimated.length === 0) return estimated.map(([a, b, v]) => [a, b, v]);
+  const nameOf = new Array<string | null>(n).fill(null);
+  for (const [a, b, v] of names) for (let i = a; i < b && i < n; i++) nameOf[i] = v;
+  const cum = cumulativeM(coords);
+  const heading = Array.from({ length: n }, (_, i) => bearingDeg(coords[i]!, coords[i + 1]!));
+
+  // Each sign on the segment nearest it, facing the route, by grid cell as for lights.
+  const CELL = 0.001;
+  const pad = (SIGN_MATCH_M / 111_000) * 2;
+  const grid = new Map<string, number[]>();
+  for (let i = 0; i < n; i++) {
+    const a = coords[i]!;
+    const b = coords[i + 1]!;
+    for (let x = Math.floor((Math.min(a[0], b[0]) - pad) / CELL); x <= Math.floor((Math.max(a[0], b[0]) + pad) / CELL); x++)
+      for (let y = Math.floor((Math.min(a[1], b[1]) - pad) / CELL); y <= Math.floor((Math.max(a[1], b[1]) + pad) / CELL); y++) {
+        const key = `${x},${y}`;
+        const list = grid.get(key);
+        if (list) list.push(i);
+        else grid.set(key, [i]);
+      }
+  }
+  const passed: Array<{ m: number; segment: number; kmh: number }> = [];
+  for (const s of signs) {
+    const near = grid.get(`${Math.floor(s.lon / CELL)},${Math.floor(s.lat / CELL)}`);
+    if (!near) continue;
+    let best: { d: number; segment: number; m: number } | null = null;
+    for (const i of near) {
+      if (headingGap(heading[i]!, s.bearing) > SIGN_HEADING_DEG) continue;
+      const p = projectOntoSegment([s.lon, s.lat], coords[i]!, coords[i + 1]!);
+      if (p.distanceM <= SIGN_MATCH_M && (!best || p.distanceM < best.d)) best = { d: p.distanceM, segment: i, m: cum[i]! + (cum[i + 1]! - cum[i]!) * p.t };
+    }
+    if (best) passed.push({ m: best.m, segment: best.segment, kmh: s.kmh });
+  }
+  if (passed.length === 0) return estimated.map(([a, b, v]) => [a, b, v]);
+  passed.sort((a, b) => a.m - b.m);
+
+  // The sign in force at the start of segment i: the last passed before it on the same road.
+  const signAt = (i: number): number | null => {
+    const road = nameOf[i];
+    if (!road) return null;
+    for (let k = passed.length - 1; k >= 0; k--) {
+      const s = passed[k]!;
+      // A sign part-way along a segment applies from the next one on.
+      if (s.segment >= i) continue;
+      if (cum[i]! - s.m > SIGN_CARRY_M) return null;
+      for (let j = s.segment; j < i; j++) if (nameOf[j] !== road) return null;
+      return s.kmh;
+    }
+    return null;
+  };
+  const out: Array<[number, number, number | null]> = [];
+  for (const [a, b, kmh] of estimated) {
+    for (let i = a; i < b && i < n; i++) {
+      const v = signAt(i) ?? kmh;
       const last = out.at(-1);
       if (last && last[1] === i && last[2] === v) last[1] = i + 1;
       else out.push([i, i + 1, v]);

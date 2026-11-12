@@ -10,6 +10,7 @@ import {
   mainRoadEstimates,
   markTurnsAtLights,
   signalsAlongRoute,
+  surveyedEstimates,
   splitEstimatedLimits,
   travelTime,
   usuallySlow,
@@ -239,5 +240,42 @@ describe('local time on Australian roads', () => {
     // 22:30 UTC on a Sunday is 8:30 on Monday in Brisbane.
     expect(localDayHour(new Date('2026-11-01T22:30:00Z'), 'Australia/Brisbane')).toEqual({ day: 1, hour: 8 });
     expect(localDayHour(new Date('2026-11-01T12:00:00Z'), 'Australia/Perth')).toEqual({ day: 0, hour: 20 });
+  });
+});
+
+describe('estimated limits mended from surveyed signs', () => {
+  // 20 segments of 100 m heading east, Main Street then Side Street from segment 12.
+  const start: LngLat = [153.0, -27.5];
+  const coords: LngLat[] = Array.from({ length: 21 }, (_, i) => destination(start, 90, i * 100));
+  const names = [[0, 12, 'Main Street'], [12, 20, 'Side Street']] as const;
+  const beside = (m: number, offM = 8): LngLat => destination(destination(start, 90, m), 180, offM);
+  const sign = (m: number, kmh: number, bearing = 90) => ({ lon: beside(m)[0], lat: beside(m)[1], kmh, bearing });
+
+  it('carries a sign facing the route to the estimated stretches after it on the same road', () => {
+    const estimated = [[0, 20, 50]] as const;
+    expect(surveyedEstimates(estimated, coords, [sign(250, 70)], names)).toEqual([
+      [0, 3, 50],
+      [3, 12, 70],
+      [12, 20, 50],
+    ]);
+  });
+
+  it('takes the latest sign passed, and leaves signposted stretches to the map', () => {
+    // Only 6..10 is estimated; the 60 sign at 150 m and an 80 at 750 m.
+    const out = surveyedEstimates([[6, 10, 50]], coords, [sign(150, 60), sign(750, 80)], names);
+    expect(out).toEqual([[6, 8, 60], [8, 10, 80]]);
+  });
+
+  it('ignores signs facing the other way, far from the route, or with nothing to mend', () => {
+    const estimated = [[0, 20, 50]] as const;
+    expect(surveyedEstimates(estimated, coords, [sign(250, 70, 270)], names)).toEqual([[0, 20, 50]]);
+    expect(surveyedEstimates(estimated, coords, [{ ...sign(250, 70), lat: beside(250, 60)[1] }], names)).toEqual([[0, 20, 50]]);
+    expect(surveyedEstimates([], coords, [sign(250, 70)], names)).toEqual([]);
+    expect(surveyedEstimates(estimated, coords, [], names)).toEqual([[0, 20, 50]]);
+  });
+
+  it('fills a main road the map left without a limit, but not one with no name to match', () => {
+    expect(surveyedEstimates([[5, 8, null]], coords, [sign(150, 100)], names)).toEqual([[5, 8, 100]]);
+    expect(surveyedEstimates([[5, 8, null]], coords, [sign(150, 100)], [])).toEqual([[5, 8, null]]);
   });
 });

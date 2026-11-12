@@ -14,6 +14,7 @@ import { MapCanvas } from '../src/map/MapCanvas';
 import { sendSpeedLimitReport } from '../src/nav/speedLimitReport';
 import { useTurnByTurn } from '../src/nav/useTurnByTurn';
 import { Button, Empty, Notice, Press } from '../src/ui/kit';
+import { LaneGuide } from '../src/ui/LaneGuide';
 import { ManeuverIcon } from '../src/ui/ManeuverIcon';
 
 
@@ -142,6 +143,12 @@ export default function Navigate() {
           </Text>
         </View>
       </View>
+      {next?.lanes && !arrived && s?.status === 'navigating' ? (
+        // The lanes leading to the turn, part of the banner, under the words.
+        <View style={{ backgroundColor: banner, paddingHorizontal: space[4], paddingBottom: space[3], marginTop: -space[2] }}>
+          <LaneGuide lanes={next.lanes} color="#ffffff" />
+        </View>
+      ) : null}
       {then ? (
         // The banner's colour, darkened: part of it, but read second.
         <View accessible accessibilityLabel={`Then ${then.text.charAt(0).toLowerCase()}${then.text.slice(1)}`} style={{ backgroundColor: banner, paddingHorizontal: space[4], paddingBottom: space[3], marginTop: -space[2] }}>

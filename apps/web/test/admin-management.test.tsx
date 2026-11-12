@@ -6,6 +6,7 @@ import { AuditPage } from '../src/admin/pages/AuditPage';
 import { DeletedPage } from '../src/admin/pages/DeletedPage';
 import { FeedbackDetailPage, FeedbackPage } from '../src/admin/pages/FeedbackPage';
 import { InvitesPage } from '../src/admin/pages/InvitesPage';
+import { LimitChecksPage } from '../src/admin/pages/LimitChecksPage';
 import { UserDetailPage } from '../src/admin/pages/UserDetailPage';
 import { UsersPage } from '../src/admin/pages/UsersPage';
 import { type Routes, apiError } from './fakeApi';
@@ -466,3 +467,31 @@ describe('Feedback reports', () => {
     expect(screen.getByText('Platform').nextSibling).toHaveTextContent('Android 0.1.0');
   });
 });
+
+describe('Limits to check', () => {
+  it('lists roads whose limit drives disagree with, with links to check and fix them', async () => {
+    await renderApp(<LimitChecksPage />, {
+      path: '/admin/limits',
+      user: dev,
+      api: {
+        'GET /api/admin/limit-checks': () => ({
+          items: [
+            { wayId: '9', limitKmh: 100, typicalKmh: 49, trips: 5, people: 2, location: [153.1, -27.5] },
+            { wayId: '8', limitKmh: 40, typicalKmh: 62, trips: 4, people: 3, location: [153.2, -27.6] },
+          ],
+        }),
+      },
+    });
+    const rows = await screen.findAllByRole('row');
+    expect(rows[1]).toHaveTextContent('100 km/h49 km/hDrives go well under it: the limit may be too high5 by 2 people');
+    expect(rows[2]).toHaveTextContent('Drives go well over it: the limit may be too low');
+    expect(within(rows[1]!).getByRole('link', { name: 'View road' })).toHaveAttribute('href', 'https://www.openstreetmap.org/way/9');
+    expect(within(rows[1]!).getByRole('link', { name: 'Edit in OpenStreetMap' })).toHaveAttribute('href', 'https://www.openstreetmap.org/edit?way=9');
+  });
+
+  it('says when there is nothing to check', async () => {
+    await renderApp(<LimitChecksPage />, { path: '/admin/limits', user: admin, api: { 'GET /api/admin/limit-checks': () => ({ items: [] }) } });
+    expect(await screen.findByText(/No limits to check/)).toBeInTheDocument();
+  });
+});
+

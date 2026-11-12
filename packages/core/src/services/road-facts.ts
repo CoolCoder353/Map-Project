@@ -6,6 +6,8 @@ import {
   type Route,
   type RouteSignal,
   type SignalKind,
+  type SurveyedSign,
+  type WayLanes,
   applyWayLimitRules,
   bboxOf,
   cumulativeM,
@@ -16,9 +18,11 @@ import {
   speedLimitRuns,
   splitEstimatedLimits,
   stateTimeZone,
+  surveyedEstimates,
   timeZoneAt,
   travelTime,
   usuallySlow,
+  withLanes,
   withoutCovered,
 } from '@wayfinder/shared';
 import type { DbClient } from '../db/pool.js';
@@ -41,9 +45,32 @@ export interface RoadFacts {
   speeds: Map<number, number>;
   /** How long a set of lights usually holds a car going one way through it now, where drives have shown it. */
   timings: TimingLookup;
+  /** The lane markings on the roads that have them (driving only). */
+  lanes: Map<number, WayLanes>;
+  /** Surveyed speed limit signs near the routes (driving only), for stretches the map has no limit for. */
+  speedSigns: SurveyedSign[];
 }
 
-export const NO_ROAD_FACTS: RoadFacts = { signals: [], rules: new Map(), speeds: new Map(), timings: NO_TIMINGS };
+export const NO_ROAD_FACTS: RoadFacts = { signals: [], rules: new Map(), speeds: new Map(), timings: NO_TIMINGS, lanes: new Map(), speedSigns: [] };
+
+/** The surveyed speed limit signs inside a box. */
+export async function speedSignsIn(db: DbClient, box: BBox, limit = 50_000): Promise<SurveyedSign[]> {
+  const r = await db.query<{ lon: number; lat: number; kmh: number; bearing: number }>(
+    `SELECT lon, lat, kmh, bearing FROM speed_signs WHERE point(lon, lat) <@ box(point($1, $2), point($3, $4)) LIMIT $5`,
+    [box[0], box[1], box[2], box[3], limit],
+  );
+  return r.rows.map((x) => ({ lon: x.lon, lat: x.lat, kmh: Number(x.kmh), bearing: Number(x.bearing) }));
+}
+
+/** The lane markings on these ways, where mapped. */
+export async function lanesOf(db: DbClient, wayIds: readonly number[]): Promise<Map<number, WayLanes>> {
+  if (wayIds.length === 0) return new Map();
+  const r = await db.query<{ way_id: string; forward: string | null; backward: string | null; coords: WayLanes['coords'] }>(
+    'SELECT way_id::text, forward, backward, coords FROM way_lanes WHERE way_id = ANY($1::bigint[])',
+    [wayIds.map(String)],
+  );
+  return new Map(r.rows.map((x) => [Number(x.way_id), { forward: x.forward, backward: x.backward, coords: x.coords }]));
+}
 
 const wayIdsOf = (paths: readonly GhPath[]) => [...new Set(paths.flatMap((p) => (p.details?.osm_way_id ?? []).map((r) => r[2]).filter((id) => id > 0)))];
 
@@ -62,7 +89,7 @@ export async function loadRoadFacts(db: DbClient, paths: readonly GhPath[], mode
   if (coords.length === 0) return NO_ROAD_FACTS;
   const ways = wayIdsOf(paths);
   const box = bboxOf(coords, 30);
-  const [signals, rules, speeds, timings] = await Promise.all([
+  const [signals, rules, speeds, timings, lanes, speedSigns] = await Promise.all([
     // Lights are for driving: on foot they're crossings, which a walk's time already allows for.
     mode === 'car' ? signalsIn(db, box) : Promise.resolve([]),
     ways.length
@@ -75,8 +102,10 @@ export async function loadRoadFacts(db: DbClient, paths: readonly GhPath[], mode
       : Promise.resolve(new Map<number, WayRule>()),
     mode === 'car' ? learnedSpeeds(db, ways, now, coords[0]!) : Promise.resolve(new Map<number, number>()),
     mode === 'car' ? lightTimingsIn(db, box, now, coords[0]!) : Promise.resolve(NO_TIMINGS),
+    mode === 'car' ? lanesOf(db, ways) : Promise.resolve(new Map<number, WayLanes>()),
+    mode === 'car' ? speedSignsIn(db, box) : Promise.resolve([]),
   ]);
-  return { signals, rules, speeds, timings };
+  return { signals, rules, speeds, timings, lanes, speedSigns };
 }
 
 const parsedConditions = new Map<string, OpeningHours | null>();
@@ -138,7 +167,7 @@ export function conditionalLimitNow(tag: string, timeZone: string, now: Date): n
 
 /**
  * Finish a route with what the database knows about its roads: lights (driving only) and turns made
- * at them, signposted limits apart from estimated ones, school zones in force and roads whose limit
+ * at them, the lanes for each turn where they're mapped, signposted limits apart from estimated ones, school zones in force and roads whose limit
  * is on electronic signs, the time the drive takes going by trips actually made, and how long each
  * set of lights usually holds a car going this way at this time.
  */
@@ -152,7 +181,13 @@ export function finishRoute(route: Route, path: GhPath, facts: RoadFacts, now: D
   const { signed } = split;
   // On a highway, the same road's signs beat the built-up default (or no limit beats a wrong one).
   const d = path.details;
-  const estimated = mainRoadEstimates(split.estimated, signed, d?.road_class ?? [], d?.street_name ?? [], d?.street_ref ?? [], coords);
+  // And where a surveyed sign on the same road says what the limit is, that beats a guess.
+  const estimated = surveyedEstimates(
+    mainRoadEstimates(split.estimated, signed, d?.road_class ?? [], d?.street_name ?? [], d?.street_ref ?? [], coords),
+    coords,
+    facts.speedSigns,
+    d?.street_name ?? [],
+  );
   const ruleFor = (wayId: number) => {
     const rule = facts.rules.get(wayId);
     if (!rule) return null;
@@ -174,7 +209,9 @@ export function finishRoute(route: Route, path: GhPath, facts: RoadFacts, now: D
     return timing ? { ...s, timing } : s;
   });
 
-  const instructions = markTurnsAtLights(route.instructions, coords, signals);
+  // Turns with the lanes to be in, where the road leading to them has its lanes mapped.
+  const atLights = markTurnsAtLights(route.instructions, coords, signals);
+  const instructions = route.mode === 'car' ? withLanes(atLights, coords, ways, (id) => facts.lanes.get(id)) : atLights;
   const time = travelTime({
     coords,
     instructions,

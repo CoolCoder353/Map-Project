@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Activity, ArrowLeft, Bug, Cog, Gauge, History, KeyRound, Layers, MessageSquare, Trash2, Users, UsersRound } from 'lucide-react';
+import { Activity, ArrowLeft, Bug, Cog, Gauge, History, KeyRound, Layers, MessageSquare, Signpost, Trash2, Users, UsersRound } from 'lucide-react';
 import { useEffect } from 'react';
 import { NavLink, Route, Routes, useLocation } from 'react-router';
 import { api } from '../lib/api';
@@ -12,6 +12,7 @@ import { ErrorsPage } from './pages/ErrorsPage';
 import { FeedbackDetailPage, FeedbackPage } from './pages/FeedbackPage';
 import { InvitesPage } from './pages/InvitesPage';
 import { JobsPage } from './pages/JobsPage';
+import { LimitChecksPage } from './pages/LimitChecksPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { PerformancePage } from './pages/PerformancePage';
 import { UsagePage } from './pages/UsagePage';
@@ -29,6 +30,7 @@ const NAV = [
   { group: 'Management', items: [
     { to: '/admin/users', label: 'Users', icon: Users },
     { to: '/admin/feedback', label: 'Feedback', icon: MessageSquare },
+    { to: '/admin/limits', label: 'Limits to check', icon: Signpost },
     { to: '/admin/invites', label: 'Invite codes', icon: KeyRound },
     { to: '/admin/audit', label: 'Audit log', icon: History },
     { to: '/admin/deleted', label: 'Recently deleted', icon: Trash2 },
@@ -90,6 +92,7 @@ export default function AdminApp() {
           <Route path="settings" element={<AppSettingsPage />} />
           <Route path="feedback" element={<FeedbackPage />} />
           <Route path="feedback/:id" element={<FeedbackDetailPage />} />
+          <Route path="limits" element={<LimitChecksPage />} />
         </Routes>
       </main>
     </div>

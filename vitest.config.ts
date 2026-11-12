@@ -18,6 +18,7 @@ export default defineConfig({
         'apps/worker/src/main.ts',
         'apps/worker/src/refresh-cli.ts',
         'apps/worker/src/pipeline/import-places-cli.ts',
+        'apps/worker/src/speed-signs-cli.ts',
         'apps/web/src/main.tsx',
       ],
       reporter: ['text-summary', 'html', 'json-summary'],

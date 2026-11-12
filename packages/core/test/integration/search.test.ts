@@ -21,7 +21,7 @@ beforeAll(async () => {
   };
   await places.upsertPlaces(t.db, [
     ...stores,
-    near('w1', 'Woolworths', 0, 1500, { poiType: 'shop=supermarket', suburb: 'Dickson', state: 'ACT', postcode: '2602', openingHours: 'Mo-Su 07:00-22:00' }),
+    near('w1', 'Woolworths', 0, 1500, { poiType: 'shop=supermarket', suburb: 'Dickson', state: 'ACT', postcode: '2602', openingHours: 'Mo-Su 07:00-22:00', phone: '+61 2 6100 0000', website: 'https://www.woolworths.com.au/', checkedOn: '2025-03-14' }),
     near('w2', 'Woolworths', 200, 4000, { poiType: 'shop=supermarket', suburb: 'Civic', state: 'ACT', postcode: '2601' }),
     near('f1', 'Ampol Braddon', 90, 800, { poiType: 'amenity=fuel', brand: 'Ampol', suburb: 'Braddon', state: 'ACT', postcode: '2612' }),
     near('f2', 'Caltex Dickson', 30, 3000, { poiType: 'amenity=fuel', brand: 'Ampol', suburb: 'Dickson', state: 'ACT' }),
@@ -63,6 +63,14 @@ describe('place search', () => {
     expect(r[0]!.distanceM).toBeLessThan(1600);
     expect(r[0]!.hours).toEqual({ openNow: true, label: 'Open until 10 pm' });
     expect(r[2]!.distanceM).toBeGreaterThan(190_000);
+  });
+
+  it('gives a business its phone, website and when its details were checked, and nothing for one with none', async () => {
+    const r = await places.searchPlaces(t.db, 'Woolworths', braddon, 5, friday);
+    expect(r[0]).toMatchObject({ phone: '+61 2 6100 0000', website: 'https://www.woolworths.com.au/', checkedOn: '2025-03-14' });
+    expect(r[1]).not.toHaveProperty('phone');
+    expect(r[1]).not.toHaveProperty('website');
+    expect(r[1]).not.toHaveProperty('checkedOn');
   });
 
   it('still finds a city by name from far away, above a nearby partial match', async () => {

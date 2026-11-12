@@ -189,7 +189,7 @@ export async function matchTrips(
     const travelled = waysOfPath(path);
     // Drives also say how fast each road really goes, for travel times.
     if (trip.mode === 'car') {
-      await recordSpeedSamples(db, trip.id, speedSamples(path.points.coordinates, path.details?.osm_way_id ?? [], points));
+      await recordSpeedSamples(db, trip.id, speedSamples(path.points.coordinates, path.details?.osm_way_id ?? [], points, path.details?.max_speed ?? []));
       // And how long each set of lights held it.
       const signals = await signalsIn(db, bboxOf(path.points.coordinates, 30));
       await recordLightPasses(db, trip.id, lightPasses(path.points.coordinates, points, signals));

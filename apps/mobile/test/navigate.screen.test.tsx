@@ -120,6 +120,29 @@ it('shows the turn after the next when it comes straight after, as the car does'
   expect(screen.queryByLabelText(/^Then /)).toBeNull();
 });
 
+it('shows the lanes to be in for the next turn, where they are mapped', async () => {
+  const lanes = [
+    { directions: ['left' as const], valid: true },
+    { directions: ['straight' as const], valid: false },
+    { directions: ['straight' as const, 'right' as const], valid: false },
+  ];
+  const instructions = [
+    { sign: 0, text: 'Head north', streetName: '', distanceM: 300, durationS: 30, interval: [0, 1] as [number, number] },
+    { sign: -2, text: 'Turn left onto Logan Road', streetName: 'Logan Road', distanceM: 800, durationS: 60, interval: [1, 1] as [number, number], lanes },
+    { sign: 4, text: 'Arrive at destination', streetName: '', distanceM: 0, durationS: 0, interval: [1, 1] as [number, number] },
+  ];
+  mockNav.route = route({ instructions });
+  mockNav.state = { status: 'navigating', nextInstruction: instructions[1], nextInstructionIndex: 1, distanceToNextManeuverM: 400, remainingDurationS: 600, remainingDistanceM: 5400 };
+  const { rerender } = await renderScreen(<Navigate />);
+  expect(screen.getByLabelText('Use the left lane')).toBeOnTheScreen();
+  expect(screen.getAllByTestId('lane-use')).toHaveLength(1);
+  expect(screen.getAllByTestId('lane-other')).toHaveLength(2);
+  // A turn with no lanes mapped shows none.
+  mockNav.state = { ...(mockNav.state as object), nextInstruction: instructions[0], nextInstructionIndex: 0 };
+  await rerender(<Navigate />);
+  expect(screen.queryByTestId('lane-guide')).toBeNull();
+});
+
 it('shows how fast you’re going while driving, marked when over the limit', async () => {
   mockNav.state = { status: 'navigating', nextInstruction: { sign: 0, text: 'Continue' }, distanceToNextManeuverM: 900, remainingDurationS: 600, remainingDistanceM: 5400, speedLimitKmh: 60 };
   mockNav.speedMps = 16.7; // 60 km/h

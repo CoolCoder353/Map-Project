@@ -29,6 +29,7 @@ import {
   notFound,
   opsService,
   parse,
+  roadSpeedService,
   trackService,
 } from '@wayfinder/core';
 import type { AppDeps } from '../deps.js';
@@ -191,6 +192,8 @@ export const adminRoutes =
       newCount: await feedbackService.countNewFeedback(db),
     }));
     app.get('/feedback/summary', async () => ({ newCount: await feedbackService.countNewFeedback(db) }));
+    // Roads whose limit the group's drives suggest is wrong, from the nightly road speeds job.
+    app.get('/limit-checks', async () => ({ items: await roadSpeedService.listLimitChecks(db) }));
     app.get<{ Params: { id: string } }>('/feedback/:id', async (req) => {
       const item = await feedbackService.getFeedback(db, req.params.id);
       if (!item) throw notFound('Report not found');

@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { checkedLabel, websiteLabel } from '@wayfinder/shared';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { AccountMenu } from '../components/AccountMenu';
 import { type ChosenPlace, SearchField } from '../components/SearchField';
@@ -110,6 +111,17 @@ export function MapShell() {
                   <span className="place-name">{place.name}</span>
                   {place.description && <span className="place-meta">{place.description}</span>}
                   {place.hours && <span className={`place-meta place-hours ${place.hours.openNow ? 'is-open' : ''}`}>{place.hours.label}</span>}
+                  {(place.phone || place.website) && (
+                    <span className="place-meta place-contact">
+                      {place.phone && <a href={`tel:${place.phone.replace(/[^+\d]/g, '')}`}>{place.phone}</a>}
+                      {place.website && (
+                        <a href={place.website} target="_blank" rel="noopener noreferrer">
+                          {websiteLabel(place.website)}
+                        </a>
+                      )}
+                    </span>
+                  )}
+                  {place.checkedOn && <span className="place-meta place-checked">{checkedLabel(place.checkedOn)}</span>}
                 </div>
                 <button
                   type="button"

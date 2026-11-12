@@ -32,9 +32,12 @@ interface PlaceRow {
   postcode: string | null;
   poi_type: string | null;
   opening_hours: string | null;
+  phone: string | null;
+  website: string | null;
+  checked_on: string | null;
 }
 
-const COLUMNS = 'id, name, kind, description, lon, lat, importance, suburb, state, postcode, poi_type, opening_hours';
+const COLUMNS = 'id, name, kind, description, lon, lat, importance, suburb, state, postcode, poi_type, opening_hours, phone, website, checked_on';
 
 const KIND_BOOST: Record<string, number> = { city: 0.35, town: 0.3, suburb: 0.2, poi: 0.1, street: 0.05, address: 0 };
 const KIND_LABEL: Record<string, string> = { street: 'Street', address: 'Address' };
@@ -60,6 +63,9 @@ function toPlace(r: PlaceRow, origin: LngLat | null = null, now = new Date()): P
     ...(context ? { context } : {}),
     ...(origin ? { distanceM: Math.round(haversineM(origin, [r.lon, r.lat])) } : {}),
     ...(hours ? { hours } : {}),
+    ...(r.kind === 'poi' && r.phone ? { phone: r.phone } : {}),
+    ...(r.kind === 'poi' && r.website ? { website: r.website } : {}),
+    ...(r.kind === 'poi' && r.checked_on ? { checkedOn: r.checked_on } : {}),
   };
 }
 
@@ -343,6 +349,9 @@ export interface PlaceInput {
   poiType?: string | null;
   brand?: string | null;
   openingHours?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  checkedOn?: string | null;
 }
 
 /** Bulk upsert places (used by the OSM importer and tests). */
@@ -350,15 +359,17 @@ export async function upsertPlaces(db: DbClient, places: PlaceInput[], table = '
   if (places.length === 0) return;
   await db.query(
     `INSERT INTO ${table} (id, name, kind, category, description, lon, lat, r9, r7, importance,
-                           suburb, state, postcode, poi_type, brand, opening_hours)
+                           suburb, state, postcode, poi_type, brand, opening_hours, phone, website, checked_on)
      SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::float8[], $7::float8[],
                           $8::bigint[], $9::bigint[], $10::real[],
-                          $11::text[], $12::text[], $13::text[], $14::text[], $15::text[], $16::text[])
+                          $11::text[], $12::text[], $13::text[], $14::text[], $15::text[], $16::text[],
+                          $17::text[], $18::text[], $19::text[])
      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, kind = EXCLUDED.kind, category = EXCLUDED.category,
        description = EXCLUDED.description, lon = EXCLUDED.lon, lat = EXCLUDED.lat, r9 = EXCLUDED.r9,
        r7 = EXCLUDED.r7, importance = EXCLUDED.importance, suburb = EXCLUDED.suburb, state = EXCLUDED.state,
        postcode = EXCLUDED.postcode, poi_type = EXCLUDED.poi_type, brand = EXCLUDED.brand,
-       opening_hours = EXCLUDED.opening_hours`,
+       opening_hours = EXCLUDED.opening_hours, phone = EXCLUDED.phone, website = EXCLUDED.website,
+       checked_on = EXCLUDED.checked_on`,
     [
       places.map((p) => p.id),
       places.map((p) => p.name),
@@ -376,6 +387,9 @@ export async function upsertPlaces(db: DbClient, places: PlaceInput[], table = '
       places.map((p) => p.poiType ?? null),
       places.map((p) => p.brand ?? null),
       places.map((p) => p.openingHours ?? null),
+      places.map((p) => p.phone ?? null),
+      places.map((p) => p.website ?? null),
+      places.map((p) => p.checkedOn ?? null),
     ],
   );
 }

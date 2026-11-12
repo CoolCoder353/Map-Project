@@ -18,6 +18,21 @@ export const InstructionSchema = z.object({
   exitAngleDeg: z.number().min(1).max(360).optional(),
   /** The turn is at a set of traffic lights (its text then starts "At the lights"). */
   atTrafficLights: z.boolean().optional(),
+  /**
+   * The lanes leading to the turn, left to right, where they're mapped: what each lane's arrows
+   * point to, and whether it's one to be in for this turn. Absent where unknown or when every lane
+   * will do.
+   */
+  lanes: z
+    .array(
+      z.object({
+        directions: z.array(z.enum(['sharpLeft', 'left', 'slightLeft', 'straight', 'slightRight', 'right', 'sharpRight', 'uTurn'])).min(1),
+        valid: z.boolean(),
+      }),
+    )
+    .min(2)
+    .max(12)
+    .optional(),
 });
 export type Instruction = z.infer<typeof InstructionSchema>;
 
@@ -205,6 +220,11 @@ export const PlaceSchema = z.object({
   /** From the search origin, when one was given. */
   distanceM: z.number().optional(),
   hours: PlaceHoursSchema.optional(),
+  /** A business's phone number and website, as mapped. */
+  phone: z.string().optional(),
+  website: z.string().url().optional(),
+  /** When someone last checked its details on the ground, YYYY-MM-DD. */
+  checkedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 export type Place = z.infer<typeof PlaceSchema>;
 export const SearchResponseSchema = z.object({ results: z.array(PlaceSchema) });

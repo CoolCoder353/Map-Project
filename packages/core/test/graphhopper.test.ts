@@ -116,7 +116,7 @@ describe('GraphHopper requests', () => {
   it('snaps a track with GPX, times included, and asks for way ids', async () => {
     const gh = recording(() => json({ paths: [path] }));
     expect(await gh.client.match([{ lon: 153, lat: -27, ts: Date.parse('2026-09-20T00:00:00Z') }, { lon: 153.01, lat: -27 }], 'foot')).toEqual(path);
-    expect(gh.calls[0]!.url).toBe('http://gh/match?profile=foot&points_encoded=false&details=osm_way_id');
+    expect(gh.calls[0]!.url).toBe('http://gh/match?profile=foot&points_encoded=false&details=osm_way_id&details=max_speed');
     const gpx = String(gh.calls[0]!.init.body);
     expect(gpx).toContain('<trkpt lat="-27" lon="153"><time>2026-09-20T00:00:00.000Z</time></trkpt><trkpt lat="-27" lon="153.01"></trkpt>');
     expect((gh.calls[0]!.init.headers as Record<string, string>)['content-type']).toBe('application/gpx+xml');

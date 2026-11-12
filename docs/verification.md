@@ -259,6 +259,16 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
 
 ## Open / manual
 
+- **Lanes, surveyed speed signs, limits to check and business details (2026-11-13, not deployed).**
+  Checked by tests only. Lanes come from OSM `turn:lanes` with the next places refresh (and
+  migration 013); the survey's sign codes and filters were set from two of its files (Winton and
+  Brisbane South: 18,470 rows, of which UNSIGNED 11,985, R4-1 speed signs about 4,000, school zones
+  about 1,400, roadworks about 400). Still to do: run `speed-signs-cli.js` on the server and see
+  how many signs import; on a device, the lane arrows under a turn on a mapped junction (Brisbane's
+  main roads have the most `turn:lanes`); a route with an estimated stretch near a surveyed sign;
+  the web place card's phone and website. Limits to check needs drives matched after the update
+  (older samples have no limit), from two people, before anything is listed. The car screen
+  doesn't show lanes yet.
 - **Traffic lights, school zones, estimated limits and learned speeds (2026-11-01, deployed 2026-11-02 with a rebuilt graph and places; see deploy-small-server.md).**
   Checked by tests, and by hand against real data: a Brisbane extract (152.98–153.12°E,
   27.42–27.53°S) built into a GraphHopper 11 graph with the new `config.yml` (estimates on), which

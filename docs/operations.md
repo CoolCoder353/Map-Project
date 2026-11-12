@@ -95,7 +95,17 @@ Steps are `download`, `graph`, `tiles` and `places`; name any combination. The r
 Every place gets a suburb, state and postcode for search suggestions ("Main Street · Queanbeyan NSW 2620"):
 - **State and suburb** come from OSM administrative boundaries: states are admin level 4, suburbs and localities are levels 9 and 10. A tagged `addr:suburb` wins. Without a boundary, the place takes `addr:city`, then the nearest suburb or town within about 5 km.
 - **Postcode** comes from `addr:postcode`, or else the postcode most of the suburb's addresses use. Suburbs with no addresses mapped in OSM (for example Richardson, ACT) have no postcode to learn, so none is shown.
-- **Businesses** keep their type (`shop=supermarket`), brand and `opening_hours`. Hours are shown as "Open until 9 pm" in the place's own time zone.
+- **Businesses** keep their type (`shop=supermarket`), brand, `opening_hours`, phone, website and the latest `check_date`. Hours are shown as "Open until 9 pm" in the place's own time zone; the web place card links the phone and website and says "Details checked Mar 2024". Businesses tagged as closed (`disused=yes`, `abandoned=yes`, `opening_hours=closed`) are left out, keeping their address.
+
+### Queensland's surveyed speed signs
+
+Routes fill in limits the map doesn't have from Queensland's survey of speed limit signs (2019-20, CC BY 4.0). The survey isn't updated, so this runs once per server, after the update that adds it, and again only if the `speed_signs` table is lost. It downloads about 64 regional CSV files from data.qld.gov.au, a few minutes in all:
+
+```bash
+docker compose run --rm --no-deps worker node dist/speed-signs-cli.js
+```
+
+A failed download leaves the signs already there untouched. Without the signs, routes simply keep the legal-default estimates.
 
 ## Verifying a deployment
 

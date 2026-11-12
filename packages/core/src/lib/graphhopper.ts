@@ -140,7 +140,7 @@ export class GraphHopperClient {
       .join('');
     const gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1"><trk><trkseg>${trkpt}</trkseg></trk></gpx>`;
     try {
-      const res = await this.fetchImpl(`${this.baseUrl}/match?profile=${encodeURIComponent(profile)}&points_encoded=false&details=osm_way_id`, {
+      const res = await this.fetchImpl(`${this.baseUrl}/match?profile=${encodeURIComponent(profile)}&points_encoded=false&details=osm_way_id&details=max_speed`, {
         method: 'POST',
         headers: { 'content-type': 'application/gpx+xml' },
         body: gpx,

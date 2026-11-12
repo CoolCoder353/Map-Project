@@ -1,5 +1,6 @@
 import { open, stat, type FileHandle } from 'node:fs/promises';
 import { PMTiles, type RangeResponse, type Source } from 'pmtiles';
+import { SPEED_SIGNS_ATTRIBUTION } from '@wayfinder/shared';
 
 class NodeFileSource implements Source {
   private handle: Promise<FileHandle>;
@@ -49,7 +50,7 @@ export function openTileArchive(path: string): TileArchive {
         bounds: [header.minLon, header.minLat, header.maxLon, header.maxLat],
         center: [header.centerLon, header.centerLat, header.centerZoom],
         vector_layers: metadata.vector_layers ?? [],
-        attribution: metadata.attribution ?? '© OpenStreetMap contributors',
+        attribution: `${typeof metadata.attribution === 'string' ? metadata.attribution : '© OpenStreetMap contributors'} · ${SPEED_SIGNS_ATTRIBUTION}`,
       };
     },
   };

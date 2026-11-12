@@ -12,6 +12,9 @@ export const OSMIUM_ROAD_FILTERS = [
   'w/maxspeed:conditional',
   'w/maxspeed:variable',
   'w/maxspeed=signals',
+  'w/turn:lanes',
+  'w/turn:lanes:forward',
+  'w/turn:lanes:backward',
 ];
 
 export interface SignalRecord {
@@ -27,6 +30,14 @@ export interface WayRuleRecord {
   variable: boolean;
   /** Where the way is, for its state's time zone. */
   point: [number, number] | null;
+}
+
+export interface WayLanesRecord {
+  wayId: number;
+  /** turn:lanes in the way's direction and against it, as tagged. */
+  forward: string | null;
+  backward: string | null;
+  coords: Array<[number, number]>;
 }
 
 const str = (tags: GeoJsonFeature['properties'], k: string) => (typeof tags[k] === 'string' ? (tags[k] as string) : undefined);
@@ -67,26 +78,65 @@ export function featureToWayRule(f: GeoJsonFeature): WayRuleRecord | null {
   return { wayId, conditional, variable, point: representativePoint(f.geometry) };
 }
 
+/** Ways that only go one way: tagged so, or one-way by kind (motorways, roundabouts). */
+function oneWay(t: GeoJsonFeature['properties']): 'forward' | 'backward' | null {
+  const oneway = str(t, 'oneway');
+  if (oneway === '-1') return 'backward';
+  if (oneway === 'yes' || oneway === 'true' || oneway === '1') return 'forward';
+  if (oneway === 'no') return null;
+  if (str(t, 'highway') === 'motorway' || str(t, 'junction') === 'roundabout' || str(t, 'junction') === 'circular') return 'forward';
+  return null;
+}
+
+const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
+
+/**
+ * A way's lane markings for each direction, or null when it has none the routes can use. On a
+ * one-way road `turn:lanes` is for the way it goes; on a two-way road only `:forward` and
+ * `:backward` say which side they're for.
+ */
+export function featureToWayLanes(f: GeoJsonFeature): WayLanesRecord | null {
+  const wayId = osmId(f, 'w');
+  if (wayId === null || f.geometry?.type !== 'LineString') return null;
+  const t = f.properties;
+  const one = oneWay(t);
+  const plain = str(t, 'turn:lanes')?.trim() || null;
+  let forward = str(t, 'turn:lanes:forward')?.trim() || null;
+  let backward = str(t, 'turn:lanes:backward')?.trim() || null;
+  if (one === 'forward') forward ??= plain;
+  if (one === 'backward') backward ??= plain;
+  if (one === 'forward') backward = null;
+  if (one === 'backward') forward = null;
+  if (!forward && !backward) return null;
+  const coords = (f.geometry.coordinates as number[][]).map(([lon, lat]) => [round6(lon!), round6(lat!)] as [number, number]);
+  if (coords.length < 2) return null;
+  return { wayId, forward, backward, coords };
+}
+
 const BATCH = 5000;
+
+/** The tables a road facts import replaces together. */
+const TABLES = ['traffic_signals', 'way_speed_rules', 'way_lanes'] as const;
 
 /**
  * Load an `osmium export -f geojsonseq` file of the road filters into staging tables, then swap them
- * in for `traffic_signals` and `way_speed_rules` together. Returns how many of each were imported.
+ * in for `traffic_signals`, `way_speed_rules` and `way_lanes` together. Returns how many of each were imported.
  */
 export async function importRoadFacts(
   db: Db,
   path: string,
   log: (m: string) => void = () => undefined,
   boundaries: BoundaryIndex | null = null,
-): Promise<{ signals: number; rules: number }> {
-  await db.query('DROP TABLE IF EXISTS traffic_signals_staging');
-  await db.query('DROP TABLE IF EXISTS way_speed_rules_staging');
-  await db.query('CREATE TABLE traffic_signals_staging (LIKE traffic_signals INCLUDING ALL)');
-  await db.query('CREATE TABLE way_speed_rules_staging (LIKE way_speed_rules INCLUDING ALL)');
+): Promise<{ signals: number; rules: number; lanes: number }> {
+  for (const table of TABLES) {
+    await db.query(`DROP TABLE IF EXISTS ${table}_staging`);
+    await db.query(`CREATE TABLE ${table}_staging (LIKE ${table} INCLUDING ALL)`);
+  }
 
   let signals: SignalRecord[] = [];
   let rules: WayRuleRecord[] = [];
-  const counts = { signals: 0, rules: 0 };
+  let lanes: WayLanesRecord[] = [];
+  const counts = { signals: 0, rules: 0, lanes: 0 };
   const flush = async () => {
     if (signals.length) {
       await db.query(
@@ -111,6 +161,15 @@ export async function importRoadFacts(
       counts.rules += rules.length;
       rules = [];
     }
+    if (lanes.length) {
+      await db.query(
+        `INSERT INTO way_lanes_staging (way_id, forward, backward, coords)
+         SELECT * FROM unnest($1::bigint[], $2::text[], $3::text[], $4::jsonb[]) ON CONFLICT DO NOTHING`,
+        [lanes.map((l) => String(l.wayId)), lanes.map((l) => l.forward), lanes.map((l) => l.backward), lanes.map((l) => JSON.stringify(l.coords))],
+      );
+      counts.lanes += lanes.length;
+      lanes = [];
+    }
   };
 
   const rl = createInterface({ input: createReadStream(path, 'utf8'), crlfDelay: Infinity });
@@ -128,23 +187,24 @@ export async function importRoadFacts(
     if (signal) signals.push(signal);
     const rule = featureToWayRule(f);
     if (rule) rules.push(rule);
-    if (signals.length + rules.length >= BATCH) await flush();
+    const wayLanes = featureToWayLanes(f);
+    if (wayLanes) lanes.push(wayLanes);
+    if (signals.length + rules.length + lanes.length >= BATCH) await flush();
   }
   await flush();
 
   await withTransaction(db, async (tx) => {
-    for (const table of ['traffic_signals', 'way_speed_rules']) {
+    for (const table of TABLES) {
       await tx.query(`DROP TABLE ${table}`);
       await tx.query(`ALTER TABLE ${table}_staging RENAME TO ${table}`);
+      // LIKE … INCLUDING ALL names its copies after the staging table; give them the usual names.
+      await tx.query(`ALTER INDEX IF EXISTS ${table}_staging_pkey RENAME TO ${table}_pkey`);
     }
-    // LIKE … INCLUDING ALL names its copies after the staging table; give them the usual names.
-    await tx.query('ALTER INDEX IF EXISTS traffic_signals_staging_pkey RENAME TO traffic_signals_pkey');
-    await tx.query('ALTER INDEX IF EXISTS way_speed_rules_staging_pkey RENAME TO way_speed_rules_pkey');
     const point = await tx.query<{ indexname: string }>(
       "SELECT indexname FROM pg_indexes WHERE tablename = 'traffic_signals' AND indexname <> 'traffic_signals_pkey'",
     );
     for (const r of point.rows) await tx.query(`ALTER INDEX ${r.indexname} RENAME TO traffic_signals_point_idx`);
   });
-  log(`road facts import complete: ${counts.signals} traffic lights, ${counts.rules} roads with limit rules`);
+  log(`road facts import complete: ${counts.signals} traffic lights, ${counts.rules} roads with limit rules, ${counts.lanes} roads with lanes`);
   return counts;
 }

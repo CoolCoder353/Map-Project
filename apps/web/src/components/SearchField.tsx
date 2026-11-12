@@ -10,6 +10,9 @@ export interface ChosenPlace {
   description: string;
   location: LngLat;
   hours?: Place['hours'];
+  phone?: string;
+  website?: string;
+  checkedOn?: string;
 }
 
 /** What a chosen place keeps: its type and suburb (distance depends on where you start). */
@@ -18,6 +21,9 @@ const chosen = (p: Place): ChosenPlace => ({
   description: placeDetail({ ...p, distanceM: undefined }, formatDistanceShort),
   location: p.location,
   ...(p.hours ? { hours: p.hours } : {}),
+  ...(p.phone ? { phone: p.phone } : {}),
+  ...(p.website ? { website: p.website } : {}),
+  ...(p.checkedOn ? { checkedOn: p.checkedOn } : {}),
 });
 
 interface Props {

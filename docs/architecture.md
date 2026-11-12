@@ -113,6 +113,24 @@ routes; nothing user-facing shows them.
   the fastest route is usually slow at this time, the routing engine's alternatives are asked for
   and the quickest by the same measure is offered, marked "Usually slow at this time" if it still
   is. With a small group most roads have no learned speed, and keep the engine's.
+- **Limits to check** (`rebuildLimitChecks` in `road-speeds.ts`): each sample also keeps the limit
+  the map gave the road (map matching asks for `max_speed`) and where. The same nightly job lists
+  in `limit_checks` the roads where drives from two or more people (three or more trips) typically
+  go 15 km/h or more over the limit, or, on a road of 80 or more, are 30 under it even at their
+  quicker (85th percentile). Admin → Limits to check shows them with links to fix them in
+  OpenStreetMap; the next map refresh brings the fix in.
+- **Lanes** (`packages/shared/src/lanes.ts`): driving routes look up `way_lanes` for their ways.
+  For each turn, the way leading into it gives its `turn:lanes` in the direction travelled (found
+  by where the route lies along the way's line), only where the turn is within 30 m of the way's
+  end. The lanes that suit the turn (a left turn's left lanes, a roundabout's by how far round the
+  exit is) are marked; the phone draws them under the turn with "Use the left lane" for screen
+  readers. The car screen doesn't show them yet.
+- **Surveyed speed signs** (`speed-signs.ts`, `surveyedEstimates`): Queensland's 2019-20 survey of
+  speed limit signs (data.qld.gov.au, CC BY 4.0), imported once by an admin
+  (`node dist/speed-signs-cli.js`) into `speed_signs`. It is the one outside download besides the
+  OpenStreetMap extract, agreed for this use, and never called while the app is used. Routes use a
+  sign only on stretches the map has no limit for. School zones, roadworks and signs that hold
+  part of the time are left out. The map's credits name the survey.
 - **Waits at lights learned from drives** (`light-timing.ts`, `packages/shared/src/light-timing.ts`):
   matching a car trip also times it through each set of lights where its fixes are at most 5 s
   apart while moving (in practice navigated drives, a fix a second; standing still the phone sends
@@ -165,8 +183,9 @@ URLs.
 ### Map data refresh
 
 `apps/worker/src/pipeline/refresh.ts`: download the extract → GraphHopper graph → tiles → places →
-swap all three in. The places step also extracts traffic lights and speed-limit rules
-(`osm-roads.ts`) into `traffic_signals` and `way_speed_rules`, swapped in the same way. Live data is untouched until every step succeeds. Needs about 16 GB of RAM,
+swap all three in. The places step also extracts traffic lights, speed-limit rules and lane
+markings (`osm-roads.ts`) into `traffic_signals`, `way_speed_rules` and `way_lanes`, swapped in the
+same way. Live data is untouched until every step succeeds. Needs about 16 GB of RAM,
 so a small server gets its data built elsewhere ([deploy-small-server.md](deploy-small-server.md)).
 
 ### Admin and monitoring
@@ -186,7 +205,7 @@ pg-boss queues, handled in `apps/worker/src/jobs.ts`:
 | `purge-deleted` | daily 03:17 | hard-delete users and trips deleted over 7 days ago |
 | `system-sample` | every minute | CPU, memory, disk, queue depth, worker heartbeat |
 | `metrics-maintenance` | hourly | roll up and prune metrics |
-| `road-speeds` | daily 03:37 | rebuild typical road speeds from drives, drop samples over 180 days old |
+| `road-speeds` | daily 03:37 | rebuild typical road speeds from drives and the limits to check, drop samples over 180 days old |
 | `light-timings` | daily 03:41 | rebuild how long lights hold drives, and fixed cycles; check against the last 14 days; drop passes over 180 days old |
 | `osm-refresh` | `OSM_REFRESH_CRON`, or the admin button | the map data refresh |
 

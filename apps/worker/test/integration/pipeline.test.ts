@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { adminService, opsService, placeService } from '@wayfinder/core';
 import { importPlacesFromGeoJsonSeq } from '../../src/pipeline/import-places.js';
 import { importRoadFacts } from '../../src/pipeline/osm-roads.js';
+import { downloadSpeedSigns } from '../../src/pipeline/speed-signs.js';
 import { type RunCommand, runOsmRefresh } from '../../src/pipeline/refresh.js';
 import { type TestDb, createTestDb } from '../../../../packages/core/test/helpers/db.js';
 
@@ -192,10 +193,15 @@ describe('road facts import', () => {
         feature('w4', { highway: 'motorway', maxspeed: '100', 'maxspeed:variable': 'yes' }, [[153.0, -27.4], [153.01, -27.4]], 'LineString'),
         feature('w5', { highway: 'primary', maxspeed: 'signals' }, [[153.0, -27.41], [153.01, -27.41]], 'LineString'),
         feature('w6', { highway: 'primary', maxspeed: '60' }, [[153.0, -27.42], [153.01, -27.42]], 'LineString'),
+        feature('w7', { highway: 'primary', oneway: 'yes', 'turn:lanes': 'left|through|through;right' }, [[153.0, -27.43], [153.01, -27.43]], 'LineString'),
       ]) + 'not json\n\n',
     );
-    expect(await importRoadFacts(t.db, file)).toEqual({ signals: 2, rules: 2 });
-    expect(await importRoadFacts(t.db, file)).toEqual({ signals: 2, rules: 2 });
+    expect(await importRoadFacts(t.db, file)).toEqual({ signals: 2, rules: 2, lanes: 1 });
+    expect(await importRoadFacts(t.db, file)).toEqual({ signals: 2, rules: 2, lanes: 1 });
+    expect((await t.db.query('SELECT way_id::text, forward, backward, coords FROM way_lanes')).rows).toEqual([
+      { way_id: '7', forward: 'left|through|through;right', backward: null, coords: [[153.0, -27.43], [153.01, -27.43]] },
+    ]);
+    expect((await t.db.query("SELECT indexname FROM pg_indexes WHERE tablename = 'way_lanes'")).rows).toEqual([{ indexname: 'way_lanes_pkey' }]);
     expect((await t.db.query('SELECT id::text, kind FROM traffic_signals ORDER BY id')).rows).toEqual([
       { id: '1', kind: 'signals' },
       { id: '2', kind: 'ramp_meter' },
@@ -209,3 +215,36 @@ describe('road facts import', () => {
     expect(idx).toEqual(['traffic_signals_pkey', 'traffic_signals_point_idx']);
   });
 });
+
+describe('speed signs import', () => {
+  const HEADER = 'NUMBER,LATITUDE,LONGITUDE,SPEED,SIGN_TXT,SIGN_NOTE,SIGN_NUM,SIDE,ST_NAME,ST_TYPE,LOCALITY,DIRECTION,DATE,TIME';
+  const files: Record<string, string> = {
+    'https://data.example/a.csv': `${HEADER}\na1,-27.5,153.0,60,,,R4-1A,LEFT,FORD,ROAD,BURBANK,EAST,5/08/2019,1\na2,-27.5,153.01,40,SCHOOL ZONE,,R4-Q01A,LEFT,FORD,ROAD,BURBANK,EAST,5/08/2019,1\n`,
+    'https://data.example/b.csv': `${HEADER}\nb1,-19.2,146.8,50,,,UNSIGNED,,LONG,STREET,TOWNSVILLE,NORTH,1/02/2020,1\na1,-27.5,153.0,60,,,R4-1A,LEFT,FORD,ROAD,BURBANK,EAST,5/08/2019,1\n`,
+  };
+  const fetchImpl = async (url: string) => {
+    const text = files[url];
+    const body = { result: { resources: Object.keys(files).map((u) => ({ name: u, url: u, format: 'CSV' })) } };
+    return { ok: url.includes('package_show') || text !== undefined, status: text === undefined && !url.includes('package_show') ? 404 : 200, text: async () => text ?? '', json: async () => body };
+  };
+
+  it('downloads every region and swaps the signs in, once each', async () => {
+    const log: string[] = [];
+    expect(await downloadSpeedSigns(t.db, fetchImpl, (m) => log.push(m))).toBe(2);
+    expect((await t.db.query("SELECT id, kmh, bearing, unsigned, to_char(surveyed_on, 'YYYY-MM-DD') AS surveyed_on FROM speed_signs ORDER BY id")).rows).toEqual([
+      { id: 'a1', kmh: 60, bearing: 90, unsigned: false, surveyed_on: '2019-08-05' },
+      { id: 'b1', kmh: 50, bearing: 0, unsigned: true, surveyed_on: '2020-02-01' },
+    ]);
+    expect(log).toContain('speed signs import complete: 2 signs');
+    // The point index keeps its usual name for the lookups routes make.
+    const idx = (await t.db.query("SELECT indexname FROM pg_indexes WHERE tablename = 'speed_signs' ORDER BY indexname")).rows.map((r) => r.indexname);
+    expect(idx).toEqual(['speed_signs_pkey', 'speed_signs_point_idx']);
+  });
+
+  it('keeps the signs it has when a region won’t download', async () => {
+    const broken = async (url: string) => (url.endsWith('b.csv') ? { ok: false, status: 500, text: async () => '', json: async () => ({}) } : fetchImpl(url));
+    await expect(downloadSpeedSigns(t.db, broken)).rejects.toThrow('download answered 500');
+    expect(Number((await t.db.query<{ n: string }>('SELECT count(*) AS n FROM speed_signs')).rows[0]!.n)).toBe(2);
+  });
+});
+

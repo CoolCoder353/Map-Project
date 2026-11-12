@@ -4,6 +4,8 @@ import * as routing from '../../src/services/routing.js';
 import * as roads from '../../src/services/roads.js';
 import * as speeds from '../../src/services/road-speeds.js';
 import * as lightTiming from '../../src/services/light-timing.js';
+import * as roadFacts from '../../src/services/road-facts.js';
+import type { Route } from '@wayfinder/shared';
 import { MetricsAggregator } from '../../src/lib/metrics.js';
 import type { GhPath, GraphHopperClient, RouteParams } from '../../src/lib/graphhopper.js';
 import { type TestDb, createTestDb } from '../helpers/db.js';
@@ -54,6 +56,53 @@ describe('routes and what the map knows about their roads', () => {
     // Walking, lights don't count.
     expect((await routing.fastestRoute(deps(), u.id, { from, to, mode: 'foot', via: [] })).trafficSignals).toBeUndefined();
     await t.db.query('DELETE FROM traffic_signals');
+  });
+
+  it('marks the lanes to be in for a turn where the road leading to it has them mapped', async () => {
+    const corner = destination(from, 90, 1000);
+    const path = straightPath([from, corner, destination(corner, 0, 500)], SPEED);
+    const coords = path.points.coordinates;
+    const turnAt = coords.findIndex((c) => Math.abs(c[0] - corner[0]) < 1e-9 && Math.abs(c[1] - corner[1]) < 1e-9);
+    path.details = { osm_way_id: [[0, turnAt, 601], [turnAt, coords.length - 1, 602]] };
+    await t.db.query(`INSERT INTO way_lanes (way_id, forward, backward, coords) VALUES (601, 'left|through|through', NULL, $1::jsonb)`, [JSON.stringify([from, corner])]);
+    const instructions: Route['instructions'] = [
+      { sign: 0, text: 'Head east', streetName: 'A Street', distanceM: 1000, durationS: 80, interval: [0, turnAt] },
+      { sign: -2, text: 'Turn left', streetName: 'B Street', distanceM: 500, durationS: 40, interval: [turnAt, coords.length - 1] },
+      { sign: 4, text: 'Arrive', streetName: '', distanceM: 0, durationS: 0, interval: [coords.length - 1, coords.length - 1] },
+    ];
+    const route = { id: 'r', kind: 'fastest', mode: 'car', distanceM: 1500, durationS: 120, extraDurationS: 0, geometry: coords, instructions, viaPoints: [], novelty: { totalKm: 1.5, newKm: 0, noveltyPct: 0 } } satisfies Route;
+    const [car] = await roadFacts.finishRoutes(t.db, [{ route, path }]);
+    expect(car!.instructions[1]!.lanes).toEqual([
+      { directions: ['left'], valid: true },
+      { directions: ['straight'], valid: false },
+      { directions: ['straight'], valid: false },
+    ]);
+    expect(car!.instructions[0]!.lanes).toBeUndefined();
+    // On foot, lanes don't matter.
+    const [walk] = await roadFacts.finishRoutes(t.db, [{ route: { ...route, mode: 'foot' }, path }]);
+    expect(walk!.instructions[1]!.lanes).toBeUndefined();
+    await t.db.query('DELETE FROM way_lanes');
+  });
+
+  it('takes a surveyed sign’s limit where the map has only the legal default, driving only', async () => {
+    const path = straightPath([from, to], SPEED);
+    const n = path.points.coordinates.length - 1;
+    path.details = {
+      osm_way_id: [[0, n, 501]],
+      max_speed: [[0, n, 50]],
+      max_speed_estimated: [[0, n, true]],
+      street_name: [[0, n, 'Long Road']],
+    };
+    const sign = destination(destination(from, 90, 450), 180, 8);
+    await t.db.query(`INSERT INTO speed_signs (id, lon, lat, kmh, bearing) VALUES ('s1', $1, $2, 80, 90), ('s2', $1, $2, 40, 270)`, sign);
+    const route = { id: 'r', kind: 'fastest', mode: 'car', distanceM: 3000, durationS: 240, extraDurationS: 0, geometry: path.points.coordinates, instructions: [], viaPoints: [], novelty: { totalKm: 3, newKm: 0, noveltyPct: 0 } } satisfies Route;
+    const [car] = await roadFacts.finishRoutes(t.db, [{ route, path }]);
+    // The legal default up to the sign, then the sign's 80 (the one facing the other way doesn't count).
+    expect(car!.estimatedSpeedLimits).toEqual([{ from: 0, to: 5, kmh: 50 }, { from: 5, to: n, kmh: 80 }]);
+    expect(car!.speedLimits).toEqual([]);
+    const [walk] = await roadFacts.finishRoutes(t.db, [{ route: { ...route, mode: 'foot' }, path }]);
+    expect(walk!.estimatedSpeedLimits).toEqual([{ from: 0, to: n, kmh: 50 }]);
+    await t.db.query('DELETE FROM speed_signs');
   });
 
   it('drops the limit on roads with electronic signs', async () => {
@@ -168,9 +217,43 @@ describe('road speeds learned from drives', () => {
 
   it('forgets old drives, and a deleted trip’s', async () => {
     await t.db.query(`UPDATE road_speed_samples SET observed_at = now() - interval '200 days' WHERE trip_id IN (SELECT id FROM trips WHERE user_id = (SELECT id FROM users WHERE email = 'neighbour@example.com'))`);
-    expect(await speeds.rebuildRoadSpeeds(t.db)).toEqual({ roads: 0, pruned: 1 });
+    expect(await speeds.rebuildRoadSpeeds(t.db)).toEqual({ roads: 0, pruned: 1, limitChecks: 0 });
     await t.db.query('DELETE FROM trips');
     expect(Number((await t.db.query<{ n: string }>('SELECT count(*) AS n FROM road_speed_samples')).rows[0]!.n)).toBe(0);
+  });
+
+  it('lists roads whose limit drives keep going well over, or well under on a fast road, for an admin to check', async () => {
+    const limit = 60;
+    const withLimit = {
+      async match(points: ReadonlyArray<{ lon: number; lat: number }>) {
+        const path = await matcher.match(points);
+        const n = path.points.coordinates.length - 1;
+        return { ...path, details: { ...path.details, max_speed: [[0, n, limit]] } };
+      },
+    };
+    const a = await makeUser(t.db, 'limits-a@example.com');
+    const b = await makeUser(t.db, 'limits-b@example.com');
+    for (const [u, day] of [[a, 0], [a, 1], [b, 2]] as const) await driveTrip(u.id, day);
+    await roads.matchTrips(t.db, withLimit as never, a.id);
+    await roads.matchTrips(t.db, withLimit as never, b.id);
+    const sample = (await t.db.query<{ limit_kmh: number; lon: number; lat: number }>('SELECT limit_kmh, lon, lat FROM road_speed_samples LIMIT 1')).rows[0]!;
+    expect(sample.limit_kmh).toBe(60);
+    expect(sample.lon).toBeGreaterThan(from[0]);
+    // Driving 36 in a 60 is nothing to look at.
+    expect((await speeds.rebuildRoadSpeeds(t.db)).limitChecks).toBe(0);
+    // In a 100: everyone well under, on a fast road.
+    await t.db.query('UPDATE road_speed_samples SET limit_kmh = 100');
+    expect((await speeds.rebuildRoadSpeeds(t.db)).limitChecks).toBe(1);
+    const [check] = await speeds.listLimitChecks(t.db);
+    expect(check).toMatchObject({ wayId: '702', limitKmh: 100, typicalKmh: 36, trips: 3, people: 2 });
+    expect(check!.location[1]).toBeCloseTo(from[1], 3);
+    // In a 20: everyone well over.
+    await t.db.query('UPDATE road_speed_samples SET limit_kmh = 20');
+    expect(await speeds.rebuildLimitChecks(t.db)).toBe(1);
+    // One person alone doesn't put a road on the list.
+    await t.db.query('UPDATE trips SET deleted_at = now() WHERE user_id = $1', [b.id]);
+    expect(await speeds.rebuildLimitChecks(t.db)).toBe(0);
+    await t.db.query('DELETE FROM trips');
   });
 
   it('records nothing for walks', async () => {

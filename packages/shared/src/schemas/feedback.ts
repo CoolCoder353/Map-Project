@@ -106,3 +106,21 @@ export const CarReportDetailsSchema = z.object({
   screenshot: FeedbackScreenshotSchema.optional(),
 });
 export type CarReportDetails = z.infer<typeof CarReportDetailsSchema>;
+
+/**
+ * A road whose speed limit the group's drives suggest is wrong: they typically go well over it, or
+ * well under it on a fast road. Rebuilt nightly, for an admin to check and correct in OpenStreetMap.
+ */
+export const LimitCheckSchema = z.object({
+  wayId: z.string(),
+  /** The limit the map gives the road. */
+  limitKmh: z.number(),
+  /** How fast drives typically go along it. */
+  typicalKmh: z.number(),
+  trips: z.number().int(),
+  people: z.number().int(),
+  /** Roughly the middle of the stretches timed. */
+  location: z.tuple([z.number(), z.number()]),
+});
+export type LimitCheck = z.infer<typeof LimitCheckSchema>;
+export const LimitCheckListSchema = z.object({ items: z.array(LimitCheckSchema) });

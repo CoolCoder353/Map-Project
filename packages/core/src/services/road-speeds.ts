@@ -30,6 +30,10 @@ export interface SpeedSample {
   kmh: number;
   lengthM: number;
   observedAt: Date;
+  /** The limit the map gave the road there, where it had one. */
+  limitKmh: number | null;
+  /** The middle of the stretch timed. */
+  at: LngLat;
 }
 
 export const dayKindOf = (day: number): 0 | 1 => (day === 0 || day === 6 ? 1 : 0);
@@ -95,6 +99,7 @@ export function speedSamples(
   matched: readonly LngLat[],
   wayRuns: ReadonlyArray<readonly [number, number, number]>,
   fixes: ReadonlyArray<{ lon: number; lat: number; ts: number }>,
+  limitRuns: ReadonlyArray<readonly [number, number, number | null]> = [],
 ): SpeedSample[] {
   if (matched.length < 2 || fixes.length < 2) return [];
   const cum = cumulativeM(matched);
@@ -116,7 +121,10 @@ export function speedSamples(
     if (kmh < 3 || kmh > 150) return;
     const observedAt = new Date(t0);
     const { day, hour } = localDayHour(observedAt, timeZoneAt(matched[from]!));
-    out.push({ wayId, dayKind: dayKindOf(day), hour, kmh, lengthM, observedAt });
+    const mid = Math.floor((from + Math.min(to, matched.length - 1)) / 2);
+    const limit = limitRuns.find(([a, b]) => a <= mid && mid < b)?.[2];
+    const limitKmh = typeof limit === 'number' && limit > 0 && limit <= 130 ? Math.round(limit) : null;
+    out.push({ wayId, dayKind: dayKindOf(day), hour, kmh, lengthM, observedAt, limitKmh, at: matched[mid]! });
   });
   return out;
 }
@@ -126,8 +134,9 @@ export async function recordSpeedSamples(db: DbClient, tripId: string, samples: 
   await db.query('DELETE FROM road_speed_samples WHERE trip_id = $1', [tripId]);
   if (samples.length === 0) return;
   await db.query(
-    `INSERT INTO road_speed_samples (trip_id, way_id, day_kind, hour, kmh, length_m, observed_at)
-     SELECT $1, * FROM unnest($2::bigint[], $3::smallint[], $4::smallint[], $5::real[], $6::real[], $7::timestamptz[])`,
+    `INSERT INTO road_speed_samples (trip_id, way_id, day_kind, hour, kmh, length_m, observed_at, limit_kmh, lon, lat)
+     SELECT $1, * FROM unnest($2::bigint[], $3::smallint[], $4::smallint[], $5::real[], $6::real[], $7::timestamptz[],
+                              $8::smallint[], $9::float8[], $10::float8[])`,
     [
       tripId,
       samples.map((s) => String(s.wayId)),
@@ -136,6 +145,9 @@ export async function recordSpeedSamples(db: DbClient, tripId: string, samples: 
       samples.map((s) => s.kmh),
       samples.map((s) => s.lengthM),
       samples.map((s) => s.observedAt.toISOString()),
+      samples.map((s) => s.limitKmh),
+      samples.map((s) => s.at[0]),
+      samples.map((s) => s.at[1]),
     ],
   );
 }
@@ -147,7 +159,7 @@ export async function recordSpeedSamples(db: DbClient, tripId: string, samples: 
  * still stand count: not a trip deleted or since marked as a walk, nor a deleted, disabled
  * or test account's. Samples older than SAMPLE_DAYS are dropped.
  */
-export async function rebuildRoadSpeeds(db: DbClient): Promise<{ roads: number; pruned: number }> {
+export async function rebuildRoadSpeeds(db: DbClient): Promise<{ roads: number; pruned: number; limitChecks: number }> {
   const pruned = await db.query(`DELETE FROM road_speed_samples WHERE observed_at < now() - make_interval(days => $1)`, [SAMPLE_DAYS]);
   await db.query('DELETE FROM road_speeds');
   await db.query(
@@ -171,7 +183,88 @@ export async function rebuildRoadSpeeds(db: DbClient): Promise<{ roads: number; 
     [MIN_TRIPS, MIN_PEOPLE],
   );
   const roads = await db.query<{ n: string }>('SELECT count(DISTINCT way_id) AS n FROM road_speeds');
-  return { roads: Number(roads.rows[0]!.n), pruned: pruned.rowCount ?? 0 };
+  const limitChecks = await rebuildLimitChecks(db);
+  return { roads: Number(roads.rows[0]!.n), pruned: pruned.rowCount ?? 0, limitChecks };
+}
+
+/** Drives typically this much faster than a road's limit suggest the limit shown is too low. */
+export const OVER_LIMIT_KMH = 15;
+/**
+ * Drives this much slower than the limit even at their quicker (85th percentile) suggest it is too
+ * high: on a fast road only, where a street given the 100 km/h rural default is the likely mistake.
+ * A slow road's drivers are often held up, which says nothing about its limit.
+ */
+export const UNDER_LIMIT_KMH = 30;
+const UNDER_LIMIT_FROM_KMH = 80;
+
+/**
+ * Rebuild the list of roads whose limit the group's drives suggest is wrong, for an admin to check:
+ * where at least MIN_TRIPS trips from MIN_PEOPLE people (each counted once, as for speeds) went
+ * typically OVER_LIMIT_KMH faster than the limit the map gave the road, or UNDER_LIMIT_KMH slower
+ * even at their quickest on a fast road. Only drives that still stand count.
+ */
+export async function rebuildLimitChecks(db: DbClient): Promise<number> {
+  await db.query('DELETE FROM limit_checks');
+  const r = await db.query(
+    `WITH live AS (
+       SELECT s.way_id, s.kmh, s.limit_kmh, s.lon, s.lat, s.trip_id, t.user_id
+       FROM road_speed_samples s
+       JOIN trips t ON t.id = s.trip_id AND t.deleted_at IS NULL AND t.mode = 'car'
+       JOIN users u ON u.id = t.user_id AND u.deleted_at IS NULL AND u.disabled_at IS NULL AND NOT u.test_account
+       WHERE s.limit_kmh IS NOT NULL AND s.lon IS NOT NULL
+     ),
+     per_person AS (
+       SELECT way_id, user_id,
+              percentile_cont(0.5) WITHIN GROUP (ORDER BY kmh) AS kmh,
+              percentile_cont(0.85) WITHIN GROUP (ORDER BY kmh) AS quick_kmh,
+              count(DISTINCT trip_id) AS trips
+       FROM live GROUP BY way_id, user_id
+     ),
+     per_way AS (
+       SELECT p.way_id,
+              percentile_cont(0.5) WITHIN GROUP (ORDER BY p.kmh) AS typical,
+              percentile_cont(0.5) WITHIN GROUP (ORDER BY p.quick_kmh) AS quick,
+              sum(p.trips) AS trips, count(*) AS people
+       FROM per_person p GROUP BY p.way_id
+     ),
+     facts AS (
+       SELECT way_id, mode() WITHIN GROUP (ORDER BY limit_kmh) AS limit_kmh, avg(lon) AS lon, avg(lat) AS lat
+       FROM live GROUP BY way_id
+     )
+     INSERT INTO limit_checks (way_id, limit_kmh, typical_kmh, trips, people, lon, lat)
+     SELECT w.way_id, f.limit_kmh, w.typical, w.trips, w.people, f.lon, f.lat
+     FROM per_way w JOIN facts f USING (way_id)
+     WHERE w.trips >= $1 AND w.people >= $2
+       AND (w.typical >= f.limit_kmh + $3 OR (f.limit_kmh >= $5 AND w.quick <= f.limit_kmh - $4))`,
+    [MIN_TRIPS, MIN_PEOPLE, OVER_LIMIT_KMH, UNDER_LIMIT_KMH, UNDER_LIMIT_FROM_KMH],
+  );
+  return r.rowCount ?? 0;
+}
+
+export interface LimitCheck {
+  wayId: string;
+  limitKmh: number;
+  typicalKmh: number;
+  trips: number;
+  people: number;
+  location: LngLat;
+}
+
+/** The roads whose limit drives suggest is wrong, the furthest off first. */
+export async function listLimitChecks(db: DbClient, limit = 200): Promise<LimitCheck[]> {
+  const r = await db.query<{ way_id: string; limit_kmh: number; typical_kmh: number; trips: number; people: number; lon: number; lat: number }>(
+    `SELECT way_id::text, limit_kmh, typical_kmh, trips, people, lon, lat FROM limit_checks
+     ORDER BY abs(typical_kmh - limit_kmh) DESC, way_id LIMIT $1`,
+    [limit],
+  );
+  return r.rows.map((x) => ({
+    wayId: x.way_id,
+    limitKmh: Number(x.limit_kmh),
+    typicalKmh: Math.round(Number(x.typical_kmh)),
+    trips: Number(x.trips),
+    people: Number(x.people),
+    location: [Number(x.lon), Number(x.lat)],
+  }));
 }
 
 /**

@@ -65,6 +65,19 @@ describe('Map shell', () => {
     expect(screen.queryByRole('combobox', { name: 'Search' })).not.toBeInTheDocument();
   });
 
+  it('shows a business’s phone and website as links, and when its details were checked', async () => {
+    await renderShell('/discover', {
+      api: { 'GET /api/search': () => ({ results: [place({ phone: '07 3000 1234', website: 'https://www.gumdaless.eq.edu.au/', checkedOn: '2024-03-02' })] }) },
+    });
+    await userEvent.type(screen.getByRole('combobox', { name: 'Search' }), 'gumdale');
+    await userEvent.click(await screen.findByRole('option', { name: /Gumdale State School/ }));
+    expect(screen.getByRole('link', { name: '07 3000 1234' })).toHaveAttribute('href', 'tel:0730001234');
+    const site = screen.getByRole('link', { name: 'gumdaless.eq.edu.au' });
+    expect(site).toHaveAttribute('href', 'https://www.gumdaless.eq.edu.au/');
+    expect(site).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(screen.getByText('Details checked Mar 2024')).toBeInTheDocument();
+  });
+
   it('clears a searched place', async () => {
     const { map } = await renderShell('/trips', { api: { 'GET /api/search': () => ({ results: [place()] }) } });
     await userEvent.type(screen.getByRole('combobox', { name: 'Search' }), 'gumdale');

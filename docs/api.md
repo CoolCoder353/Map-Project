@@ -50,7 +50,7 @@ exactly what each field is.
 
 | Method | Path | Schema / notes |
 |---|---|---|
-| GET | `/api/search` | `SearchQuerySchema` (`q`, optional `lon`/`lat` to rank by distance, `limit`) → `{ results: Place[] }`. Coordinates (`-27.4698, 153.0251`, either order) give one `kind: "point"` place there; a four-digit postcode gives its suburbs and towns, nearest first; everyday names are understood ("maccas", "woolies"). Branches of a chain are ranked by distance, whatever each is named. Your own saved places whose name starts with `q` come first (`kind: "saved"`, id `saved:<id>`, `typeLabel` "Saved place"): at most half of `limit`, and not repeated as the place they were saved from (a found place within 30 m of one) |
+| GET | `/api/search` | `SearchQuerySchema` (`q`, optional `lon`/`lat` to rank by distance, `limit`) → `{ results: Place[] }`. Coordinates (`-27.4698, 153.0251`, either order) give one `kind: "point"` place there; a four-digit postcode gives its suburbs and towns, nearest first; everyday names are understood ("maccas", "woolies"). A business may have `phone`, `website` (absolute http(s)) and `checkedOn` (YYYY-MM-DD, when its details were last checked on the ground, OSM `check_date`); businesses OSM marks as closed down are left out. Branches of a chain are ranked by distance, whatever each is named. Your own saved places whose name starts with `q` come first (`kind: "saved"`, id `saved:<id>`, `typeLabel` "Saved place"): at most half of `limit`, and not repeated as the place they were saved from (a found place within 30 m of one) |
 | GET | `/api/saved-places` | Your saved places → `SavedPlaceListSchema`, by name |
 | POST | `/api/saved-places` | `SavedPlaceSaveSchema` (`name`, `description`, `location`) → the `SavedPlace`. A name already used (any capitals) moves that place. Up to 50 (`409 conflict` beyond) |
 | DELETE | `/api/saved-places/:id` | |
@@ -81,7 +81,10 @@ Newer servers add, each left out where empty:
   default for the road. Kept apart so older apps never show a guess as a sign. On a main road
   (motorway, trunk, primary, secondary), which is always signposted, the estimate is the same road's
   signposted limit within 2 km either side along the route (same route number, else name), or no
-  limit at all, never the built-up default of 50.
+  limit at all, never the built-up default of 50. Driving, where Queensland's surveyed speed signs
+  (`speed_signs`) include one beside the route facing its way, the stretches after it on the same
+  street (same name, within 5 km) take that sign's limit instead of a guess. Signposted limits are
+  never changed by the survey, which is older than the map.
 - `trafficSignals` (driving only): `{ index, kind }`, the sets of lights along the route at their
   nearest geometry point; `kind` is `signals`, `crossing` or `ramp_meter`. A turn at a set of lights
   has `atTrafficLights: true` and text starting "At the lights, …", which older apps say as it is.
@@ -93,6 +96,11 @@ Newer servers add, each left out where empty:
   `utcOffsetS` turns the phone's clock into the lights' local time. Apps draw the lights red or
   green from these (`lightsAhead` in `packages/shared/src/light-timing.ts`), using the cycle only
   for lights under 45 s away.
+- Instruction `lanes` (driving only): where the road leading to a turn has its lanes mapped
+  (OSM `turn:lanes`), `[{ directions, valid }]` left to right: each lane's arrows (`sharpLeft`,
+  `left`, `slightLeft`, `straight`, `slightRight`, `right`, `sharpRight`, `uTurn`) and whether it is
+  one to be in for this turn. Left out where unknown, where no lane suits the turn (the markings and
+  the route disagree), or where every lane does.
 - `usuallySlow`: trips on these roads at this time of day take noticeably longer than the map
   suggests. `durationS` and each instruction's `durationS` already allow for lights and for speeds
   learned from the group's drives.
@@ -145,6 +153,7 @@ another person's data and every change is written to the audit log.
 | GET | `/invites` · POST `/invites`, `/invites/:code/revoke` (**admin**) | |
 | GET | `/app-settings` · PATCH `/app-settings` (**admin**) | App name, voice, feedback switch |
 | GET | `/feedback`, `/feedback/summary`, `/feedback/:id`, `/feedback/:id/screenshot` · PATCH, DELETE `/feedback/:id` (**admin**) | Triage |
+| GET | `/limit-checks` | `LimitCheckListSchema`: roads whose limit the group's drives suggest is wrong, furthest off first: `{ wayId, limitKmh, typicalKmh, trips, people, location }`. Rebuilt nightly by `road-speeds` |
 | GET | `/audit` | Audit log |
 
 ## Checking a server against the app
