@@ -51,7 +51,8 @@ export function placeDetail(
 export function websiteLabel(url: string): string {
   const m = /^https?:\/\/([^/?#]+)([^?#]*)/i.exec(url);
   if (!m) return url;
-  const host = m[1]!.toLowerCase().replace(/^www\./, '');
+  // Only the real host: "a.com@b.com" goes to b.com, so it mustn't read as a.com.
+  const host = m[1]!.slice(m[1]!.lastIndexOf('@') + 1).toLowerCase().replace(/^www\./, '');
   const path = m[2] === '/' ? '' : m[2]!.replace(/\/$/, '');
   return `${host}${path}`;
 }

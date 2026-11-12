@@ -142,6 +142,8 @@ export function websiteOf(tags: Record<string, unknown>): string | null {
   const withScheme = /^https?:\/\//i.test(first) ? first : `https://${first}`;
   try {
     const u = new URL(withScheme);
+    // A name and password in the address ("https://bank.com@other.example") are a way to disguise where it goes.
+    if (u.username || u.password) return null;
     return (u.protocol === 'https:' || u.protocol === 'http:') && u.hostname.includes('.') ? u.toString() : null;
   } catch {
     return null;

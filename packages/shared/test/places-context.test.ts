@@ -103,6 +103,8 @@ describe('website and check-date labels', () => {
     expect(websiteLabel('https://www.bakery.com.au/')).toBe('bakery.com.au');
     expect(websiteLabel('https://shop.example.com/stores/dickson/')).toBe('shop.example.com/stores/dickson');
     expect(websiteLabel('not a url')).toBe('not a url');
+    // Never the part before an @, which isn't where the link goes.
+    expect(websiteLabel('https://bank.com.au@other.example/login')).toBe('other.example/login');
   });
 
   it('says when details were checked by month', () => {

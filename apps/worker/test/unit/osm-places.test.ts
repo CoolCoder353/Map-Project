@@ -124,6 +124,7 @@ describe('OSM place mapping', () => {
     expect(phoneOf({ phone: 'call us' })).toBeNull();
     expect(websiteOf({ website: 'javascript:alert(1)' })).toBeNull();
     expect(websiteOf({ website: 'localhost' })).toBeNull();
+    expect(websiteOf({ website: 'https://bank.com.au@other.example/' })).toBeNull();
     expect(websiteOf({ url: 'http://example.org/a' })).toBe('http://example.org/a');
     expect(checkedOnOf({ check_date: '2024' })).toBeNull();
   });
