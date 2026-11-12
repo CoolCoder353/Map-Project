@@ -146,6 +146,10 @@ reaches rows below the fold.
 Deployed to maps.coolcodertech.com and shipped as 0.7.0 (versionCode 18) to internal testing on
 2026-11-10. `/api/health` up; `verify:stack` and `verify:mobile` not run.
 
+Shipped as 0.7.2 (versionCode 20) to internal testing on 2026-11-13, with the server deployed
+first (`3fff424`): lane arrows under the next turn on Navigate. Nothing of 0.7.2 has been seen on a
+device yet.
+
 Shipped as 0.7.1 (versionCode 19, `9b074d7`) to internal testing on 2026-11-10: the second run's
 and the usability pass's fixes. The server was not deployed with it, so its parts of those fixes
 (brand and suburb search, gyms, short navigated trips, trips named by their destination, migration
@@ -259,12 +263,12 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
 
 ## Open / manual
 
-- **Lanes, surveyed speed signs, limits to check and business details (2026-11-13, not deployed).**
-  Checked by tests only. Lanes come from OSM `turn:lanes` with the next places refresh (and
+- **Lanes, surveyed speed signs, limits to check and business details (2026-11-13, deployed 2026-11-13 as `3fff424`; app 0.7.2 on internal testing).**
+  Checked by tests, and read-only on the live server (see deploy-small-server.md): lanes on 14 turns
+  of five real drives, survey limits filling unmapped stretches, phone numbers in search. Lanes come from OSM `turn:lanes` with the next places refresh (and
   migration 013); the survey's sign codes and filters were set from two of its files (Winton and
   Brisbane South: 18,470 rows, of which UNSIGNED 11,985, R4-1 speed signs about 4,000, school zones
-  about 1,400, roadworks about 400). Still to do: run `speed-signs-cli.js` on the server and see
-  how many signs import; on a device, the lane arrows under a turn on a mapped junction (Brisbane's
+  about 1,400, roadworks about 400); the live import kept 185,687 signs. Still to do: on a device, the lane arrows under a turn on a mapped junction (Brisbane's
   main roads have the most `turn:lanes`); a route with an estimated stretch near a surveyed sign;
   the web place card's phone and website. Limits to check needs drives matched after the update
   (older samples have no limit), from two people, before anything is listed. The car screen
