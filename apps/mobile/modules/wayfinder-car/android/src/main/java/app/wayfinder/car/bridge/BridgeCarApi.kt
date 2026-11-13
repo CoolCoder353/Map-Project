@@ -31,10 +31,27 @@ class BridgeCarApi(private val bridge: CarBridge) : CarApi {
   override fun simulate(done: (Result<Unit>) -> Unit) = ask("simulate", JSONObject(), { }, done)
   override fun report(screenshotJpeg: String?, done: (Result<Unit>) -> Unit) =
     ask("report", JSONObject().apply { screenshotJpeg?.let { put("screenshotJpeg", it) } }, { }, done)
-  override val navigation: CarNav? get() = bridge.navigation?.let(::readNav)
-  override fun onNavigation(listener: (CarNav?) -> Unit): () -> Unit = bridge.onNavigation { json -> listener(json?.let(::readNav)) }
+  override val navigation: CarNav? get() = readNav(bridge.navigation)
+  override fun onNavigation(listener: (CarNav?) -> Unit): () -> Unit = bridge.onNavigation { json -> listener(readNav(json)) }
 
-  private fun readNav(json: JSONObject): CarNav? = runCatching { Protocol.nav(json) }.getOrNull()
+  /** The trip as last read, while one runs. */
+  private var lastRead: CarNav? = null
+
+  /**
+   * The trip the phone sent, or null when there is none. An update that can't be read is not the
+   * trip ending: the car keeps what it last read, rather than leaving the directions and saying
+   * they stopped while the phone goes on navigating.
+   */
+  private fun readNav(json: JSONObject?): CarNav? {
+    if (json == null) {
+      lastRead = null
+      return null
+    }
+    runCatching { Protocol.nav(json) }
+      .onSuccess { lastRead = it }
+      .onFailure { android.util.Log.w("WayfinderCar", "a trip update couldn't be read: ${it.message}") }
+    return lastRead
+  }
 
   /**
    * An answer that can't be read means the phone app and the car app are out of step (one was

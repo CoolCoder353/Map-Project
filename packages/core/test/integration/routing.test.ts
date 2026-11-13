@@ -341,6 +341,21 @@ describe('routing service (fake GraphHopper)', () => {
     for (const v of loopVias) expect(v[1], `loop via ${v} is out at sea`).toBeGreaterThan(west[1]);
   });
 
+  // A plan asked for from a moving car: without the way it is going, a route could begin behind it,
+  // and the trip was off the route the moment it started.
+  it('starts every route of a plan the way a moving car is heading', async () => {
+    const base: LngLat = [150.2, -33.1];
+    const east = destination(base, 90, 20_000);
+    const u = await makeUser(t.db, 'moving-plan@example.com');
+    calls.length = 0;
+    await routing.exploreRoutes(deps(), u.id, { from: base, to: east, mode: 'car', budgetMin: 30, heading: 270 });
+    expect(calls.length).toBeGreaterThan(1);
+    for (const c of calls) expect(c.heading, `asked without a heading: ${JSON.stringify(c.points)}`).toBe(270);
+    calls.length = 0;
+    await routing.exploreRoutes(deps(), u.id, { from: base, to: east, mode: 'car', budgetMin: 30 });
+    for (const c of calls) expect(c.heading).toBeUndefined();
+  });
+
   it('sends detours down through-roads, not service roads or dead ends', async () => {
     const base: LngLat = [151.5, -32.0];
     const east = destination(base, 90, 20_000);

@@ -2,6 +2,8 @@ package app.wayfinder.car
 
 import android.location.Location
 import android.os.SystemClock
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import app.wayfinder.car.bridge.CarApi
 import app.wayfinder.car.bridge.CarFix
 
@@ -43,7 +45,7 @@ class IdleFixes(
    * first position for ever, as the phone's own GPS isn't running with the phone locked). The car's
    * own go to the phone app through [CarLocation]; this keeps the phone's coming for it too.
    */
-  fun forTrip(): () -> Unit {
+  fun hold(): () -> Unit {
     var held = true
     holdPhone()
     return {
@@ -85,6 +87,24 @@ class IdleFixes(
 }
 
 /**
+ * Keeps positions flowing to the phone app while the car's screen shows Wayfinder, whichever of its
+ * screens that is. Only Home listened, so on Search, Saved places or Discover the last position
+ * aged, and after a minute a plan asked the (locked) phone where it was again.
+ */
+class WhileShowing(private val fixes: IdleFixes) : DefaultLifecycleObserver {
+  private var stop: (() -> Unit)? = null
+
+  override fun onStart(owner: LifecycleOwner) {
+    if (stop == null) stop = fixes.hold()
+  }
+
+  override fun onStop(owner: LifecycleOwner) {
+    stop?.invoke()
+    stop = null
+  }
+}
+
+/**
  * Keeps the phone's positions flowing to the phone app ([IdleFixes]) for as long as a trip runs, so a car that
  * gives no position of its own doesn't leave the trip on "Still finding where you are". Idle, it
  * listens to nothing.
@@ -103,7 +123,7 @@ class TripFixes(private val api: CarApi, private val fixes: IdleFixes) {
   }
 
   private fun update(navigating: Boolean) {
-    if (navigating && stop == null) stop = fixes.forTrip()
+    if (navigating && stop == null) stop = fixes.hold()
     else if (!navigating) {
       stop?.invoke()
       stop = null

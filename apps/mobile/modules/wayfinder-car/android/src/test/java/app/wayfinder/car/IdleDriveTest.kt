@@ -41,6 +41,20 @@ class IdleDriveTest {
     assertEquals(0, last().speedKmh)
   }
 
+  /**
+   * A position with no heading (some phones, some cars) left the old one standing: the live server
+   * was asked for limits with the same heading through six minutes of turns.
+   */
+  @Test fun worksOutTheWayItIsGoingFromMovementWhenPositionsCarryNone() {
+    drive.onFix(fix(0.0, heading = 182.0), scenes::show)
+    drive.onFix(fix(10.0, heading = null), scenes::show)
+    assertEquals("not from 10 m: GPS wobble", 182.0, last().headingDeg!!, 0.0)
+    drive.onFix(fix(40.0, heading = null), scenes::show)
+    assertEquals("north now", 0.0, last().headingDeg!!, 1.0)
+    drive.onFix(CarFix(153.25 + 0.001, -27.56 + 40.0 / 111_195.0, 5.0, 15.0, null, clock), scenes::show)
+    assertEquals("then east", 90.0, last().headingDeg!!, 1.0)
+  }
+
   @Test fun asksForTheLimitAndShowsIt() {
     drive.onFix(fix(0.0, heading = 90.0), scenes::show)
     assertEquals(listOf("speedLimit 153.25,-27.56 90.0"), api.calls)

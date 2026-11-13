@@ -325,6 +325,28 @@ describe('the 9 November phone run', () => {
     expect(screen.getByLabelText('Starting point')).toHaveDisplayValue('Your location');
   });
 
+  // The Plan tab stays mounted behind a trip. It asked the server for new routes every 200 m of
+  // every navigated drive (six times a minute on the live server), for a screen nobody was on.
+  it('leaves “Your location” and its routes alone while a trip runs, and catches up when it ends', async () => {
+    await renderScreen(<Host />);
+    await chooseDestination();
+    await screen.findByText('Explore 1');
+    const asked = fake.api.callsTo('POST api/routes/explore').length;
+    const { navigation } = jest.requireActual<typeof import('../src/nav/navigationService')>('../src/nav/navigationService');
+    const snap = jest.spyOn(navigation, 'getSnapshot').mockReturnValue({ ...navigation.getSnapshot(), active: true, destinationName: 'Gym' });
+    try {
+      await act(async () => bump());
+      mockHere = [153.2, -27.52];
+      await act(async () => bump());
+      await act(async () => new Promise((r) => setTimeout(r, 600)));
+      expect(fake.api.callsTo('POST api/routes/explore')).toHaveLength(asked);
+    } finally {
+      snap.mockRestore();
+    }
+    await act(async () => bump());
+    await waitFor(() => expect(fake.api.callsTo('POST api/routes/explore').at(-1)!.body).toMatchObject({ from: [153.2, -27.52] }));
+  });
+
   it('never offers to save “Your location” or a whole suburb (P81, P11)', async () => {
     fake.api.on({ 'GET api/search': () => ({ results: [place({ id: 'sub', name: 'Mount Coot-tha', kind: 'suburb', typeLabel: 'Suburb', context: 'Brisbane QLD' })] }) });
     await renderScreen(<Plan />);

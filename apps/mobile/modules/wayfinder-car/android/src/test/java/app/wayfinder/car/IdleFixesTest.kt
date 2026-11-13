@@ -68,7 +68,7 @@ class IdleFixesTest {
   }
 
   @Test fun aTripGetsThePhonesPositionsWhenTheCarGivesNone() {
-    val off = fixes.forTrip()
+    val off = fixes.hold()
     assertEquals(1, phoneListening)
     phoneListener!!(phoneFix())
     assertEquals(153.1, toPhoneApp.single().lon, 0.0)
@@ -77,7 +77,7 @@ class IdleFixesTest {
   }
 
   @Test fun aTripLeavesTheCarsPositionsToCarLocation() {
-    fixes.forTrip()
+    fixes.hold()
     fixes.car(carFix)
     assertEquals("the car's own fixes already reach the phone app, so not twice", emptyList<CarFix>(), toPhoneApp)
     clock += 2_000
@@ -110,12 +110,45 @@ class IdleFixesTest {
 
   @Test fun aTripAndTheHomeScreenShareOnePhoneListener() {
     val off = fixes.listen { }
-    val offTrip = fixes.forTrip()
+    val offTrip = fixes.hold()
     assertEquals(1, phoneListening)
     off()
     assertEquals(1, phoneListening)
     offTrip()
     assertEquals(0, phoneListening)
+  }
+}
+
+/** Positions for planning, on whichever screen the car shows. */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
+class WhileShowingTest {
+  private var listening = 0
+  private var listener: ((Location) -> Unit)? = null
+  private val phone = object : PhoneFixSource {
+    override fun listen(onFix: (Location) -> Unit): () -> Unit {
+      listening++
+      listener = onFix
+      return { listening-- }
+    }
+  }
+  private val sent = mutableListOf<CarFix>()
+  private val showing = WhileShowing(IdleFixes(phone, { 0L }) { sent += it })
+  private val owner = object : androidx.lifecycle.LifecycleOwner {
+    override val lifecycle = androidx.lifecycle.LifecycleRegistry.createUnsafe(this)
+  }
+
+  @Test fun thePhoneAppGetsPositionsWhileTheCarShowsWayfinderWithHomeNotOnTop() {
+    assertEquals(0, listening)
+    showing.onStart(owner)
+    showing.onStart(owner)
+    assertEquals(1, listening)
+    listener!!(Location("gps").apply { longitude = 153.1; latitude = -27.1; time = 2L })
+    assertEquals(153.1, sent.single().lon, 0.0)
+    showing.onStop(owner)
+    assertEquals("another app on the car's screen: no GPS for Wayfinder", 0, listening)
+    showing.onStop(owner)
+    assertEquals(0, listening)
   }
 }
 

@@ -239,6 +239,31 @@ class HomeScreenTest {
   }
 
   /** Parked, the whole description ran to five lines and pushed Discover off the screen (R2-C4). */
+  /** Driving, Home asked the phone, and the phone the server twice, every 30 s of the whole drive. */
+  @Test fun asksLessOftenWhileTheCarIsMoving() {
+    val feed = Feed()
+    val home = HomeScreen(carContext, api, scenes, fixes = feed::listen) { }
+    ScreenController(home).moveToState(Lifecycle.State.STARTED)
+    api.answer("status", Samples.status())
+    feed.send(fix)
+    val looper = org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper())
+    val asked = { api.calls.count { it == "status" } }
+    looper.idleFor(HomeScreen.REFRESH_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+    assertEquals("the refresh already due still runs", 2, asked())
+    api.answer("status", Samples.status())
+    looper.idleFor(HomeScreen.REFRESH_MS * 2, java.util.concurrent.TimeUnit.MILLISECONDS)
+    assertEquals("not again within a minute while moving", 2, asked())
+    looper.idleFor(HomeScreen.REFRESH_MOVING_MS - HomeScreen.REFRESH_MS * 2, java.util.concurrent.TimeUnit.MILLISECONDS)
+    assertEquals(3, asked())
+    api.answer("status", Samples.status())
+    feed.send(fix.copy(speedMps = 0.0))
+    looper.idleFor(HomeScreen.REFRESH_MOVING_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+    assertEquals(4, asked())
+    api.answer("status", Samples.status())
+    looper.idleFor(HomeScreen.REFRESH_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+    assertEquals("stopped: every 30 s again", 5, asked())
+  }
+
   @Test fun homesLineIsHowFarAndWhatItIs() {
     assertEquals("4.3 km away · Bunnings Warehouse", HomeScreen.shortDetail("4.3 km away · Bunnings Warehouse, Hardware store · Victoria Point QLD 4165"))
     assertEquals("Lookout · 6.2 km away", HomeScreen.shortDetail("Lookout · 6.2 km away"))

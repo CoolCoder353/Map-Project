@@ -237,7 +237,11 @@ its map follows the car (`IdleDrive.kt`) with the driving camera, the car's arro
 road's limit. Positions are the car's GNSS, which works with the phone locked, else the phone's GPS
 when the car has said nothing for 5 s (`IdleFixes.kt`, listening to the phone only while Home or a trip wants
 positions, asking for GPS accuracy and leaving out any rougher than 100 m). Each phone position used
-also goes to the phone app, so planning starts from where the car's map shows you. The limit is asked of the server (`GET /api/roads/speed-limit`) one request at a time,
+also goes to the phone app, so planning starts from where the car's map shows you; the phone is
+listened to on every car screen while Wayfinder is showing (`WhileShowing`), not only on Home. A plan
+asked for while the car is moving carries its heading, so its routes start the way it is going
+(`heading` on `POST /api/routes/explore`). Home asks the phone for its status every 30 s, and every
+2 minutes while the car is moving. Positions with no heading get one from movement (20 m or more). The limit is asked of the server (`GET /api/roads/speed-limit`) one request at a time,
 after 150 m of driving or 30 m over 20 s, never while parked, and isn't shown once the car is 300 m
 from where it was looked up.
 
@@ -247,14 +251,15 @@ then the nearest), `search`, `discover`, `plan`, `planned`, `routeLine`, `start`
 `speedLimit`, and JS pushes every navigation change back
 (`src/car/navModel.ts`). The car also sends its own position once a second (`location`, from the car's
 GNSS via `CarLocation.kt`): while it comes, the phone's navigation follows it and sets the phone's own
-fixes aside, as the car's map does (`IdleFixes`); the phone's are followed again once the car's have
+fixes aside, as the car's map does (`IdleFixes`); a car position dropped as older than one already
+followed sets nothing aside; the phone's are followed again once the car's have
 stopped for 5 s (`CAR_FIX_AFTER_MS`), as in a car with no location of its own. `CarLocation` logs once
 a session whether the car's position is followed. Planning and Discover use the
 position the car session last sent (the car's GNSS, else the phone's GPS as the car session hears it)
 from the last minute, else the phone's own recent one, and only then wait for a new fix from the
 phone, for at most 8 s (`PHONE_FIX_WAIT_MS`): a locked phone in a pocket may never give one. Each
-request gives up after 45 s (`CarBridge`), longer than the phone's own 30 s wait for the server plus
-that 8 s, so a weak signal shows as "No connection to the server" rather than as the phone not
+request gives up after 25 s (`CarBridge`), longer than the 15 s the phone waits for the server on the
+car's behalf (`CAR_SERVER_TIMEOUT_MS`) plus that 8 s, so a weak signal shows as "No connection to the server" rather than as the phone not
 answering (`carModule.test.ts` keeps the three in that order). The trip handed to the car's cluster carries the current step and the
 one after it. The messages are defined in `src/car/protocol.ts` and `bridge/Protocol.kt`,
 pinned by fixtures both test suites read. Another test (`carModule.test.ts`) checks that every

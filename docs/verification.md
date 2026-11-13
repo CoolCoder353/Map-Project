@@ -309,7 +309,9 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   refused location permission it already had; the car session's listener was given Wi-Fi and
   mobile-tower positions, not GPS; and positions the car's map had never reached planning. All three
   fixed with tests; none seen on a phone, as none was attached, and the third is the likely cause of
-  routes not starting while driving, not a proven one. See
+  routes not starting while driving, not a proven one. A scan of the phone-to-car code the same day
+  fixed seven more (a plan on the move now carries the car's heading, which needs the server
+  deployed; the rest need only a build), all by tests. See
   [android-auto-locked-phone.md](android-auto-locked-phone.md) ("Since 0.7.2").
 - **The phone locked, fixed 2026-11-03 (server live, app 0.5.9 on internal testing).** JavaScript timers now run for a trip and while the car
   app is open, and the phone's location listener starts even when the location service is refused; the

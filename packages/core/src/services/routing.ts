@@ -215,6 +215,8 @@ interface RouteRequest {
   customModel?: CustomModel;
   alternatives?: number;
   vias: LngLat[];
+  /** Which way the traveller is going at the start (a plan asked for on the move). */
+  heading?: number | undefined;
 }
 
 /** Run route requests concurrently; a request that fails (e.g. unreachable via) gives no paths. */
@@ -229,6 +231,7 @@ async function runRoutes(deps: RoutingDeps, requests: readonly RouteRequest[], l
           ...(r.alternatives ? { alternatives: r.alternatives } : {}),
           // Detours should carry on through their waypoints, not turn around at them.
           ...(r.vias.length > 0 ? { passThrough: true } : {}),
+          ...(r.heading !== undefined ? { heading: r.heading } : {}),
         }),
       ),
     ),
@@ -407,11 +410,14 @@ export function turnAroundWhenYouCan(route: Route): Route {
 export async function exploreRoutes(
   deps: RoutingDeps,
   userId: string,
-  req: { from: LngLat; to: LngLat; mode: Mode; budgetMin: number | undefined },
+  req: { from: LngLat; to: LngLat; mode: Mode; budgetMin: number | undefined; heading?: number | undefined },
 ): Promise<ExploreRouteResponse> {
   const budgetS = (req.budgetMin ?? DEFAULT_EXPLORE_BUDGET_MIN[req.mode]) * 60;
+  // Asked for on the move (the car's screen while driving): every route starts the way the car is
+  // going, as a new route mid-trip does, rather than behind it.
+  const heading = req.heading;
   const [fastestPath] = await deps.metrics.time('graphhopper.route', 'explore.fastest', () =>
-    deps.graphhopper.route({ points: [req.from, req.to], profile: profileFor(req.mode) }),
+    deps.graphhopper.route({ points: [req.from, req.to], profile: profileFor(req.mode), ...(heading !== undefined ? { heading } : {}) }),
   );
   if (!fastestPath) throw new AppError(422, 'no_route', 'No route found');
   const t0 = fastestPath.time / 1000;
@@ -440,20 +446,20 @@ export async function exploreRoutes(
   const vias = picked.map((p, i) => snappedVias[i] ?? p);
 
   const requests: RouteRequest[] = [
-    { points: [req.from, req.to], mode: req.mode, alternatives: 3, vias: [] },
+    { points: [req.from, req.to], mode: req.mode, alternatives: 3, vias: [], heading },
   ];
   for (const factor of [0.5, 0.2]) {
     const model = exploreModel(req.mode, polygon, factor);
-    if (model) requests.push({ points: [req.from, req.to], mode: req.mode, customModel: model, vias: [] });
+    if (model) requests.push({ points: [req.from, req.to], mode: req.mode, customModel: model, vias: [], heading });
   }
   const viaModel = exploreModel(req.mode, polygon, 0.5);
   for (const via of vias) {
-    requests.push({ points: [req.from, via, req.to], mode: req.mode, ...(viaModel ? { customModel: viaModel } : {}), vias: [via] });
+    requests.push({ points: [req.from, via, req.to], mode: req.mode, ...(viaModel ? { customModel: viaModel } : {}), vias: [via], heading });
   }
   if (vias.length >= 2) {
     // Order the pair along the trip direction.
     const pair = vias.slice(0, 2).sort((a, b) => haversineM(req.from, a) - haversineM(req.from, b));
-    requests.push({ points: [req.from, ...pair, req.to], mode: req.mode, ...(viaModel ? { customModel: viaModel } : {}), vias: pair });
+    requests.push({ points: [req.from, ...pair, req.to], mode: req.mode, ...(viaModel ? { customModel: viaModel } : {}), vias: pair, heading });
   }
 
   const candidates = await tryRoutes(deps, requests, 'explore.candidate');
@@ -479,7 +485,8 @@ export async function exploreRoutes(
     })),
   ]);
   // Times now allow for lights and what trips have learned, so the extra time is by the same measure.
-  return quickestFirst(fastest!, explore);
+  const ordered = quickestFirst(fastest!, explore);
+  return heading === undefined ? ordered : { fastest: turnAroundWhenYouCan(ordered.fastest), explore: ordered.explore.map(turnAroundWhenYouCan) };
 }
 
 /**

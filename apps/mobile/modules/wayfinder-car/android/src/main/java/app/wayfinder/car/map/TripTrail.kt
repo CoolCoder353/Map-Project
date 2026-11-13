@@ -33,5 +33,15 @@ class TripTrail(private val stepM: Double = 10.0) {
       val h = sin(dLat / 2).pow(2) + cos(Math.toRadians(a.lat)) * cos(Math.toRadians(b.lat)) * sin(dLon / 2).pow(2)
       return 2 * r * asin(sqrt(h))
     }
+
+    /** Which way [b] is from [a], degrees clockwise from north, 0 to 360. */
+    fun bearing(a: LngLat, b: LngLat): Double {
+      val lat1 = Math.toRadians(a.lat)
+      val lat2 = Math.toRadians(b.lat)
+      val dLon = Math.toRadians(b.lon - a.lon)
+      val y = sin(dLon) * cos(lat2)
+      val x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
+      return (Math.toDegrees(kotlin.math.atan2(y, x)) + 360.0) % 360.0
+    }
   }
 }

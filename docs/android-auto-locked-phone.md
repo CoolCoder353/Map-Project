@@ -66,6 +66,23 @@ with no heading. **None of this has been seen on a phone:** none was attached.
   a route while driving (the phone is in a pocket then, and in the hand when parked); it isn't
   proven, as nothing recorded what the driver tapped.
 
+From a scan of the code between the phone and the car the same day, also fixed (tests only):
+
+- **A plan asked for on the move starts the way the car is going.** The car's plan sent no
+  heading, so a route could begin behind a moving car and the trip was off its route at once. The
+  heading of the last position, if under 5 s old and the car is moving, goes with the plan, and
+  the server starts every route that way (it needs the server deployed; an older server ignores
+  it). The live routing engine accepts a heading with alternatives, detour models and via points.
+- **A car position dropped as old no longer sets the phone's aside.** A car whose clock runs
+  behind the phone's had its positions dropped and the phone's ignored too.
+- **Positions keep coming on every car screen,** not only Home (`WhileShowing`), so a plan from
+  Search or Saved places a minute after leaving Home still knows where the car is.
+- **One trip update the car can't read is not the trip ending:** the car keeps what it last read.
+- **With no trip, a position with no heading gets one from movement,** so the limit is looked up
+  for the way the car is going, not the way it was going six minutes ago.
+- **Home asks the phone for places every 2 minutes while moving,** not every 30 s.
+- **The phone's Plan tab no longer plans again every 200 m of a trip** it sits behind.
+
 To check on a phone: steps 1 and 3 below, and plan from Home while a drive is replayed with the
 phone locked.
 

@@ -73,6 +73,21 @@ describe('the car’s own location', () => {
     }
   });
 
+  // Without the way the car is going, a route planned on the move could begin behind it.
+  it('plans the way a moving car is heading, and any way for one standing still', async () => {
+    fake.api.on({ 'POST api/routes/explore': () => ({ fastest: route({ id: 'r-car' }), explore: [] }) });
+    await carHandlers.location!(fixFromCar({ speedMps: 13.5, headingDeg: 90 }));
+    await carHandlers.plan!({ to: [152.957, -27.4846] });
+    expect(fake.api.callsTo('POST api/routes/explore').at(-1)!.body).toEqual({ from: [153.05, -27.45], to: [152.957, -27.4846], mode: 'car', heading: 90 });
+    // Stopped, a car's heading is noise (or 0).
+    await carHandlers.location!(fixFromCar({ speedMps: 0.4, headingDeg: 0 }));
+    await carHandlers.plan!({ to: [152.957, -27.4846] });
+    expect(fake.api.callsTo('POST api/routes/explore').at(-1)!.body).toEqual({ from: [153.05, -27.45], to: [152.957, -27.4846], mode: 'car' });
+    await carHandlers.location!(fixFromCar({ speedMps: 13.5, headingDeg: null }));
+    await carHandlers.plan!({ to: [152.957, -27.4846] });
+    expect(fake.api.callsTo('POST api/routes/explore').at(-1)!.body).not.toHaveProperty('heading');
+  });
+
   it('plans from the car’s position without waiting on the phone', async () => {
     jest.mocked(Location.getLastKnownPositionAsync).mockClear();
     jest.mocked(Location.getCurrentPositionAsync).mockClear();

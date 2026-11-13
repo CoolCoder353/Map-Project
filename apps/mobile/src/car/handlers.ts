@@ -30,7 +30,23 @@ async function copy(): Promise<CopyCatalog> {
 }
 
 /** The car's own last position, which Android Auto gives us from the car's GNSS. [at] is when it arrived, by this phone's clock. */
-let lastCarFix: { at: number; position: LngLat } | null = null;
+let lastCarFix: { at: number; position: LngLat; speedMps: number | null; headingDeg: number | null } | null = null;
+/** Slower than this a car's heading is noise (stopped, it reports 0), as navigation takes it. */
+const MOVING_MPS = 2;
+
+/**
+ * Which way the car is going, when it is moving and has said where it is in the last few seconds.
+ * A plan asked for on the move starts that way; without it a route could begin behind the car, and
+ * the trip was off its route the moment it started.
+ */
+function headingNow(): number | null {
+  const f = lastCarFix;
+  if (!f || Date.now() - f.at > HEADING_MAX_AGE_MS) return null;
+  if (f.headingDeg == null || !Number.isFinite(f.headingDeg) || f.headingDeg < 0 || (f.speedMps ?? 0) < MOVING_MPS) return null;
+  return f.headingDeg % 360;
+}
+/** A heading older than this may be from before the last corner. */
+const HEADING_MAX_AGE_MS = 5_000;
 /** A car position older than this isn't where you are any more. */
 const CAR_FIX_MAX_AGE_MS = 60_000;
 
@@ -257,7 +273,8 @@ export const carHandlers: CarHandlers = {
     const from = await here(true);
     if (!from) throw new Error(NO_LOCATION);
     // The extra time allowed for ways you haven't been is the person's own setting (server default).
-    const [res, c] = await Promise.all([api.request('api/routes/explore', { method: 'POST', body: { from, to, mode: 'car' }, schema: ExploreRouteResponseSchema, ...carRequest }), copy()]);
+    const heading = headingNow();
+    const [res, c] = await Promise.all([api.request('api/routes/explore', { method: 'POST', body: { from, to, mode: 'car', ...(heading !== null ? { heading } : {}) }, schema: ExploreRouteResponseSchema, ...carRequest }), copy()]);
     const options = [toOption(res.fastest, 'Fastest', c), ...res.explore.map((r, i) => toOption(r, exploreTitles(res.explore, res.fastest)[i]!, c, res.fastest.durationS))].slice(0, MAX_ROWS);
     const note = res.explore.length ? null : res.fastest.novelty.noveltyPct >= 90 ? c.allNewAlready : NO_OTHER_WAYS;
     return { options, note };
@@ -336,10 +353,10 @@ export const carHandlers: CarHandlers = {
     }
   },
 
-  /** The car's own location, once a second: remembered for planning, and followed by a trip the phone can't locate. */
+  /** The car's location (its own GNSS, else the phone's GPS as the car session hears it), once a second: remembered for planning, and followed by a trip the phone can't locate. */
   async location(params) {
     const f = CarParams.location.parse(params);
-    lastCarFix = { at: Date.now(), position: [f.lon, f.lat] };
+    lastCarFix = { at: Date.now(), position: [f.lon, f.lat], speedMps: f.speedMps, headingDeg: f.headingDeg };
     navigation.handleFix(
       { coords: { longitude: f.lon, latitude: f.lat, accuracy: f.accuracyM, speed: f.speedMps, heading: f.headingDeg, altitude: null, altitudeAccuracy: null }, timestamp: f.timeMs },
       'car',

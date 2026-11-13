@@ -44,12 +44,16 @@ class HomeScreen(
   private val idle = IdleDrive(api)
   private var stopFollowing: (() -> Unit)? = null
   private val handler = Handler(Looper.getMainLooper())
+  /** The car is driving, by its last position. */
+  private var moving = false
   /** Asks again while Home shows, so a place saved on the phone appears without leaving Home (C78). */
   private val refresh = object : Runnable {
     override fun run() {
       if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return
       load(quiet = true)
-      handler.postDelayed(this, REFRESH_MS)
+      // Less often on the move: nobody is saving places on the phone then, and each refresh is two
+      // requests to the server over mobile data.
+      handler.postDelayed(this, if (moving) REFRESH_MOVING_MS else REFRESH_MS)
     }
   }
   private val back = BackToDirections({ api.navigation != null }, { onDrive() })
@@ -89,12 +93,16 @@ class HomeScreen(
     val wanted = lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) && api.navigation == null &&
       status?.getOrNull()?.account == Account.SIGNED_IN
     if (!wanted) return unfollow()
-    if (stopFollowing == null) stopFollowing = fixes { fix -> idle.onFix(fix) { show(map, it) } }
+    if (stopFollowing == null) stopFollowing = fixes { fix ->
+      moving = (fix.speedMps ?: 0.0) >= MOVING_MPS
+      idle.onFix(fix) { show(map, it) }
+    }
   }
 
   private fun unfollow() {
     stopFollowing?.invoke()
     stopFollowing = null
+    moving = false
     idle.stop()
   }
 
@@ -162,6 +170,8 @@ class HomeScreen(
 
   companion object {
     const val REFRESH_MS = 30_000L
+    const val REFRESH_MOVING_MS = 120_000L
+    private const val MOVING_MPS = 2.0
 
     /**
      * Home's line, kept to one: how far and what it is, without the type, suburb and postcode

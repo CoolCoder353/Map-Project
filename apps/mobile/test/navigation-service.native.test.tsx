@@ -585,6 +585,18 @@ describe('the car’s own location', () => {
     expect(navigation.getSnapshot().position).toEqual([153.0005, -27.4]);
   });
 
+  // A car whose clock runs behind the phone's: its positions are dropped as already followed. They
+  // used to set the phone's aside all the same, and the trip had no position from either.
+  it('does not set the phone’s fixes aside for a car position that was dropped as old', async () => {
+    navigation.start(route());
+    await waitFor(() => expect(mockOnFix).not.toBeNull());
+    mockOnFix!(fix(153, -27.4, 5000));
+    navigation.handleFix(fix(153.2, -27.4, 1000) as never, 'car');
+    expect(navigation.getSnapshot().position).toEqual([153, -27.4]);
+    mockOnFix!(fix(153.0005, -27.4, 6000));
+    expect(navigation.getSnapshot().position).toEqual([153.0005, -27.4]);
+  });
+
   it('is not followed by a test drive', async () => {
     navigation.start(route(), { simulated: true });
     navigation.handleFix(fix(153, -27.4, 1000) as never, 'car');

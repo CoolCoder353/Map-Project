@@ -27,14 +27,27 @@ class IdleDrive(private val api: CarApi, private val now: () -> Long = SystemClo
   private var generation = 0
   private var show: ((MapScene) -> Unit)? = null
   private var lastFix: CarFix? = null
+  /** Where the heading was last known or worked out. */
+  private var movedFrom: LngLat? = null
 
   fun onFix(fix: CarFix, show: (MapScene) -> Unit) {
     this.show = show
     lastFix = fix
     val here = LngLat(fix.lon, fix.lat)
     position = here
-    // Stopped, a car reports no heading (or 0): keep the way it was going, or none yet.
-    if (fix.headingDeg != null && (fix.speedMps ?: 0.0) >= MOVING_MPS) heading = fix.headingDeg
+    // Stopped, a car reports no heading (or 0): keep the way it was going, or none yet. A position
+    // with no heading at all: the way from where it last had one, once it has moved far enough to
+    // tell, as navigation does (followHeading in navigationService.ts).
+    val from = movedFrom
+    if (fix.headingDeg != null && (fix.speedMps ?: 0.0) >= MOVING_MPS) {
+      heading = fix.headingDeg
+      movedFrom = here
+    } else if (from == null) {
+      movedFrom = here
+    } else if (TripTrail.metres(from, here) >= HEADING_FROM_MOVEMENT_M) {
+      heading = TripTrail.bearing(from, here)
+      movedFrom = here
+    }
     draw()
     if (shouldAsk(here, fix)) ask(here)
   }
@@ -91,6 +104,7 @@ class IdleDrive(private val api: CarApi, private val now: () -> Long = SystemClo
 
   private companion object {
     const val MOVING_MPS = 2.0
+    const val HEADING_FROM_MOVEMENT_M = 20.0
     const val ASK_AFTER_M = 150.0
     const val ASK_CREEPING_M = 30.0
     const val ASK_EVERY_MS = 20_000L

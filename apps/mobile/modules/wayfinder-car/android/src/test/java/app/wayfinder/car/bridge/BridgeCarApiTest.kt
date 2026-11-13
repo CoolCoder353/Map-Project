@@ -101,12 +101,32 @@ class BridgeCarApiTest {
   @Test fun givesNavigationOnlyWhenItCanBeRead() {
     var seen: CarNav? = null
     api.onNavigation { seen = it }
+    bridge.setNavigation("{}")
+    assertNull("no trip was known: one that can't be read isn't one", seen)
+    assertNull(api.navigation)
     bridge.setNavigation(fixture("nav-navigating.json").toString())
     assertEquals(NavStatus.NAVIGATING, seen!!.status)
     assertEquals(NavStatus.NAVIGATING, api.navigation!!.status)
-    seen = null
+  }
+
+  /**
+   * One update the car can't read used to look like the trip ending: the car left the directions
+   * and said they had stopped on the phone, while the phone went on navigating and speaking.
+   */
+  @Test fun keepsTheTripWhenOneUpdateCantBeRead() {
+    var seen: CarNav? = null
+    var updates = 0
+    api.onNavigation { seen = it; updates++ }
+    bridge.setNavigation(fixture("nav-navigating.json").toString())
+    val trip = seen!!
     bridge.setNavigation("{}")
-    assertNull(seen)
+    assertEquals(2, updates)
+    assertEquals("as it last was", trip, seen)
+    assertEquals(trip, api.navigation)
+    bridge.setNavigation(null)
+    assertNull("ended is still ended", seen)
     assertNull(api.navigation)
+    bridge.setNavigation("{}")
+    assertNull("and the trip before it isn't brought back", api.navigation)
   }
 }

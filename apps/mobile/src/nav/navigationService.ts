@@ -414,11 +414,13 @@ export function createNavigationService(): NavigationService {
     // antenna is outside the cabin, and it keeps coming with the phone locked in a pocket. Two
     // sources taken turn about would make the position jitter between them. The phone's fixes are
     // followed once the car's stop (no car, or one with no location of its own) (R2-H1).
-    if (source === 'car') lastCarFixAt = Date.now();
-    else if (source !== 'simulation' && Date.now() - lastCarFixAt < CAR_FIX_AFTER_MS) return;
+    if (source !== 'car' && source !== 'simulation' && Date.now() - lastCarFixAt < CAR_FIX_AFTER_MS) return;
     // The location service and the GPS watch deliver the same fixes; follow each once. Only the
     // service's are compared with every fix so far: the watch alone may repeat a timestamp.
     if (loc.timestamp <= (source === 'service' || source === 'car' ? lastFixTs : lastServiceFixTs)) return;
+    // Only a car position that is followed sets the phone's aside. One dropped as old (a car whose
+    // clock runs behind the phone's) used to as well, and the trip then had no position from either.
+    if (source === 'car') lastCarFixAt = Date.now();
     lastFixTs = Math.max(lastFixTs, loc.timestamp);
     if (source === 'service') lastServiceFixTs = loc.timestamp;
     const given = loc.coords.speed != null && Number.isFinite(loc.coords.speed) && loc.coords.speed >= 0 ? loc.coords.speed : null;

@@ -65,17 +65,17 @@ export default function Plan() {
   const { sideBySide } = useLayout();
   const split = splitStyles(sideBySide, searching && !sideBySide ? '0%' : bigMap ? MAP_SHARE.big : MAP_SHARE.normal);
   const panel = useRef<ScrollView>(null);
-  // A trip already running: starting one here replaces it, so say so (C14).
-  const running = useSyncExternalStore(navigation.subscribe, () => {
-    const n = navigation.getSnapshot();
-    return n.active ? (n.destinationName ?? 'your destination') : null;
-  });
   // A route that starts somewhere else, waiting for "Start anyway" (P83).
   const [farStart, setFarStart] = useState<Route | null>(null);
   const [tab, setTab] = useState<Tab>('directions');
   const [mode, setMode] = useState<Mode>(user?.settings.defaultMode ?? 'car');
   // Round trip keeps its own: a walk planned there doesn't turn Directions into walking.
   const [loopMode, setLoopMode] = useState<Mode>(user?.settings.defaultMode ?? 'car');
+  // A trip already running: starting one here replaces it, so say so (C14).
+  const running = useSyncExternalStore(navigation.subscribe, () => {
+    const n = navigation.getSnapshot();
+    return n.active ? (n.destinationName ?? 'your destination') : null;
+  });
   const [from, setFrom] = useState<ChosenPlace | null>(null);
   // Start where you are, once a position is known — but only the first time, so clearing the
   // field doesn't immediately fill it in again.
@@ -85,13 +85,15 @@ export default function Plan() {
     // "Your location" is where you are now: it moves with you (useApproxLocation says when you've
     // moved far enough to matter), and routes from it are worked out again.
     if (from?.current && (from.location[0] !== here[0] || from.location[1] !== here[1])) {
-      setFrom({ ...from, location: here });
+      // Not during a trip: this screen stays mounted behind the directions, and asked the server
+      // for new routes every 200 m of the drive. It catches up when the trip ends.
+      if (!running) setFrom({ ...from, location: here });
       return;
     }
     if (filledStart.current || from) return;
     filledStart.current = true;
     setFrom({ name: 'Your location', description: '', location: here, current: true });
-  }, [here, from]);
+  }, [here, from, running]);
   const [to, setTo] = useState<ChosenPlace | null>(null);
   // Leaving the app (Back on Plan closes it) and coming back finds the trip still planned (U2).
   const restored = useRef(false);

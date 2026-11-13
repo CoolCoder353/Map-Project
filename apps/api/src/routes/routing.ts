@@ -26,7 +26,7 @@ export const routingRoutes =
       const user = currentUser(req);
       const budgetMin = body.budgetMin ?? (user.settings.exploreBudgetMin as number | undefined);
       return deps.ctx.metrics.time('route', 'explore', () =>
-        routingService.exploreRoutes(r, user.id, { from: body.from, to: body.to, mode: body.mode, budgetMin }),
+        routingService.exploreRoutes(r, user.id, { from: body.from, to: body.to, mode: body.mode, budgetMin, heading: body.heading }),
       );
     });
 

@@ -118,6 +118,8 @@ export const ExploreRouteRequestSchema = z.object({
   to: LngLatSchema,
   mode: ModeSchema,
   budgetMin: z.number().int().min(1).max(120).optional(),
+  /** Which way the traveller is heading, when the plan is asked for on the move (the car's screen): routes start that way. */
+  heading: z.number().min(0).max(360).optional(),
 });
 export type ExploreRouteRequest = z.input<typeof ExploreRouteRequestSchema>;
 
