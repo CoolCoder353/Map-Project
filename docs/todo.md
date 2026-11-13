@@ -53,8 +53,12 @@ off this list when it ships, and record it in [verification.md](verification.md)
 
 ## Android Auto with the phone locked: what's left
 
+- **Fixed in code 2026-11-13, to check on a phone:** a trip started from the car no longer asks for
+  location permission it has, the car session asks for GPS accuracy, and planning uses the car
+  session's positions. With the phone locked: plan and Go from Home during a replayed drive, and
+  look for "Navigation needs location permission" and for the map jumping between a few points.
 - **Today:** with location allowed only while using the app, a trip started from the car while locked
-  has no phone GPS and relies on the car's position, and it has no "Navigating to …" notification until
+  may have no phone GPS and rely on the car's position, and it has no "Navigating to …" notification until
   the app next shows. Whether Android lets a location service start from the car at all is unknown.
   What's fixed and what isn't: [android-auto-locked-phone.md](android-auto-locked-phone.md).
 - **Where:** `apps/mobile/src/nav/navigationLocation.ts`.

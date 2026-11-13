@@ -8,11 +8,18 @@ import app.wayfinder.car.bridge.CarFix
 /**
  * Positions for the car's map with no trip. The car's own (see [CarLocation]) work with the phone
  * locked; the phone's are the fallback for a car that gives none, and are only listened to while
- * something wants positions (the home screen, with no trip), so a parked car app costs no GPS.
+ * something wants positions (the home screen, or a trip), so a parked car app costs no GPS.
+ *
+ * Every phone position used also goes to the phone app ([toPhoneApp]), as the car's own do through
+ * [CarLocation]: planning then starts from where the car's map shows you, and a trip follows it.
+ * Asked from JavaScript instead, a locked phone may say nothing, and no route could be started.
  */
-class IdleFixes(private val phone: PhoneFixSource?, private val now: () -> Long = SystemClock::elapsedRealtime) {
+class IdleFixes(
+  private val phone: PhoneFixSource?,
+  private val now: () -> Long = SystemClock::elapsedRealtime,
+  private val toPhoneApp: (CarFix) -> Unit = {},
+) {
   private val listeners = LinkedHashSet<(CarFix) -> Unit>()
-  private val tripListeners = LinkedHashSet<(CarFix) -> Unit>()
   private var holders = 0
   private var lastCarAt: Long? = null
   private var stopPhone: (() -> Unit)? = null
@@ -34,13 +41,16 @@ class IdleFixes(private val phone: PhoneFixSource?, private val now: () -> Long 
   /**
    * The phone's positions while a trip runs, for a car that gives none (the trip would wait for a
    * first position for ever, as the phone's own GPS isn't running with the phone locked). The car's
-   * own go to the phone app through [CarLocation], so only the phone's are passed on here.
+   * own go to the phone app through [CarLocation]; this keeps the phone's coming for it too.
    */
-  fun forTrip(onFix: (CarFix) -> Unit): () -> Unit {
-    tripListeners += onFix
+  fun forTrip(): () -> Unit {
+    var held = true
     holdPhone()
     return {
-      if (tripListeners.remove(onFix)) releasePhone()
+      if (held) {
+        held = false
+        releasePhone()
+      }
     }
   }
 
@@ -58,9 +68,12 @@ class IdleFixes(private val phone: PhoneFixSource?, private val now: () -> Long 
   private fun fromPhone(l: Location) {
     val carAt = lastCarAt
     if (carAt != null && now() - carAt <= CAR_QUIET_MS) return
+    // A guess from Wi-Fi or mobile towers, hundreds of metres out: it would pull the map and a
+    // trip off the road, as a rough one from the car would (CarLocation).
+    if (l.hasAccuracy() && l.accuracy > CarLocation.MAX_ACCURACY_M) return
     val fix = CarFix.from(l)
+    toPhoneApp(fix)
     emit(fix)
-    tripListeners.toList().forEach { it(fix) }
   }
 
   private fun emit(fix: CarFix) = listeners.toList().forEach { it(fix) }
@@ -72,7 +85,7 @@ class IdleFixes(private val phone: PhoneFixSource?, private val now: () -> Long 
 }
 
 /**
- * Keeps the phone's positions flowing to the phone app for as long as a trip runs, so a car that
+ * Keeps the phone's positions flowing to the phone app ([IdleFixes]) for as long as a trip runs, so a car that
  * gives no position of its own doesn't leave the trip on "Still finding where you are". Idle, it
  * listens to nothing.
  */
@@ -90,7 +103,7 @@ class TripFixes(private val api: CarApi, private val fixes: IdleFixes) {
   }
 
   private fun update(navigating: Boolean) {
-    if (navigating && stop == null) stop = fixes.forTrip(api::location)
+    if (navigating && stop == null) stop = fixes.forTrip()
     else if (!navigating) {
       stop?.invoke()
       stop = null

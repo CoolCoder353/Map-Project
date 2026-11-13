@@ -16,6 +16,7 @@ const mockRemove = jest.fn();
 let mockOnFix: ((loc: unknown) => void) | null = null;
 jest.mock('expo-location', () => ({
   Accuracy: { BestForNavigation: 6 },
+  getForegroundPermissionsAsync: jest.fn(async () => ({ granted: false })),
   requestForegroundPermissionsAsync: jest.fn(async () => ({ granted: true })),
   watchPositionAsync: jest.fn(async (_opts: unknown, cb: (loc: unknown) => void) => {
     mockOnFix = cb;
@@ -92,6 +93,28 @@ it('navigates with no screen open, as the car starts it', async () => {
   expect(Speech.speak).toHaveBeenCalledWith('Turn left', expect.anything());
   expect(changes).toBeGreaterThanOrEqual(2);
   off();
+});
+
+// Asking needs an app screen. With none (a trip started from the car, the phone locked), Expo
+// answers "denied" for a permission that is granted, or never answers at all.
+it('a trip started with no app screen uses the location already allowed, without asking', async () => {
+  const Location = jest.requireMock('expo-location') as { getForegroundPermissionsAsync: jest.Mock; requestForegroundPermissionsAsync: jest.Mock };
+  Location.getForegroundPermissionsAsync.mockResolvedValueOnce({ granted: true });
+  navigation.start(route({ id: 'r1' }), { destinationName: 'Home' });
+  await waitFor(() => expect(NavLocation.startNavigationLocation).toHaveBeenCalled());
+  await waitFor(() => expect(mockOnFix).not.toBeNull());
+  expect(Location.requestForegroundPermissionsAsync).not.toHaveBeenCalled();
+  expect(navigation.getSnapshot().error).toBeNull();
+  navigation.stop();
+});
+
+it('asks for location when it is not allowed yet, and says so when refused', async () => {
+  const Location = jest.requireMock('expo-location') as { requestForegroundPermissionsAsync: jest.Mock };
+  Location.requestForegroundPermissionsAsync.mockResolvedValueOnce({ granted: false });
+  navigation.start(route({ id: 'r1' }));
+  await waitFor(() => expect(navigation.getSnapshot().error).toBe('Navigation needs location permission.'));
+  expect(NavLocation.startNavigationLocation).not.toHaveBeenCalled();
+  navigation.stop();
 });
 
 // Android 13+ hides "Navigating to …" without permission; the phone asks, the car never does.

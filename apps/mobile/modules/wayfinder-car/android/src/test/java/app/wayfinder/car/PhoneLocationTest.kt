@@ -79,6 +79,18 @@ class PhoneLocationTest {
     assertTrue(sent.isEmpty())
   }
 
+  /**
+   * Asked the old way (provider, interval, distance), Android 12 and up treat the fused provider
+   * as "balanced power": Wi-Fi and mobile towers, no GPS. With the phone locked nothing else has
+   * GPS on, so the car got the same few points, hundreds of metres from the road.
+   */
+  @Test fun asksForGpsAccuracyEverySecondOrFiveMetres() {
+    val request = LocationManagerFixSource.request()
+    assertEquals(android.location.LocationRequest.QUALITY_HIGH_ACCURACY, request.quality)
+    assertEquals(1_000L, request.intervalMillis)
+    assertEquals(5f, request.minUpdateDistanceMeters, 0f)
+  }
+
   @Test fun followsTheRealLocationManagerUntilStopped() {
     val app = ApplicationProvider.getApplicationContext<Application>()
     shadowOf(app).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
@@ -86,6 +98,7 @@ class PhoneLocationTest {
     val provider = LocationManagerFixSource.provider(manager)
     val got = mutableListOf<Location>()
     val stop = LocationManagerFixSource(app).listen { got += it }
+    assertEquals(android.location.LocationRequest.QUALITY_HIGH_ACCURACY, shadowOf(manager).getLegacyLocationRequests(provider).single().locationRequest.quality)
     shadowOf(manager).simulateLocation(location(provider))
     shadowOf(Looper.getMainLooper()).idle()
     assertEquals(1, got.size)

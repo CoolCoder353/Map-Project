@@ -5,9 +5,12 @@ import android.content.Context
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.location.LocationRequest
 import android.os.Build
 import android.os.Bundle
 import android.os.Looper
+import androidx.annotation.RequiresApi
+import androidx.core.content.ContextCompat
 
 /** Where the phone's own positions come from. */
 interface PhoneFixSource {
@@ -67,11 +70,21 @@ class LocationManagerFixSource(private val context: Context) : PhoneFixSource {
       override fun onProviderEnabled(provider: String) {}
       override fun onProviderDisabled(provider: String) {}
     }
-    manager.requestLocationUpdates(provider(manager), 1_000L, 5f, listener, Looper.getMainLooper())
+    // Android 12 and up: asked for by name with GPS accuracy. The older call below leaves the fused
+    // provider at "balanced power" (Wi-Fi and mobile towers), which is all a locked phone then gave.
+    if (Build.VERSION.SDK_INT >= 31) manager.requestLocationUpdates(provider(manager), request(), ContextCompat.getMainExecutor(context), listener)
+    else manager.requestLocationUpdates(provider(manager), INTERVAL_MS, DISTANCE_M, listener, Looper.getMainLooper())
     return { manager.removeUpdates(listener) }
   }
 
   companion object {
+    private const val INTERVAL_MS = 1_000L
+    private const val DISTANCE_M = 5f
+
+    @RequiresApi(31)
+    fun request(): LocationRequest =
+      LocationRequest.Builder(INTERVAL_MS).setMinUpdateDistanceMeters(DISTANCE_M).setQuality(LocationRequest.QUALITY_HIGH_ACCURACY).build()
+
     /** Fused (GPS with Wi-Fi and cell) where the phone has it, else GPS. */
     fun provider(manager: LocationManager): String =
       if (Build.VERSION.SDK_INT >= 31 && manager.hasProvider(LocationManager.FUSED_PROVIDER)) LocationManager.FUSED_PROVIDER else LocationManager.GPS_PROVIDER

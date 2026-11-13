@@ -606,7 +606,13 @@ export function createNavigationService(): NavigationService {
     setNavigationRecording(true);
     void (async () => {
       try {
-        const perm = await Location.requestForegroundPermissionsAsync();
+        // Asked only when not allowed already. Asking needs an app screen: with none (a trip started
+        // from the car, the phone locked or the app never opened), Expo answers "denied" for a
+        // permission that is granted, or waits for a screen that never comes. The trip then had no
+        // phone GPS at all and told the driver it needed a permission it had.
+        const allowed = await Location.getForegroundPermissionsAsync().catch(() => null);
+        if (gen !== generation) return;
+        const perm = allowed?.granted ? allowed : await Location.requestForegroundPermissionsAsync();
         if (gen !== generation) return;
         if (!perm.granted) {
           set({ error: 'Navigation needs location permission.' });

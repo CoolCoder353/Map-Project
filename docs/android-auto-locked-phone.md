@@ -37,6 +37,38 @@ locked on purpose:** no such device was attached. Each finding says what it rest
   the phone's fixes only while the car is silent. Checked by tests only; with location allowed only
   while using the app and the phone locked, Android may still give the car app nothing.
 
+## Since 0.7.2 (2026-11-13; in code, not yet in a build)
+
+Three faults found from the live server's log of 13 November (0.7.2) and the code. That morning the
+car's Home ran for three drives (8:33, 11:28 and 12:29 am/pm) with its map following the car and
+not one request for a route, a search or Discover; in the last, every position the map asked a
+limit for was one of the same few points, some seen an hour before, up to 300 m off the road and
+with no heading. **None of this has been seen on a phone:** none was attached.
+
+- **A trip started with no app screen asked for location permission it already had.** Asking needs
+  a screen. With none (opened from the car, the phone locked or the app never opened), Expo
+  answers "denied", and behind a locked screen may never answer. The trip then said "Navigation
+  needs location permission" or sat with no phone GPS: neither the listener of 0.5.9 nor the GPS
+  watch was started. The trip now reads the permission first and only asks when it isn't granted
+  (`navigationService.ts`).
+- **The car session's own listener got Wi-Fi and mobile-tower positions, not GPS.** It asked
+  Android's fused provider the old way (name, interval, distance), which Android 12 and up treat
+  as "balanced power". With an app screen up Expo's GPS watch was running and the listener got its
+  fixes; with the phone locked nothing had GPS on. It now asks for high accuracy
+  (`LocationManagerFixSource.request`), and a phone position rougher than 100 m isn't used, as
+  one from the car isn't (`IdleFixes`).
+- **Planning from the car asked the phone where it was, though the car's map already knew.** With
+  no trip, positions the car session had from the phone drew the map but never reached JavaScript,
+  so Search, Saved places, Discover and Go's plan asked Expo for a position again, which a locked
+  phone may not give within the 8 s allowed ("Can't tell where you are"). Every phone position the
+  car session uses now goes to the phone app too, as the car's GNSS ones always did, so planning
+  starts from where the car's map shows you. This is the likely cause of not being able to start
+  a route while driving (the phone is in a pocket then, and in the hand when parked); it isn't
+  proven, as nothing recorded what the driver tapped.
+
+To check on a phone: steps 1 and 3 below, and plan from Home while a drive is replayed with the
+phone locked.
+
 ## The short version
 
 - **A trip started on the phone, then locked, works.** Directions and GPS keep going. Uploads and

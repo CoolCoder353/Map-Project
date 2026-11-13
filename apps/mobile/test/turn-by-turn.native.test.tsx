@@ -15,6 +15,7 @@ const mockRemove = jest.fn();
 let mockOnFix: ((loc: unknown) => void) | null = null;
 jest.mock('expo-location', () => ({
   Accuracy: { BestForNavigation: 6 },
+  getForegroundPermissionsAsync: jest.fn(async () => ({ granted: false })),
   requestForegroundPermissionsAsync: jest.fn(async () => ({ granted: true })),
   watchPositionAsync: jest.fn(async (_opts: unknown, cb: (loc: unknown) => void) => {
     mockOnFix = cb;

@@ -22,9 +22,10 @@ class IdleFixesTest {
       return { phoneListening--; phoneListener = null }
     }
   }
-  private val fixes = IdleFixes(phone) { clock }
+  private val toPhoneApp = mutableListOf<CarFix>()
+  private val fixes = IdleFixes(phone, { clock }) { toPhoneApp += it }
   private val carFix = CarFix(153.0, -27.0, 5.0, 10.0, 90.0, 1L)
-  private fun phoneFix() = Location("gps").apply { longitude = 153.1; latitude = -27.1; time = 2L }
+  private fun phoneFix(accuracyM: Float? = null) = Location("gps").apply { longitude = 153.1; latitude = -27.1; time = 2L; accuracyM?.let { accuracy = it } }
 
   @Test fun listensToThePhoneOnlyWhileSomethingWantsPositions() {
     assertEquals(0, phoneListening)
@@ -58,7 +59,7 @@ class IdleFixesTest {
   }
 
   @Test fun aPhoneThatWontGivePositionsLeavesTheCars() {
-    val refusing = IdleFixes(object : PhoneFixSource { override fun listen(onFix: (Location) -> Unit): () -> Unit = throw SecurityException("no permission") }) { clock }
+    val refusing = IdleFixes(object : PhoneFixSource { override fun listen(onFix: (Location) -> Unit): () -> Unit = throw SecurityException("no permission") }, { clock })
     val got = mutableListOf<CarFix>()
     val off = refusing.listen { got += it }
     refusing.car(carFix)
@@ -67,29 +68,49 @@ class IdleFixesTest {
   }
 
   @Test fun aTripGetsThePhonesPositionsWhenTheCarGivesNone() {
-    val got = mutableListOf<CarFix>()
-    val off = fixes.forTrip { got += it }
+    val off = fixes.forTrip()
     assertEquals(1, phoneListening)
     phoneListener!!(phoneFix())
-    assertEquals(1, got.size)
-    assertEquals(153.1, got.single().lon, 0.0)
+    assertEquals(153.1, toPhoneApp.single().lon, 0.0)
     off()
     assertEquals("the phone is let go when the trip ends", 0, phoneListening)
   }
 
   @Test fun aTripLeavesTheCarsPositionsToCarLocation() {
-    val got = mutableListOf<CarFix>()
-    fixes.forTrip { got += it }
+    fixes.forTrip()
     fixes.car(carFix)
-    assertEquals("the car's own fixes already reach the phone app, so not twice", emptyList<CarFix>(), got)
+    assertEquals("the car's own fixes already reach the phone app, so not twice", emptyList<CarFix>(), toPhoneApp)
     clock += 2_000
     phoneListener!!(phoneFix())
-    assertEquals("the car spoke 2 s ago", emptyList<CarFix>(), got)
+    assertEquals("the car spoke 2 s ago", emptyList<CarFix>(), toPhoneApp)
+  }
+
+  /**
+   * With no trip the phone app was told nothing of these, so planning from the car asked the
+   * phone's own location again, which a locked phone may not give: no route could be started from
+   * a car that has no position of its own, while its map followed the car all along.
+   */
+  @Test fun thePhoneAppHearsThePhonesPositionsWithNoTripToo() {
+    val onMap = mutableListOf<CarFix>()
+    fixes.listen { onMap += it }
+    phoneListener!!(phoneFix(accuracyM = 6f))
+    assertEquals(1, onMap.size)
+    assertEquals("planning starts from where the car's map shows you", onMap, toPhoneApp)
+  }
+
+  @Test fun aRoughPhonePositionIsNotUsed() {
+    val onMap = mutableListOf<CarFix>()
+    fixes.listen { onMap += it }
+    phoneListener!!(phoneFix(accuracyM = 400f))
+    assertEquals("a mobile-tower guess isn't where the car is", emptyList<CarFix>(), onMap)
+    assertEquals(emptyList<CarFix>(), toPhoneApp)
+    phoneListener!!(phoneFix(accuracyM = 100f))
+    assertEquals(1, onMap.size)
   }
 
   @Test fun aTripAndTheHomeScreenShareOnePhoneListener() {
     val off = fixes.listen { }
-    val offTrip = fixes.forTrip { }
+    val offTrip = fixes.forTrip()
     assertEquals(1, phoneListening)
     off()
     assertEquals(1, phoneListening)
@@ -112,7 +133,7 @@ class TripFixesTest {
     }
   }
   private val api = FakeCarApi()
-  private val trip = TripFixes(api, IdleFixes(phone) { 0L })
+  private val trip = TripFixes(api, IdleFixes(phone, { 0L }, api::location))
   private fun phoneFix() = Location("gps").apply { longitude = 153.1; latitude = -27.1; time = 2L }
 
   @Test fun listensToThePhoneOnlyWhileATripRuns() {

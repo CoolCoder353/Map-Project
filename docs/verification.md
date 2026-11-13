@@ -304,6 +304,13 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   Re-centre after the map is dragged, and End asks first unless you've arrived. Still to see on a
   device: the arrows' look, and Re-centre with the real MapLibre camera. The device and head-unit
   checks stay on docs/todo.md: they need a phone with Play.
+- **The phone locked, and starting a route while driving, 2026-11-13 (in code; not yet in a build).** From the live
+  server's log of that day's drives on 0.7.2 and the code: a trip started with no app screen was
+  refused location permission it already had; the car session's listener was given Wi-Fi and
+  mobile-tower positions, not GPS; and positions the car's map had never reached planning. All three
+  fixed with tests; none seen on a phone, as none was attached, and the third is the likely cause of
+  routes not starting while driving, not a proven one. See
+  [android-auto-locked-phone.md](android-auto-locked-phone.md) ("Since 0.7.2").
 - **The phone locked, fixed 2026-11-03 (server live, app 0.5.9 on internal testing).** JavaScript timers now run for a trip and while the car
   app is open, and the phone's location listener starts even when the location service is refused; the
   service is tried again when the app next shows. Timers checked on the Android 16 emulator with the screen off

@@ -236,7 +236,8 @@ Test drive: six rows at most, Android Auto's limit while driving. With no trip, 
 its map follows the car (`IdleDrive.kt`) with the driving camera, the car's arrow, its speed and the
 road's limit. Positions are the car's GNSS, which works with the phone locked, else the phone's GPS
 when the car has said nothing for 5 s (`IdleFixes.kt`, listening to the phone only while Home or a trip wants
-positions). The limit is asked of the server (`GET /api/roads/speed-limit`) one request at a time,
+positions, asking for GPS accuracy and leaving out any rougher than 100 m). Each phone position used
+also goes to the phone app, so planning starts from where the car's map shows you. The limit is asked of the server (`GET /api/roads/speed-limit`) one request at a time,
 after 150 m of driving or 30 m over 20 s, never while parked, and isn't shown once the car is 300 m
 from where it was looked up.
 
@@ -249,7 +250,8 @@ GNSS via `CarLocation.kt`): while it comes, the phone's navigation follows it an
 fixes aside, as the car's map does (`IdleFixes`); the phone's are followed again once the car's have
 stopped for 5 s (`CAR_FIX_AFTER_MS`), as in a car with no location of its own. `CarLocation` logs once
 a session whether the car's position is followed. Planning and Discover use the
-phone's position from the last minute, else the car's, and only then wait for a new fix from the
+position the car session last sent (the car's GNSS, else the phone's GPS as the car session hears it)
+from the last minute, else the phone's own recent one, and only then wait for a new fix from the
 phone, for at most 8 s (`PHONE_FIX_WAIT_MS`): a locked phone in a pocket may never give one. Each
 request gives up after 45 s (`CarBridge`), longer than the phone's own 30 s wait for the server plus
 that 8 s, so a weak signal shows as "No connection to the server" rather than as the phone not
@@ -264,7 +266,7 @@ arriving, or another trip ends it: leaving the Navigate screen doesn't, and the 
 leads back. Once one ends, the snapshot keeps `ended` (where to, how far, how long, arrived or not)
 for five minutes: the banner sums it up with Resume, and the car says "Directions stopped on your
 phone" when they ended without the car asking and before arriving. While it runs,
-a location foreground service keeps directions coming with the phone locked. It's refused with no app screen showing (a trip started from the car, phone locked), so it's tried again when one next shows; the module's listener below starts either way. With the phone locked, expo-location
+a location foreground service keeps directions coming with the phone locked. It's refused with no app screen showing (a trip started from the car, phone locked), so it's tried again when one next shows; location permission is read first and asked for only when not granted, as asking needs a screen too; the module's listener below starts either way. With the phone locked, expo-location
 stops its watch and passes the service's fixes on through one background job each, which Android 16
 holds back under its job quota, so the module's own listener (`PhoneLocation.kt`, events `onPhoneFix`)
 sends each fix to navigation directly for the length of the trip (`src/nav/navigationLocation.ts`); its starts and stops

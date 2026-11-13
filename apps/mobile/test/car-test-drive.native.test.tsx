@@ -15,6 +15,7 @@ const mockWatch = jest.fn(async () => ({ remove: jest.fn() }));
 const mockPermission = jest.fn(async () => ({ granted: true }));
 jest.mock('expo-location', () => ({
   Accuracy: { BestForNavigation: 6 },
+  getForegroundPermissionsAsync: async () => ({ granted: false }),
   requestForegroundPermissionsAsync: () => mockPermission(),
   watchPositionAsync: () => mockWatch(),
 }));
