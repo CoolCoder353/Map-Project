@@ -146,6 +146,11 @@ reaches rows below the fold.
 Deployed to maps.coolcodertech.com and shipped as 0.7.0 (versionCode 18) to internal testing on
 2026-11-10. `/api/health` up; `verify:stack` and `verify:mobile` not run.
 
+Shipped as 0.7.3 (versionCode 21) to internal testing on 2026-11-14, with the server deployed
+first (`faded99`): the locked-phone and start-while-driving fixes and the phone-to-car scan's
+([android-auto-locked-phone.md](android-auto-locked-phone.md), "Since 0.7.2"). Nothing of 0.7.3
+has been seen on a phone or in a car: the build was not opened on the emulator either.
+
 Shipped as 0.7.2 (versionCode 20) to internal testing on 2026-11-13, with the server deployed
 first (`3fff424`): lane arrows under the next turn on Navigate. Nothing of 0.7.2 has been seen on a
 device yet.
@@ -304,7 +309,7 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
   Re-centre after the map is dragged, and End asks first unless you've arrived. Still to see on a
   device: the arrows' look, and Re-centre with the real MapLibre camera. The device and head-unit
   checks stay on docs/todo.md: they need a phone with Play.
-- **The phone locked, and starting a route while driving, 2026-11-13 (in code; not yet in a build).** From the live
+- **The phone locked, and starting a route while driving, 2026-11-13 (server live 2026-11-14 as `faded99`; app 0.7.3 on internal testing).** From the live
   server's log of that day's drives on 0.7.2 and the code: a trip started with no app screen was
   refused location permission it already had; the car session's listener was given Wi-Fi and
   mobile-tower positions, not GPS; and positions the car's map had never reached planning. All three

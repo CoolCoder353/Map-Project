@@ -53,7 +53,7 @@ off this list when it ships, and record it in [verification.md](verification.md)
 
 ## Android Auto with the phone locked: what's left
 
-- **Fixed in code 2026-11-13, to check on a phone:** a trip started from the car no longer asks for
+- **Fixed in 0.7.3 (internal testing 2026-11-14), to check on a phone:** a trip started from the car no longer asks for
   location permission it has, the car session asks for GPS accuracy, and planning uses the car
   session's positions. With the phone locked: plan and Go from Home during a replayed drive, and
   look for "Navigation needs location permission" and for the map jumping between a few points.

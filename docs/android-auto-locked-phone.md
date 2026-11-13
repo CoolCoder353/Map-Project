@@ -37,7 +37,7 @@ locked on purpose:** no such device was attached. Each finding says what it rest
   the phone's fixes only while the car is silent. Checked by tests only; with location allowed only
   while using the app and the phone locked, Android may still give the car app nothing.
 
-## Since 0.7.2 (2026-11-13; in code, not yet in a build)
+## Since 0.7.2 (2026-11-13; in app 0.7.3, on internal testing 2026-11-14)
 
 Three faults found from the live server's log of 13 November (0.7.2) and the code. That morning the
 car's Home ran for three drives (8:33, 11:28 and 12:29 am/pm) with its map following the car and
