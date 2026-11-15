@@ -104,6 +104,7 @@ Options:
 | Android device code (tracking, navigation, contacts, storage) | `apps/mobile/test/*.native.test.tsx` | Jest mocks of the Expo modules |
 | Android logic with no React Native imports | `apps/mobile/test/*.test.ts` | Plain Vitest (the upload queue, the API client) |
 | A migration | An integration test of the service that uses it | Every test database runs every migration |
+| How migrations are applied (order, once each, two services at once) | `packages/core/test/migrate.test.ts` | A stand-in database with the lock and the duplicate-key error; PGlite has one session, so it can't show two |
 | The Android app's use of the live API | `scripts/verify-mobile-contract.ts` | `pnpm verify:mobile` against a server |
 | Publishing to Google Play (`scripts/play`) | `scripts/test/*.test.ts` | Plain Vitest with a fake `fetch` standing in for Google |
 
