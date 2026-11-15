@@ -2,8 +2,9 @@
 
 An explore-first maps app for a small group of friends. It remembers where you've travelled and
 suggests routes, loops and places you've never been, always alongside the fastest route.
-Everything (routing, map tiles, search) runs on one self-hosted server; the only outside download
-is the OpenStreetMap extract.
+Everything (routing, map tiles, search) runs on one self-hosted server; the only outside downloads
+are public data the map is built from (the OpenStreetMap extract, Australia's address file G-NAF
+and Queensland's speed sign survey), fetched when map data is built and never while the app is used.
 
 - **Web app** (React + MapLibre): fastest vs explore routes, round trips, Discover, coverage of
   the roads you've travelled, trip history and replay, settings, and an admin dashboard at

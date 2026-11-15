@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { type Db, placeService, withTransaction } from '@wayfinder/core';
 import type { BoundaryIndex } from './boundaries.js';
+import { GNAF_ID_PREFIX } from './gnaf.js';
 import { type GeoJsonFeature, type PlaceRecord, featureToPlaces, streetKey } from './osm-places.js';
 
 const BATCH = 5000;
@@ -20,12 +21,16 @@ function locate(place: PlaceRecord, boundaries: BoundaryIndex | null): PlaceReco
 /**
  * Load an `osmium export -f geojsonseq` file into a staging table, fill in where each place is,
  * then atomically swap it in as `places`. Returns the number of places imported.
+ *
+ * `addresses` are G-NAF's (gnaf.ts), loaded into the same staging table: they already say where
+ * they are, and an OpenStreetMap address G-NAF also has is dropped in its favour.
  */
 export async function importPlacesFromGeoJsonSeq(
   db: Db,
   path: string,
   log: (m: string) => void = () => undefined,
   boundaries: BoundaryIndex | null = null,
+  addresses: AsyncIterable<PlaceRecord[]> | null = null,
 ): Promise<number> {
   await db.query('DROP TABLE IF EXISTS places_staging');
   await db.query('CREATE TABLE places_staging (LIKE places INCLUDING DEFAULTS)');
@@ -66,8 +71,18 @@ export async function importPlacesFromGeoJsonSeq(
   }
   await flush();
 
+  let gnaf = 0;
+  for await (const found of addresses ?? []) {
+    await placeService.upsertPlaces(db, found, 'places_staging');
+    const before = gnaf;
+    gnaf += found.length;
+    if (Math.floor(gnaf / 500_000) > Math.floor(before / 500_000)) log(`imported ${gnaf} G-NAF addresses`);
+  }
+  if (addresses) log(`G-NAF addresses: ${gnaf}`);
+
   await db.query('CREATE INDEX places_staging_point_idx ON places_staging USING gist (point(lon, lat))');
   await fillLocation(db, log);
+  if (gnaf > 0) total += gnaf - (await dropAddressesGnafHas(db, log));
 
   await db.query('CREATE INDEX places_staging_name_trgm_idx ON places_staging USING gin (name gin_trgm_ops)');
   await db.query('CREATE INDEX places_staging_r7_idx ON places_staging (r7)');
@@ -80,7 +95,11 @@ export async function importPlacesFromGeoJsonSeq(
   await db.query(
     "CREATE INDEX places_staging_settlement_trgm_idx ON places_staging USING gin (name gin_trgm_ops) WHERE kind IN ('city', 'town', 'suburb')",
   );
-  const indexes = ['name_trgm', 'r7', 'r9', 'category_r7', 'point', 'brand_trgm', 'poi_type', 'lower_name', 'lower_brand', 'settlement_trgm'];
+  // Everything but addresses, which outnumber the rest many times over once G-NAF is in (migration 014).
+  await db.query("CREATE INDEX places_staging_named_point_idx ON places_staging USING gist (point(lon, lat)) WHERE kind <> 'address'");
+  await db.query("CREATE INDEX places_staging_named_trgm_idx ON places_staging USING gin (name gin_trgm_ops) WHERE kind <> 'address'");
+  await db.query('CREATE INDEX places_staging_lower_suburb_idx ON places_staging (lower(suburb))');
+  const indexes = ['name_trgm', 'r7', 'r9', 'category_r7', 'point', 'brand_trgm', 'poi_type', 'lower_name', 'lower_brand', 'settlement_trgm', 'named_point', 'named_trgm', 'lower_suburb'];
   await withTransaction(db, async (tx) => {
     await tx.query('DROP TABLE places');
     await tx.query('ALTER TABLE places_staging RENAME TO places');
@@ -122,12 +141,13 @@ async function fillLocation(db: Db, log: (m: string) => void) {
   const postcodes = await db.query(
     `UPDATE places_staging p SET postcode = pc.postcode
      FROM (
-       SELECT suburb, state, mode() WITHIN GROUP (ORDER BY postcode) AS postcode
+       SELECT lower(suburb) AS suburb, state, mode() WITHIN GROUP (ORDER BY postcode) AS postcode
        FROM places_staging
        WHERE postcode ~ '^[0-9]{4}$' AND suburb IS NOT NULL
-       GROUP BY suburb, state
+       GROUP BY lower(suburb), state
      ) pc
-     WHERE p.postcode IS NULL AND p.suburb = pc.suburb AND p.state IS NOT DISTINCT FROM pc.state`,
+     -- Whatever the capitals: G-NAF writes "Mount Coot-Tha" where the map has "Mount Coot-tha".
+     WHERE p.postcode IS NULL AND lower(p.suburb) = pc.suburb AND p.state IS NOT DISTINCT FROM pc.state`,
   );
   log(`postcode from suburb: ${postcodes.rowCount ?? 0}`);
 
@@ -139,4 +159,19 @@ async function fillLocation(db: Db, log: (m: string) => void) {
        AND abs(a.lon - b.lon) < 0.5 AND abs(a.lat - b.lat) < 0.5`,
   );
   log(`duplicate settlements removed: ${dupes.rowCount ?? 0}`);
+}
+
+/**
+ * Drop each OpenStreetMap address G-NAF has too (the same number and street in the same suburb and
+ * state), so it is suggested once. Returns how many went.
+ */
+async function dropAddressesGnafHas(db: Db, log: (m: string) => void): Promise<number> {
+  const dropped = await db.query(
+    `DELETE FROM places_staging o USING places_staging g
+     WHERE o.kind = 'address' AND o.id NOT LIKE '${GNAF_ID_PREFIX}%'
+       AND g.kind = 'address' AND g.id LIKE '${GNAF_ID_PREFIX}%'
+       AND lower(o.name) = lower(g.name) AND lower(o.suburb) = lower(g.suburb) AND o.state IS NOT DISTINCT FROM g.state`,
+  );
+  log(`addresses G-NAF also has, dropped: ${dropped.rowCount ?? 0}`);
+  return dropped.rowCount ?? 0;
 }

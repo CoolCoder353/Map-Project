@@ -50,6 +50,8 @@ Docker Compose passes on; copy [`infra/.env.example`](../infra/.env.example) to 
 | `OSM_REFRESH_CRON` | `0 3 2 * *` | Empty disables the schedule |
 | `OSM_REFRESH_ENABLED` | `true` | `false` on a server too small to build map data; refreshes are then refused |
 | `OSM_REFRESH_SKIP` | empty | Steps to skip, comma separated |
+| `GNAF_DATASET_URL` | G-NAF on data.gov.au | Where a refresh finds the current release of the national address file, for street addresses in search. Empty switches it off: addresses then come from OpenStreetMap alone |
+| `GNAF_STATES` | empty (all) | States to take G-NAF addresses for, comma separated (`QLD`, or `NSW,ACT`); set it to match an extract smaller than Australia |
 | `GRAPHHOPPER_JAR` / `GRAPHHOPPER_CONFIG` | `/opt/graphhopper/…` | Inside the worker image |
 | `GRAPHHOPPER_IMPORT_HEAP` | `12g` | |
 | `PLANETILER_JAR` / `PLANETILER_HEAP` | `/opt/planetiler/planetiler.jar` / `8g` | |

@@ -178,7 +178,8 @@ async function byPostcode(db: DbClient, postcode: string, near: LngLat | null, l
   return rows.sort((a, b) => dist(a) - dist(b)).slice(0, limit).map((r) => toPlace(r, near, now));
 }
 
-const HOUSE_NUMBER = /^(?:\S+\/)?(\d+[a-z]?)\s+/i;
+/** The number an address starts with: "12", unit "3/12", or the first of a range, "12-14". */
+const HOUSE_NUMBER = /^(?:\S+\/)?(\d+[a-z]?)(?:-\d+[a-z]?)?\s+/i;
 
 /**
  * Places named like the address (or its street) in the suburb or postcode it gives, best first.
@@ -187,6 +188,7 @@ const HOUSE_NUMBER = /^(?:\S+\/)?(\d+[a-z]?)\s+/i;
 async function findInLocality(db: DbClient, a: { name: string; locality: string | null; postcode: string | null }, near: LngLat | null): Promise<PlaceRow[]> {
   const full = expandAbbreviations(a.name).toLowerCase();
   // "3/12 Smith Street" is unit 3 at number 12; addresses are mapped by the number on the street.
+  // "12-14 Smith Street" is one building; G-NAF lists it under its first number.
   const numbered = full.replace(HOUSE_NUMBER, '$1 ');
   const street = full.replace(HOUSE_NUMBER, '');
   const names = [...new Set([full, numbered, street])];
@@ -230,7 +232,7 @@ async function nameInSuburb(db: DbClient, q: string, near: LngLat | null): Promi
           // Warehouse, not Bunningsville). The trigram test only narrows the rows to look at.
           `WITH p AS (
              SELECT ${COLUMNS}, regexp_replace(lower(name), '[^a-z0-9 ]', '', 'g') AS n, regexp_replace(lower(coalesce(brand, '')), '[^a-z0-9 ]', '', 'g') AS b
-             FROM places WHERE (name % $1 OR brand % $1) AND (lower(suburb) = $2 OR lower(suburb) = $2 || ' city'))
+             FROM ${among(q)} (name % $1 OR brand % $1) AND (lower(suburb) = $2 OR lower(suburb) = $2 || ' city'))
            SELECT ${COLUMNS}, 1 AS sim FROM p
            WHERE n = $1 OR n LIKE $1 || ' %' OR b = $1 OR b LIKE $1 || ' %' LIMIT 20`,
           [name, suburb],
@@ -243,6 +245,15 @@ async function nameInSuburb(db: DbClient, q: string, near: LngLat | null): Promi
   for (const r of found.flat().sort((a, b) => dist(a) - dist(b))) if (!kept.some((k) => sameThing(k, r))) kept.push(r);
   return kept.slice(0, 5);
 }
+
+/**
+ * The places a fuzzy search looks among, as far as its WHERE: every place for a query that starts
+ * with a number, as an address does ("12 Smith St", "3/12 Smith St"), and otherwise everything but
+ * addresses. Every house has an address (G-NAF), so they outnumber all other places many times
+ * over: among them the 30,000 places nearest the origin would reach only a few streets, and a
+ * misspelt shop name would be compared with thousands of house numbers (migration 014's indexes).
+ */
+const among = (q: string) => (/^\s*(?:\S+\/)?\d/.test(q) ? 'places WHERE' : `places WHERE kind <> 'address' AND`);
 
 async function searchNames(db: DbClient, rawQuery: string, near: LngLat | null, limit: number, now: Date): Promise<Place[]> {
   const q = expandAbbreviations(rawQuery);
@@ -271,15 +282,17 @@ async function searchNames(db: DbClient, rawQuery: string, near: LngLat | null, 
   }
   if (!near) {
     // No origin (a phone without location): fall back to fuzzy matching everywhere. Slower for
-    // common words, but it is the only way to catch typos in street and business names.
-    pools.push(db.query<PlaceRow>(`SELECT ${COLUMNS}, ${sim} FROM places WHERE name % $1 ORDER BY sim DESC LIMIT 100`, [q]));
+    // common words, but it is the only way to catch typos in street and business names. Not among
+    // addresses, which are most of the table: a misspelt address with no origin finds its street
+    // (the exact and prefix pools above still find an address spelt right).
+    pools.push(db.query<PlaceRow>(`SELECT ${COLUMNS}, ${sim} FROM places WHERE kind <> 'address' AND name % $1 ORDER BY sim DESC LIMIT 100`, [q]));
   } else {
     // Typos and partial words near the origin: the 30,000 nearest places (a few km in a city, much
     // further in the country), filtered by similarity. A trigram index scan is no help here:
     // "12 Lonsdale Street" shares its trigrams with millions of addresses.
     pools.push(
       db.query<PlaceRow>(
-        `WITH b AS MATERIALIZED (SELECT ${COLUMNS}, brand FROM places ORDER BY ${order} LIMIT 30000)
+        `WITH b AS MATERIALIZED (SELECT ${COLUMNS}, brand FROM ${among(q)} true ORDER BY ${order} LIMIT 30000)
          SELECT ${COLUMNS}, ${sim} FROM b WHERE name % $1 OR brand % $1 OR lower(name) LIKE $2 ORDER BY sim DESC LIMIT 150`,
         [q, `${escaped}%`],
       ),

@@ -118,6 +118,8 @@ describe('place search', () => {
     expect((await places.searchPlaces(t.db, '12 Wellington Street Cleveland QLD', null, 1, friday))[0]!.id).toBe('wl-cle');
     // A unit at that number.
     expect((await places.searchPlaces(t.db, '3/12 Wellington St, Cleveland', lutwyche, 1, friday))[0]!.id).toBe('wl-cle');
+    // A building that takes up several numbers is listed under its first.
+    expect((await places.searchPlaces(t.db, '12-14 Wellington St, Cleveland', lutwyche, 1, friday))[0]!.id).toBe('wl-cle');
     // No such number mapped: the street in that suburb, once, and the other one after it.
     const street = await places.searchPlaces(t.db, '5 Shore St West, Cleveland QLD 4163', null, 3, friday);
     expect(street[0]).toMatchObject({ id: expect.stringMatching(/^ssw-cle/), context: 'Cleveland QLD 4163' });
@@ -140,10 +142,29 @@ describe('place search', () => {
     expect((await places.searchPlaces(t.db, 'Braddon Bakery', braddon, 3, friday))[0]!.name).toBe('Braddon Bakery');
   });
 
+  it('still catches a misspelt name where every house around has an address', async () => {
+    // A suburb's worth of addresses (as G-NAF has them) closer to the origin than the markets are.
+    const darwin: LngLat = [130.841, -12.463];
+    const houses: places.PlaceInput[] = Array.from({ length: 30_500 }, (_, i) => {
+      const [lon, lat] = destination(darwin, (i * 37) % 360, 20 + (i % 500));
+      return { id: `GANT${i}`, name: `${i + 1} Crowded Street`, kind: 'address', category: null, description: 'Darwin City 0800', lon, lat, importance: 0, suburb: 'Darwin City', state: 'NT', postcode: '0800' };
+    });
+    const [lon, lat] = destination(darwin, 300, 2500);
+    await places.upsertPlaces(t.db, [...houses, { id: 'mindil', name: 'Mindil Beach Markets', kind: 'poi', category: null, description: 'marketplace', lon, lat, importance: 0.05, suburb: 'The Gardens', state: 'NT' }]);
+    expect((await places.searchPlaces(t.db, 'mindle beach markts', darwin, 3, friday))[0]?.id).toBe('mindil');
+    // A misspelt address is still caught: a query that starts with a number looks at addresses too.
+    expect((await places.searchPlaces(t.db, '77 crowdedd stret', darwin, 3, friday))[0]?.name).toBe('77 Crowded Street');
+  });
+
   it('works without an origin (no distances)', async () => {
     const r = await places.searchPlaces(t.db, 'Sydney', null, 3, friday);
     expect(r[0]!.id).toBe('syd');
     expect(r[0]!.distanceM).toBeUndefined();
+    // An address spelt right is found anywhere; a misspelt one finds its street, since fuzzy
+    // matching with nowhere to start from leaves addresses out (they are most of the table).
+    expect((await places.searchPlaces(t.db, '12 Lonsdale St', null, 3, friday))[0]!.id).toBe('lon12');
+    expect((await places.searchPlaces(t.db, '5 sydny avenue', null, 3, friday))[0]!.id).toBe('s1');
+    expect((await places.searchPlaces(t.db, '12 lonsdale stret', null, 3, friday)).map((p) => p.id)).not.toContain('lon12');
   });
 });
 

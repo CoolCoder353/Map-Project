@@ -67,7 +67,7 @@ Test a restore at least once: `infra/scripts/restore.sh latest` on a staging cop
 
 The worker refreshes OpenStreetMap data monthly (`OSM_REFRESH_CRON`, UTC), and admins can start one from **Admin → Jobs & data → Refresh map data**.
 
-What it does, in order: download the Australia extract (~1 GB, md5-checked) → read its data date → build the GraphHopper graph into `graph-next` → build Planetiler vector tiles → import places/POIs into a staging table → swap all three in.
+What it does, in order: download the Australia extract (~1 GB, md5-checked) → read its data date → check data.gov.au for a newer release of the national address file, G-NAF, and download it if there is one (1.9 GB, four times a year) → build the GraphHopper graph into `graph-next` → build Planetiler vector tiles → import places/POIs into a staging table → swap all three in.
 
 - Routing keeps serving the old graph until the swap; GraphHopper then restarts itself (it watches `/data/graphhopper/graph-version`) and is unavailable for a minute or two.
 - The API notices a new tiles file within 30 seconds.
@@ -82,19 +82,20 @@ If a step fails, the run is marked failed, the log tail is kept, and the **live 
 
 ### Running only some steps
 
-After an update that changes how places are imported (search data), rebuild just the places, which takes about 7 minutes, instead of the whole refresh:
+After an update that changes how places are imported (search data), rebuild just the places, which takes about 7 minutes (longer with G-NAF's addresses: Queensland alone goes from 1 to over 3 minutes), instead of the whole refresh:
 
 ```bash
 docker compose run --rm --no-deps worker node dist/refresh-cli.js places
 ```
 
-Steps are `download`, `graph`, `tiles` and `places`; name any combination. The run shows up in the dashboard like any other.
+Steps are `download`, `gnaf`, `graph`, `tiles` and `places`; name any combination. `places` uses whatever G-NAF release is already in `/data/gnaf`, so `gnaf` only needs naming to fetch a newer one. The run shows up in the dashboard like any other.
 
 ### What the places import records
 
 Every place gets a suburb, state and postcode for search suggestions ("Main Street · Queanbeyan NSW 2620"):
 - **State and suburb** come from OSM administrative boundaries: states are admin level 4, suburbs and localities are levels 9 and 10. A tagged `addr:suburb` wins. Without a boundary, the place takes `addr:city`, then the nearest suburb or town within about 5 km.
-- **Postcode** comes from `addr:postcode`, or else the postcode most of the suburb's addresses use. Suburbs with no addresses mapped in OSM (for example Richardson, ACT) have no postcode to learn, so none is shown.
+- **Postcode** comes from `addr:postcode`, or else the postcode most of the suburb's addresses use, G-NAF's included. Without G-NAF, suburbs with no addresses mapped in OSM (for example Richardson, ACT) have no postcode to learn, so none is shown.
+- **Street addresses** come from OpenStreetMap and from G-NAF, the national address file (Geoscape Australia, on data.gov.au): one place for each number on each street, so "3/12 Smith Street" and "12-14 Smith Street" are both found as number 12. Where both have an address, G-NAF's is kept. Lots with no street number are left out. G-NAF's licence forbids using the addresses to send mail, and asks for the credit shown in the map's credits and on `/privacy`. If data.gov.au can't be reached, a refresh carries on with the release it already has; with none, it fails and says so. `GNAF_DATASET_URL=` (empty) switches G-NAF off.
 - **Businesses** keep their type (`shop=supermarket`), brand, `opening_hours`, phone, website and the latest `check_date`. Hours are shown as "Open until 9 pm" in the place's own time zone; the web place card links the phone and website and says "Details checked Mar 2024". Businesses tagged as closed (`disused=yes`, `abandoned=yes`, `opening_hours=closed`) are left out, keeping their address.
 
 ### Queensland's surveyed speed signs

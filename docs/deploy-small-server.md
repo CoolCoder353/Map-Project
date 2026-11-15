@@ -60,11 +60,14 @@ docker run -d --name wf-qld-db --network wayfinder_default -e POSTGRES_USER=wayf
 docker run --rm --network wayfinder_default -e DATABASE_URL=postgres://wayfinder:qld-build-only@wf-qld-db:5432/wayfinder \
   -e JWT_SECRET=build-only-build-only-build-only-0000 wayfinder-api node dist/cli.js migrate
 
-# 3. graph, tiles and places (~12 min)
+# 3. G-NAF, graph, tiles and places (~15 min; gnaf downloads 1.9 GB when there is a newer release)
 docker run --rm --network wayfinder_default -v wayfinder_qlddata:/data \
   -e DATABASE_URL=postgres://wayfinder:qld-build-only@wf-qld-db:5432/wayfinder -e DATA_DIR=/data \
-  -e GRAPHHOPPER_IMPORT_HEAP=8g -e PLANETILER_HEAP=6g wayfinder-worker node dist/refresh-cli.js graph tiles places
+  -e GNAF_STATES=QLD \
+  -e GRAPHHOPPER_IMPORT_HEAP=8g -e PLANETILER_HEAP=6g wayfinder-worker node dist/refresh-cli.js gnaf graph tiles places
 ```
+
+`GNAF_STATES` keeps the national address file to the state the extract covers (for another state, its abbreviation: `NSW`, `VIC`, …). With Queensland's addresses the database is about 1.1 GB rather than 0.4 GB.
 
 The extract keeps the pipeline's file name (`australia-latest.osm.pbf`) and tiles name (`australia.pmtiles`), so nothing else needs to change. For another state, swap `AU-QLD` for its ISO code (`AU-NSW`, `AU-VIC`, …).
 
@@ -106,7 +109,7 @@ cd /opt/wayfinder/infra && docker compose -f docker-compose.yml -f docker-compos
 
 ## Refreshing the map data
 
-Monthly, or whenever you like: refresh Australia on the big machine (Admin → Jobs & data, or `refresh-cli.js`), re-run steps 1 and 3 above, then `deploy-small.sh data` and `deploy-small.sh places`. The server keeps serving throughout. Routing restarts for about a minute when the new graph goes in, and search is briefly empty while places load (about 20 s).
+Monthly, or whenever you like: refresh Australia on the big machine (Admin → Jobs & data, or `refresh-cli.js`), re-run steps 1 and 3 above, then `deploy-small.sh data` and `deploy-small.sh places`. The server keeps serving throughout. Routing restarts for about a minute when the new graph goes in, and search is briefly empty while places load (about 20 s before G-NAF's addresses; expect a minute or so with them).
 
 ## Keeping the phone app in step
 

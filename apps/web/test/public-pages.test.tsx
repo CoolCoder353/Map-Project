@@ -16,6 +16,9 @@ describe('Privacy policy', () => {
     }
     expect(screen.getByText(/Your contacts are never uploaded as a list/)).toBeInTheDocument();
     expect(screen.getByText(/no analytics or tracking tools/)).toBeInTheDocument();
+    // The data the map is built from, and the credit the address list asks for.
+    expect(screen.getByText(/OpenStreetMap, Queensland’s survey of speed limit signs, and\s+Australia’s national list of street addresses/)).toBeInTheDocument();
+    expect(screen.getByText(/Incorporates or developed using G-NAF © Geoscape Australia licensed by the Commonwealth of Australia/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'WeaponryAndResourcesGame@gmail.com' })).toHaveAttribute('href', 'mailto:WeaponryAndResourcesGame@gmail.com');
   });
 

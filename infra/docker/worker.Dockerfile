@@ -30,7 +30,7 @@ ARG GRAPHHOPPER_VERSION=11.0
 ARG PLANETILER_VERSION=0.10.2
 ENV NODE_ENV=production JAVA_HOME=/opt/java/openjdk PATH="/opt/java/openjdk/bin:${PATH}"
 RUN apt-get update \
- && apt-get install -y --no-install-recommends osmium-tool curl ca-certificates \
+ && apt-get install -y --no-install-recommends osmium-tool curl unzip ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 COPY --from=jre /opt/java/openjdk /opt/java/openjdk
 ADD https://repo1.maven.org/maven2/com/graphhopper/graphhopper-web/${GRAPHHOPPER_VERSION}/graphhopper-web-${GRAPHHOPPER_VERSION}.jar /opt/graphhopper/graphhopper-web.jar

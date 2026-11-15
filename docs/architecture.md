@@ -8,7 +8,9 @@ How the pieces fit together today. Why they are this way is in the ADRs:
 it disagrees with this page, this page is right.
 
 **The one rule:** everything runs on one server. Routing, tiles and search never call an outside
-service. The only outside download is the OpenStreetMap extract, fetched by the monthly refresh.
+service. The only outside downloads are public data the map is built from, fetched when map data
+is built and never while the app is used: the OpenStreetMap extract and the national address file
+(G-NAF) in the monthly refresh, and Queensland's speed sign survey, imported once.
 
 ## Components
 
@@ -131,8 +133,8 @@ routes; nothing user-facing shows them.
   readers. The car screen doesn't show them yet.
 - **Surveyed speed signs** (`speed-signs.ts`, `surveyedEstimates`): Queensland's 2019-20 survey of
   speed limit signs (data.qld.gov.au, CC BY 4.0), imported once by an admin
-  (`node dist/speed-signs-cli.js`) into `speed_signs`. It is the one outside download besides the
-  OpenStreetMap extract, agreed for this use, and never called while the app is used. Routes use a
+  (`node dist/speed-signs-cli.js`) into `speed_signs`. It is an outside download agreed for this
+  use, like G-NAF's addresses, and never called while the app is used. Routes use a
   sign only on stretches the map has no limit for. School zones, roadworks and signs that hold
   part of the time are left out. The map's credits name the survey.
 - **Waits at lights learned from drives** (`light-timing.ts`, `packages/shared/src/light-timing.ts`):
@@ -171,6 +173,10 @@ routes; nothing user-facing shows them.
 Built once per map refresh, then served from Postgres. The worker extracts places with osmium
 (`apps/worker/src/pipeline/osm-places.ts`), works out each place's suburb, state and postcode
 from OSM boundaries (`boundaries.ts`, `import-places.ts`), and swaps a staging table in.
+Street addresses also come from G-NAF, the national address file (`gnaf.ts`): one place for each
+number on each street (units and flats share their building's), with its locality, state and
+postcode, loaded into the same staging table. Where OpenStreetMap has the same address, G-NAF's is
+kept. Their ids start `GA`. The map's credits and the privacy page carry the credit Geoscape asks for.
 `placeService.searchPlaces` ranks exact, prefix, fuzzy and category matches by text quality and
 distance. Details in [ADR 0002](adr/0002-place-search.md).
 
@@ -186,8 +192,9 @@ URLs.
 
 ### Map data refresh
 
-`apps/worker/src/pipeline/refresh.ts`: download the extract → GraphHopper graph → tiles → places →
-swap all three in. The places step also extracts traffic lights, speed-limit rules and lane
+`apps/worker/src/pipeline/refresh.ts`: download the extract → G-NAF (`gnaf`: asks data.gov.au for
+the current release and downloads its zip, 1.9 GB, only when it is newer than the one in
+`gnaf/`; releases are quarterly) → GraphHopper graph → tiles → places → swap all three in. The places step also extracts traffic lights, speed-limit rules and lane
 markings (`osm-roads.ts`) into `traffic_signals`, `way_speed_rules` and `way_lanes`, swapped in the
 same way. Live data is untouched until every step succeeds. Needs about 16 GB of RAM,
 so a small server gets its data built elsewhere ([deploy-small-server.md](deploy-small-server.md)).

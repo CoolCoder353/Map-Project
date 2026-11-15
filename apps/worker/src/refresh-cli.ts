@@ -4,7 +4,7 @@
  *
  *   docker compose run --rm --no-deps worker node dist/refresh-cli.js places
  *
- * With no arguments every step runs (like the monthly job). Steps: download, graph, tiles, places.
+ * With no arguments every step runs (like the monthly job). Steps: download, gnaf, graph, tiles, places.
  * The run appears in the dashboard's pipeline history like any other.
  */
 import { createPool, opsService } from '@wayfinder/core';
@@ -34,6 +34,8 @@ try {
       graphhopperHeap: c.GRAPHHOPPER_IMPORT_HEAP,
       planetilerJar: c.PLANETILER_JAR,
       planetilerHeap: c.PLANETILER_HEAP,
+      gnafDatasetUrl: c.GNAF_DATASET_URL,
+      gnafStates: c.GNAF_STATES,
       skip,
     },
   );

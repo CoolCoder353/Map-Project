@@ -73,8 +73,10 @@ describe('vector tiles from a gzip-compressed archive', () => {
     expect((await ta.app.inject({ method: 'GET', url: '/tiles/1/0/0.mvt' })).statusCode).toBe(204);
     const tj = (await ta.app.inject({ method: 'GET', url: '/tiles/tiles.json' })).json();
     expect(tj).toMatchObject({ minzoom: 0, maxzoom: 0 });
-    // The map's credits include the surveyed speed signs routes use.
-    expect(tj.attribution).toMatch(/OpenStreetMap contributors · Some speed limits © State of Queensland \(Transport and Main Roads\), CC BY 4\.0$/);
+    // The map's credits include the surveyed speed signs routes use and the addresses search uses.
+    expect(tj.attribution).toMatch(
+      /OpenStreetMap contributors · Some speed limits © State of Queensland \(Transport and Main Roads\), CC BY 4\.0 · Incorporates or developed using G-NAF © Geoscape Australia licensed by the Commonwealth of Australia under the Open Geo-coded National Address File \(G-NAF\) End User Licence Agreement$/,
+    );
   });
 });
 

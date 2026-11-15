@@ -45,6 +45,8 @@ const handlers = jobHandlers({
     graphhopperHeap: config.GRAPHHOPPER_IMPORT_HEAP,
     planetilerJar: config.PLANETILER_JAR,
     planetilerHeap: config.PLANETILER_HEAP,
+    gnafDatasetUrl: config.GNAF_DATASET_URL,
+    gnafStates: config.GNAF_STATES,
     skip: config.OSM_REFRESH_SKIP.split(',').map((s) => s.trim()).filter(Boolean),
   },
   refreshEnabled: config.OSM_REFRESH_ENABLED,

@@ -1,4 +1,5 @@
 import { Link } from 'react-router';
+import { GNAF_ATTRIBUTION } from '@wayfinder/shared';
 import { useAppConfig } from '../lib/config';
 import { DocPage, PRIVACY_CONTACT } from './DocPage';
 
@@ -45,9 +46,12 @@ export function PrivacyPage() {
       <h2>Who else sees it</h2>
       <p>
         Nobody outside the server. Routing, map tiles and place search all run on our own server, so where you are is not passed to
-        a map company, an advertiser or anyone else. The only outside download is the public OpenStreetMap data the map is built
-        from. There are no ads and no analytics or tracking tools in the app or the website.
+        a map company, an advertiser or anyone else. The only outside downloads are public data the map is built from, fetched
+        when the map is rebuilt and never while you use it: OpenStreetMap, Queensland&rsquo;s survey of speed limit signs, and
+        Australia&rsquo;s national list of street addresses. There are no ads and no analytics or tracking tools in the app or the
+        website.
       </p>
+      <p>{GNAF_ATTRIBUTION}.</p>
       <p>
         The people who run the server can see accounts and, to help with problems, trips and feedback. Every time an administrator
         looks at someone else&rsquo;s data it is written to a log that cannot be edited; that log keeps only the fact that they looked, not your data. Logs and error reports do not hold

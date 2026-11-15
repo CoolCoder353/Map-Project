@@ -1,10 +1,11 @@
 import { spawn } from 'node:child_process';
-import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { type Db, adminService, opsService } from '@wayfinder/core';
 import { loadBoundaries } from './boundaries.js';
+import { GNAF_STATES, type GnafState, STREET_SUFFIX_FILE, gnafAddressesFromFiles, latestRelease, stateFiles } from './gnaf.js';
 import { importPlacesFromGeoJsonSeq } from './import-places.js';
-import { OSMIUM_FILTERS } from './osm-places.js';
+import { OSMIUM_FILTERS, type PlaceRecord } from './osm-places.js';
 import { OSMIUM_ROAD_FILTERS, importRoadFacts } from './osm-roads.js';
 
 export interface RefreshConfig {
@@ -15,12 +16,19 @@ export interface RefreshConfig {
   graphhopperHeap: string;
   planetilerJar: string;
   planetilerHeap: string;
+  /**
+   * The description of the G-NAF dataset (gnaf.ts), which lists the current release. Empty or
+   * left out: no G-NAF, and addresses come from OpenStreetMap alone.
+   */
+  gnafDatasetUrl?: string;
+  /** The states to take G-NAF addresses for; all of them when left out. */
+  gnafStates?: GnafState[];
   /** Skip steps (for partial runs), e.g. ["tiles"]. */
   skip: string[];
 }
 
 /** Steps a hand-run refresh can pick (refresh-cli.js). */
-export const REFRESH_STEPS = ['download', 'graph', 'tiles', 'places'] as const;
+export const REFRESH_STEPS = ['download', 'gnaf', 'graph', 'tiles', 'places'] as const;
 
 /**
  * Which steps to skip for a hand-run refresh: every step not named, or with no names, the
@@ -58,7 +66,8 @@ export const runCommand: RunCommand = (cmd, args, onLine) =>
  * - graphhopper/graph-next → graph-current (+ bumps graph-version, which the GraphHopper
  *   container's wrapper watches to restart the server)
  * - tiles/australia.pmtiles.next → australia.pmtiles (the API reopens it on mtime change)
- * - places_staging → places (table swap in a transaction)
+ * - places_staging → places (table swap in a transaction), with G-NAF's addresses from the zip the
+ *   gnaf step keeps in gnaf/ (downloaded again only when data.gov.au lists a newer release)
  * - traffic_signals and way_speed_rules, from their staging tables, in the places step: they need
  *   the same boundaries, and travel to a small server with the places
  */
@@ -90,6 +99,9 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
   const pbf = join(osmDir, 'australia-latest.osm.pbf');
   // Planetiler infers the output format from the extension, so the temp file keeps ".pmtiles".
   const tilesNext = join(tilesDir, 'australia.next.pmtiles');
+  const gnafDir = join(cfg.dataDir, 'gnaf');
+  const gnafZip = join(gnafDir, 'g-naf.zip');
+  const gnafRelease = join(gnafDir, 'release.txt');
   let dataDate: string | null = null;
 
   const mtime = async (p: string) => (await stat(p).catch(() => null))?.mtimeMs ?? null;
@@ -129,6 +141,51 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
         log(line);
       });
     });
+
+    await step('gnaf', async () => {
+      if (!cfg.gnafDatasetUrl) {
+        log('G-NAF addresses are switched off');
+        return;
+      }
+      await mkdir(gnafDir, { recursive: true });
+      const have = (await mtime(gnafZip)) === null ? null : (await readFile(gnafRelease, 'utf8').catch(() => '')).trim();
+      let release: { name: string; url: string };
+      try {
+        const listing = join(gnafDir, 'dataset.json');
+        await run('curl', ['-fsSL', '--retry', '3', '-o', listing, cfg.gnafDatasetUrl], log);
+        release = latestRelease(JSON.parse(await readFile(listing, 'utf8')));
+      } catch (err) {
+        // A release already here still serves; with none, say so rather than build without addresses.
+        if (have === null) throw new Error(`Couldn't find the current G-NAF release: ${(err as Error).message}`, { cause: err });
+        log(`couldn't check for a newer G-NAF release (${(err as Error).message}); keeping the one already downloaded`);
+        return;
+      }
+      if (have === release.url) {
+        log(`reusing ${release.name}: still the current release`);
+        return;
+      }
+      log(`downloading ${release.name}`);
+      await run('curl', ['-fsSL', '--retry', '3', '-o', `${gnafZip}.part`, release.url], log);
+      await rename(`${gnafZip}.part`, gnafZip);
+      await writeFile(gnafRelease, `${release.url}\n`);
+    });
+
+    /** Each state's addresses, from its files unzipped one state at a time (Queensland's are 0.7 GB). */
+    async function* gnafFromZip(): AsyncGenerator<PlaceRecord[]> {
+      const unzipped = join(gnafDir, 'unzipped');
+      try {
+        for (const state of cfg.gnafStates ?? GNAF_STATES) {
+          await rm(unzipped, { recursive: true, force: true });
+          await mkdir(unzipped, { recursive: true });
+          const files = [...stateFiles(state), STREET_SUFFIX_FILE].map((f) => `*/${f}`);
+          await run('unzip', ['-o', '-j', '-q', gnafZip, ...files, '-d', unzipped], log);
+          log(`G-NAF addresses for ${state}`);
+          yield* gnafAddressesFromFiles(state, unzipped);
+        }
+      } finally {
+        await rm(unzipped, { recursive: true, force: true });
+      }
+    }
 
     await step('graph', async () => {
       if (await alreadyDone('graph')) {
@@ -196,7 +253,9 @@ export async function runOsmRefresh(db: Db, runId: string, cfg: RefreshConfig, r
         ['export', '--overwrite', '-f', 'geojsonseq', '--add-unique-id=type_id', '-o', geojson, filtered],
         log,
       );
-      await importPlacesFromGeoJsonSeq(db, geojson, log, boundaries);
+      const hasGnaf = Boolean(cfg.gnafDatasetUrl) && (await mtime(gnafZip)) !== null;
+      if (cfg.gnafDatasetUrl && !hasGnaf) log('no G-NAF download here (run the gnaf step): addresses come from OpenStreetMap alone');
+      await importPlacesFromGeoJsonSeq(db, geojson, log, boundaries, hasGnaf ? gnafFromZip() : null);
       await rm(filtered, { force: true });
       await rm(geojson, { force: true });
 

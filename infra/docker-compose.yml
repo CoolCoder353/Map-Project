@@ -66,6 +66,9 @@ services:
       GRAPHHOPPER_IMPORT_HEAP: ${GRAPHHOPPER_IMPORT_HEAP:-12g}
       PLANETILER_HEAP: ${PLANETILER_HEAP:-8g}
       OSM_REFRESH_CRON: ${OSM_REFRESH_CRON:-0 3 2 * *}
+      # Street addresses for search (G-NAF, data.gov.au). An empty GNAF_DATASET_URL switches them off.
+      GNAF_DATASET_URL: ${GNAF_DATASET_URL-https://data.gov.au/data/api/3/action/package_show?id=geocoded-national-address-file-g-naf}
+      GNAF_STATES: ${GNAF_STATES:-}
       DISK_PATH: /data
     volumes:
       - osmdata:/data

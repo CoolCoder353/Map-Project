@@ -3,8 +3,9 @@ import { runCommand, stepsToSkip } from '../../src/pipeline/refresh.js';
 
 describe('choosing refresh steps', () => {
   it('runs only the named steps', () => {
-    expect(stepsToSkip(['places'], '')).toEqual(['download', 'graph', 'tiles']);
-    expect(stepsToSkip(['graph', 'tiles'], 'places')).toEqual(['download', 'places']);
+    expect(stepsToSkip(['places'], '')).toEqual(['download', 'gnaf', 'graph', 'tiles']);
+    expect(stepsToSkip(['graph', 'tiles'], 'places')).toEqual(['download', 'gnaf', 'places']);
+    expect(stepsToSkip(['gnaf', 'places'], '')).toEqual(['download', 'graph', 'tiles']);
   });
 
   it('falls back to OSM_REFRESH_SKIP with no names', () => {
@@ -13,7 +14,7 @@ describe('choosing refresh steps', () => {
   });
 
   it('refuses a step that doesn’t exist', () => {
-    expect(() => stepsToSkip(['places', 'teleport'], '')).toThrow('Unknown step(s): teleport. Steps: download, graph, tiles, places');
+    expect(() => stepsToSkip(['places', 'teleport'], '')).toThrow('Unknown step(s): teleport. Steps: download, gnaf, graph, tiles, places');
   });
 });
 

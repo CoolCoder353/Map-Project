@@ -268,6 +268,7 @@ Checked by Jest with the map and the phone's services faked; these need a phone 
 
 ## Open / manual
 
+- **Street addresses from G-NAF (2026-11-15, not deployed).** The `gnaf` and `places` steps run from the worker image against a copy of the Queensland build database, with the real August 2026 release: the release found on data.gov.au and the zip already there reused; 2,070,034 addresses in, 673,874 OpenStreetMap copies dropped, 2,325,579 places. Read-only searches from Cleveland: "12 Wellington St, Cleveland QLD 4163" finds the address (the street only, before); "3/27 Whitby Place, Thornlands" and the misspelt "27 whitby plce" find 27 Whitby Place; "pharmcy", "bunings" and "clevland libary" find what they did before, in 95–135 ms. Not checked: a national import (only Queensland was run), and how long `deploy-small.sh places` takes with the larger table.
 - **Lanes, surveyed speed signs, limits to check and business details (2026-11-13, deployed 2026-11-13 as `3fff424`; app 0.7.2 on internal testing).**
   Checked by tests, and read-only on the live server (see deploy-small-server.md): lanes on 14 turns
   of five real drives, survey limits filling unmapped stretches, phone numbers in search. Lanes come from OSM `turn:lanes` with the next places refresh (and

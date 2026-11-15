@@ -48,6 +48,58 @@ describe('places import', () => {
   });
 });
 
+describe('places import with G-NAF addresses', () => {
+  const gnaf = (id: string, name: string, lon: number, over: object = {}) => ({
+    id, name, kind: 'address' as const, category: null, description: 'Queanbeyan 2620', lon, lat: -35.352, importance: 0,
+    suburb: 'Queanbeyan', state: 'NSW', postcode: '2620', poiType: null, brand: null, openingHours: null, ...over,
+  });
+  async function* batches(...b: ReturnType<typeof gnaf>[][]) {
+    yield* b;
+  }
+
+  it('adds them, drops the OpenStreetMap copy of one, and gives their suburb its postcode', async () => {
+    const file = join(dir, 'places-gnaf.geojsonseq');
+    await writeFile(
+      file,
+      seq([
+        feature('n1', { place: 'town', name: 'Queanbeyan' }, [149.23, -35.35]),
+        // The same address as G-NAF's, capitals aside; and one G-NAF hasn't.
+        feature('n2', { 'addr:housenumber': '1', 'addr:street': 'Monaro street', 'addr:suburb': 'QUEANBEYAN', 'addr:state': 'NSW' }, [149.232, -35.352]),
+        feature('n3', { 'addr:housenumber': '99', 'addr:street': 'Monaro Street', 'addr:suburb': 'Queanbeyan', 'addr:state': 'NSW' }, [149.239, -35.352]),
+        // The same number and street in another suburb is another address.
+        feature('n4', { 'addr:housenumber': '1', 'addr:street': 'Monaro Street', 'addr:suburb': 'Cooma', 'addr:state': 'NSW' }, [149.12, -36.23]),
+        feature('w5', { highway: 'residential', name: 'Monaro Street', 'addr:suburb': 'queanbeyan', 'addr:state': 'NSW' }, [[149.23, -35.352], [149.24, -35.352]], 'LineString'),
+      ]),
+    );
+    const lines: string[] = [];
+    const n = await importPlacesFromGeoJsonSeq(t.db, file, (l) => lines.push(l), null, batches([gnaf('GANSW1', '1 Monaro Street', 149.2321)], [gnaf('GANSW2', '3 Monaro Street', 149.2323)]));
+    const rows = (await t.db.query('SELECT id, name, suburb, postcode FROM places ORDER BY id')).rows;
+    expect(rows).toEqual([
+      { id: 'GANSW1', name: '1 Monaro Street', suburb: 'Queanbeyan', postcode: '2620' },
+      { id: 'GANSW2', name: '3 Monaro Street', suburb: 'Queanbeyan', postcode: '2620' },
+      // No boundaries in this test to say which state the town is in, so it isn't matched to a postcode.
+      { id: 'n1', name: 'Queanbeyan', suburb: 'Queanbeyan', postcode: null },
+      { id: 'n3', name: '99 Monaro Street', suburb: 'Queanbeyan', postcode: '2620' },
+      { id: 'n4', name: '1 Monaro Street', suburb: 'Cooma', postcode: null },
+      { id: 'w5', name: 'Monaro Street', suburb: 'queanbeyan', postcode: '2620' },
+    ]);
+    expect(n).toBe(6);
+    expect(lines).toContain('G-NAF addresses: 2');
+    expect(lines).toContain('addresses G-NAF also has, dropped: 1');
+    // Found by its number in its suburb, and by where it is.
+    expect((await placeService.searchPlaces(t.db, '3 Monaro St, Queanbeyan NSW 2620', null, 5))[0]).toMatchObject({ id: 'GANSW2', name: '3 Monaro Street' });
+    expect(await placeService.reverseGeocode(t.db, [149.2323, -35.352])).toMatchObject({ id: 'GANSW2' });
+  });
+
+  it('is the import it always was when there are none', async () => {
+    const file = join(dir, 'places-gnaf.geojsonseq');
+    const lines: string[] = [];
+    expect(await importPlacesFromGeoJsonSeq(t.db, file, (l) => lines.push(l), null, batches())).toBe(5);
+    expect((await t.db.query("SELECT id FROM places WHERE kind = 'address' ORDER BY id")).rows.map((r) => r.id)).toEqual(['n2', 'n3', 'n4']);
+    expect(lines).toContain('G-NAF addresses: 0');
+  });
+});
+
 const square = (x0: number, y0: number, x1: number, y1: number) => [[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]];
 const BOUNDARIES = seq([
   feature('r1', { boundary: 'administrative', admin_level: '4', name: 'New South Wales' }, square(149.2, -36, 150, -35), 'Polygon'),
@@ -124,6 +176,98 @@ describe('OSM refresh orchestration', () => {
     expect((await t.db.query('SELECT way_id::text, conditional, variable, state FROM way_speed_rules')).rows).toEqual([
       { way_id: '23', conditional: '40 @ (Mo-Fr 08:00-09:30,14:30-16:00)', variable: false, state: 'NSW' },
     ]);
+  });
+
+  it('downloads G-NAF once per release and adds its addresses for the states asked for', async () => {
+    const dataDir = join(dir, 'data-gnaf');
+    await mkdir(join(dataDir, 'graphhopper', 'graph-current'), { recursive: true });
+    const commands: string[] = [];
+    let listing: object | null = { result: { resources: [{ format: 'ZIP', name: 'AUG 2026 - Geoscape G-NAF - GDA2020', url: 'https://data.example.test/aug26_gda2020.zip' }] } };
+    const fake: RunCommand = async (cmd, args) => {
+      const argv = args.join(' ');
+      const out = args[args.indexOf('-o') + 1]!;
+      if (cmd === 'curl') {
+        const url = args.at(-1)!;
+        commands.push(`curl ${url}`);
+        if (url.includes('package_show')) {
+          if (!listing) throw new Error('curl exited with code 22');
+          await writeFile(out, JSON.stringify(listing));
+        } else await writeFile(out, 'zip');
+      }
+      if (cmd === 'unzip') {
+        const to = args[args.indexOf('-d') + 1]!;
+        const state = /\*\/([A-Z]+)_ADDRESS_DETAIL_psv\.psv/.exec(argv)![1]!;
+        commands.push(`unzip ${state}`);
+        expect(args.slice(0, 4)).toEqual(['-o', '-j', '-q', join(dataDir, 'gnaf', 'g-naf.zip')]);
+        expect(argv).toContain('*/Authority_Code_STREET_SUFFIX_AUT_psv.psv');
+        await writeFile(join(to, 'Authority_Code_STREET_SUFFIX_AUT_psv.psv'), 'CODE|NAME\nN|NORTH\n');
+        await writeFile(join(to, `${state}_LOCALITY_psv.psv`), 'LOCALITY_PID|DATE_RETIRED|LOCALITY_NAME|PRIMARY_POSTCODE\nL1||QUEANBEYAN|2620\n');
+        await writeFile(join(to, `${state}_STREET_LOCALITY_psv.psv`), 'STREET_LOCALITY_PID|DATE_RETIRED|STREET_NAME|STREET_TYPE_CODE|STREET_SUFFIX_CODE|LOCALITY_PID\nS1||MONARO|STREET||L1\n');
+        await writeFile(
+          join(to, `${state}_ADDRESS_DETAIL_psv.psv`),
+          `ADDRESS_DETAIL_PID|DATE_RETIRED|FLAT_NUMBER|LEVEL_NUMBER|NUMBER_FIRST_PREFIX|NUMBER_FIRST|NUMBER_FIRST_SUFFIX|STREET_LOCALITY_PID|ALIAS_PRINCIPAL|POSTCODE|CONFIDENCE\nGA${state}1|||||1||S1|P|2620|2\nGA${state}5|||||5||S1|P|2620|2\n`,
+        );
+        await writeFile(join(to, `${state}_ADDRESS_DEFAULT_GEOCODE_psv.psv`), `ADDRESS_DETAIL_PID|DATE_RETIRED|LONGITUDE|LATITUDE\nGA${state}1||149.2321|-35.352\nGA${state}5||149.2325|-35.352\n`);
+      }
+      if (cmd === 'osmium' && args[0] === 'export') await writeFile(out, out.includes('boundaries') ? BOUNDARIES : out.includes('roads') ? ROADS : PLACES);
+    };
+    const cfg = {
+      dataDir, pbfUrl: 'https://example.test/au.osm.pbf', graphhopperJar: 'gh.jar', graphhopperConfig: 'c.yml', graphhopperHeap: '1g', planetilerJar: 'p.jar', planetilerHeap: '1g',
+      gnafDatasetUrl: 'https://data.example.test/api/3/action/package_show?id=g-naf', gnafStates: ['NSW' as const], skip: ['download', 'graph', 'tiles'],
+    };
+    const refresh = async (c = cfg) => {
+      commands.length = 0;
+      const runId = await opsService.createPipelineRun(t.db, 'osm_refresh', null);
+      await runOsmRefresh(t.db, runId, c, fake);
+      return (await opsService.listPipelineRuns(t.db)).find((r) => r.id === runId)!.logTail;
+    };
+    const addresses = async () => (await t.db.query("SELECT id, name, suburb, state, postcode FROM places WHERE kind = 'address' ORDER BY id")).rows;
+
+    expect(await refresh()).toContain('downloading AUG 2026 - Geoscape G-NAF - GDA2020');
+    expect(commands).toEqual([`curl ${cfg.gnafDatasetUrl}`, 'curl https://data.example.test/aug26_gda2020.zip', 'unzip NSW']);
+    // G-NAF's 1 Monaro Street replaces the map's; 5 Monaro Street is new.
+    expect(await addresses()).toEqual([
+      { id: 'GANSW1', name: '1 Monaro Street', suburb: 'Queanbeyan', state: 'NSW', postcode: '2620' },
+      { id: 'GANSW5', name: '5 Monaro Street', suburb: 'Queanbeyan', state: 'NSW', postcode: '2620' },
+    ]);
+    await expect(readFile(join(dataDir, 'gnaf', 'unzipped', 'NSW_LOCALITY_psv.psv'))).rejects.toThrow(); // unzipped files don't stay
+
+    // The same release next month: not downloaded again.
+    expect(await refresh()).toContain('reusing AUG 2026 - Geoscape G-NAF - GDA2020: still the current release');
+    expect(commands.filter((c) => c.startsWith('curl'))).toEqual([`curl ${cfg.gnafDatasetUrl}`]);
+    expect(await addresses()).toHaveLength(2);
+
+    // data.gov.au down: the release already here still serves.
+    listing = null;
+    expect(await refresh()).toContain("couldn't check for a newer G-NAF release (curl exited with code 22); keeping the one already downloaded");
+    expect(await addresses()).toHaveLength(2);
+
+    // A new release is downloaded.
+    listing = { result: { resources: [{ format: 'ZIP', name: 'NOV 2026 - Geoscape G-NAF - GDA2020', url: 'https://data.example.test/nov26_gda2020.zip' }] } };
+    await refresh();
+    expect(commands.filter((c) => c.startsWith('curl'))).toEqual([`curl ${cfg.gnafDatasetUrl}`, 'curl https://data.example.test/nov26_gda2020.zip']);
+
+    // Only the places step: the addresses still come from the zip that is here.
+    await refresh({ ...cfg, skip: ['download', 'gnaf', 'graph', 'tiles'] });
+    expect(commands.filter((c) => c.startsWith('curl'))).toEqual([]);
+    expect(await addresses()).toHaveLength(2);
+
+    // Switched off: the map's own address is back and nothing is downloaded or unzipped.
+    expect(await refresh({ ...cfg, gnafDatasetUrl: '' })).toContain('G-NAF addresses are switched off');
+    expect(commands).toEqual([]);
+    expect((await addresses()).map((r) => r.id)).toEqual(['n11']);
+  });
+
+  it('fails the run when G-NAF is wanted, none is here and the release cannot be found', async () => {
+    const dataDir = join(dir, 'data-gnaf-none');
+    const runId = await opsService.createPipelineRun(t.db, 'osm_refresh', null);
+    const down: RunCommand = async (cmd) => {
+      if (cmd === 'curl') throw new Error('curl exited with code 6');
+    };
+    await expect(
+      runOsmRefresh(t.db, runId, { dataDir, pbfUrl: 'x', graphhopperJar: 'a', graphhopperConfig: 'b', graphhopperHeap: '1g', planetilerJar: 'p', planetilerHeap: '1g', gnafDatasetUrl: 'https://data.example.test/x', skip: ['download'] }, down),
+    ).rejects.toThrow("Couldn't find the current G-NAF release: curl exited with code 6");
+    expect((await opsService.listPipelineRuns(t.db)).find((r) => r.id === runId)!.status).toBe('failed');
   });
 
   it('a retry after a late failure reuses the graph and tiles already built', async () => {
