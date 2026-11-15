@@ -287,6 +287,22 @@ describe('session', () => {
     jest.restoreAllMocks();
   });
 
+  it('uploads what the phone recorded when signed in and whenever the app comes back to the screen', async () => {
+    const changes: Array<(s: AppStateStatus) => void> = [];
+    jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, fn) => {
+      changes.push(fn as (s: AppStateStatus) => void);
+      return { remove: () => changes.splice(changes.indexOf(fn as never), 1) } as never;
+    });
+    mockSaved = auth;
+    await show();
+    await waitFor(() => expect(mockSync).toHaveBeenCalledTimes(1));
+    await act(async () => changes.forEach((c) => c('background')));
+    expect(mockSync).toHaveBeenCalledTimes(1);
+    await act(async () => changes.forEach((c) => c('active')));
+    expect(mockSync).toHaveBeenCalledTimes(2);
+    jest.restoreAllMocks();
+  });
+
   it('is signed out when there is no saved session', async () => {
     mockSaved = null;
     mockHasSaved = false;

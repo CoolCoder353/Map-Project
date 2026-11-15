@@ -57,6 +57,17 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (user) void reconcileTracking(user.settings.trackingEnabled, config.appName).catch(() => undefined);
   }, [user?.settings.trackingEnabled, user, config.appName]);
+  // What the phone recorded while the app was shut goes up when it is opened, not only when
+  // enough has built up or a trip with directions is driven.
+  const signedInAs = user?.id;
+  useEffect(() => {
+    if (!signedInAs) return;
+    void syncQueue().catch(() => undefined);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void syncQueue().catch(() => undefined);
+    });
+    return () => sub.remove();
+  }, [signedInAs]);
   // Tracking that is on but waiting for "Allow all the time" starts once the app comes back from
   // the phone's settings with it granted, not at the next restart.
   const tracking = !!user?.settings.trackingEnabled;

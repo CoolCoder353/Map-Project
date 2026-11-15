@@ -61,7 +61,8 @@ jest.mock('expo-location', () => ({
   stopLocationUpdatesAsync: jest.fn(async () => undefined),
 }));
 let mockConnected: boolean | null = true;
-jest.mock('@react-native-community/netinfo', () => ({ fetch: async () => ({ isConnected: mockConnected }) }));
+let mockNetHangs = false;
+jest.mock('@react-native-community/netinfo', () => ({ fetch: () => (mockNetHangs ? new Promise(() => undefined) : Promise.resolve({ isConnected: mockConnected })) }));
 jest.mock('expo-crypto', () => {
   let n = 0;
   return { randomUUID: () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}` };
@@ -90,6 +91,7 @@ const loc = (ts: number) => ({ timestamp: ts, coords: { longitude: 153, latitude
 beforeEach(() => {
   mockDb.rows = [];
   mockConnected = true;
+  mockNetHangs = false;
   mockApi.hasAccessToken = true;
   mockAccount = 'u1';
   jest.clearAllMocks();
@@ -169,7 +171,49 @@ describe('uploading', () => {
   });
 });
 
+describe('uploads that do not come', () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('goes on without the network check when it never answers', async () => {
+    jest.useFakeTimers();
+    mockNetHangs = true;
+    await sqliteQueueStore.append([point(1000)], 'u1');
+    const run = syncQueue();
+    await jest.advanceTimersByTimeAsync(11_000);
+    await expect(run).resolves.toMatchObject({ uploaded: 1 });
+  });
+
+  it('starts a new upload when one has hung, rather than waiting on it for ever', async () => {
+    jest.useFakeTimers();
+    await sqliteQueueStore.append([point(1000)], 'u1');
+    mockRequest.mockImplementationOnce(() => new Promise(() => undefined));
+    void syncQueue();
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(121_000);
+    await expect(syncQueue()).resolves.toMatchObject({ uploaded: 1 });
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('background tracking', () => {
+  // A walk round the block is a few dozen fixes: it mustn't wait on the 50th, or on a drive with directions, to show in Trips.
+  it('uploads what is waiting every few minutes, not only once 50 are', async () => {
+    const start = Date.now();
+    const now = jest.spyOn(Date, 'now');
+    now.mockReturnValue(start);
+    await mockTask({ data: { locations: [loc(1000), loc(2000), loc(3000)] } });
+    expect(mockRequest).not.toHaveBeenCalled();
+    now.mockReturnValue(start + 4 * 60_000);
+    await mockTask({ data: { locations: [loc(4000)] } });
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect((mockRequest.mock.calls[0]![1] as { body: { points: unknown[] } }).body.points).toHaveLength(4);
+    // Not again at the next wake-up a moment later.
+    await mockTask({ data: { locations: [loc(5000)] } });
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    now.mockRestore();
+  });
+
   it('queues fixes from the background task and uploads once 50 are waiting', async () => {
     expect(taskName).toBe(BACKGROUND_TASK);
     await mockTask({ data: { locations: Array.from({ length: 10 }, (_, i) => loc(1000 + i)) } });

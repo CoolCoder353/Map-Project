@@ -46,6 +46,10 @@ service. The only outside download is the OpenStreetMap extract, fetched by the 
    uploads them in batches to `POST /api/tracks/batches`. A batch id makes retries idempotent. A
    batch the server rejects as invalid is dropped, so it cannot block later ones. While a
    navigated trip runs, background recording leaves that time to it (it records its own fixes).
+   Waiting points go up once 50 are queued or three minutes after the last try, when the app is
+   opened or comes back to the screen, and when a navigated trip starts or ends, so a short trip
+   without directions still reaches Trips. A network check or upload that never answers is given
+   up on (10 s and 2 min) so it cannot hold back every later upload (`src/tracking/sync.ts`).
    The session (`src/lib/session.tsx`) keeps the device in line with the account's tracking
    setting, and checks again each time the app comes to the foreground, so tracking that was
    waiting on "Allow all the time" starts as soon as it is granted in the phone's settings.

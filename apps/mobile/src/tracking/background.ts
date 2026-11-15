@@ -8,6 +8,11 @@ import { syncQueue } from './sync';
 
 export const BACKGROUND_TASK = 'wayfinder-background-location';
 
+/** Points wait for this many, or for this long since the last try, whichever comes first. */
+const UPLOAD_AT_POINTS = 50;
+const UPLOAD_EVERY_MS = 3 * 60_000;
+let lastUploadTry = Date.now();
+
 // Must be defined at module scope and imported from the root layout so Android can wake it.
 TaskManager.defineTask<{ locations: Location.LocationObject[] }>(BACKGROUND_TASK, async ({ data, error }) => {
   if (error || !data?.locations?.length) return;
@@ -32,7 +37,13 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(BACKGROUND_TASK
         })),
       account,
     );
-    if ((await sqliteQueueStore.count(account)) >= 50) await syncQueue();
+    // Waiting for 50 alone left a short trip on the phone until some later drive with directions
+    // sent it, so Trips showed only those.
+    const waiting = await sqliteQueueStore.count(account);
+    if (waiting >= UPLOAD_AT_POINTS || (waiting > 0 && Date.now() - lastUploadTry >= UPLOAD_EVERY_MS)) {
+      lastUploadTry = Date.now();
+      await syncQueue();
+    }
   } catch {
     // Storage or upload failed while the app was in the background; the next wake-up retries.
   }
