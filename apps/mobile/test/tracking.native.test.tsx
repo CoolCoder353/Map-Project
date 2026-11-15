@@ -196,6 +196,27 @@ describe('uploads that do not come', () => {
   });
 });
 
+describe('an upload given up on', () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('sends nothing more once abandoned or once another account is signed in', async () => {
+    jest.useFakeTimers();
+    // Two batches (different kinds of point); the first is slow to be answered.
+    await sqliteQueueStore.append([point(1000), point(2000, { source: 'navigation', mode: 'car', sessionId: 's1' })], 'u1');
+    let release: () => void = () => undefined;
+    mockRequest.mockImplementationOnce(() => new Promise((resolve) => (release = () => resolve({ accepted: 1, duplicate: false }))));
+    void syncQueue();
+    await jest.advanceTimersByTimeAsync(121_000); // given up on
+    mockAccount = 'u2'; // someone else signs in meanwhile
+    release();
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    // The signed-in account's own points still go.
+    await sqliteQueueStore.append([point(3000)], 'u2');
+    await expect(syncQueue()).resolves.toMatchObject({ uploaded: 1 });
+  });
+});
+
 describe('background tracking', () => {
   // A walk round the block is a few dozen fixes: it mustn't wait on the 50th, or on a drive with directions, to show in Trips.
   it('uploads what is waiting every few minutes, not only once 50 are', async () => {

@@ -49,7 +49,7 @@ service. The only outside download is the OpenStreetMap extract, fetched by the 
    Waiting points go up once 50 are queued or three minutes after the last try, when the app is
    opened or comes back to the screen, and when a navigated trip starts or ends, so a short trip
    without directions still reaches Trips. A network check or upload that never answers is given
-   up on (10 s and 2 min) so it cannot hold back every later upload (`src/tracking/sync.ts`).
+   up on (10 s and 2 min) so it cannot hold back every later upload; one given up on sends nothing more, and every batch is checked against the signed-in account before it goes (`src/tracking/sync.ts`).
    The session (`src/lib/session.tsx`) keeps the device in line with the account's tracking
    setting, and checks again each time the app comes to the foreground, so tracking that was
    waiting on "Allow all the time" starts as soon as it is granted in the phone's settings.
